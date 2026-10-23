@@ -1,3 +1,6 @@
+.hidden {
+  display: none !important;
+}
 body {
   font-family: 'Cairo', 'Inter', system-ui, -apple-system, sans-serif;
   background-color: #f1f5f9;

@@ -815,7 +815,7 @@ function verifyActiveUserSession() {
       loginErr.textContent = '🚫 تم إنهاء جلستك وتسجيل خروجك تلقائياً نظراً لحذف هذا الحساب من قِبل مدير الموقع!';
       loginErr.classList.remove('hidden');
     }
-    if (loginOverlay) loginOverlay.classList.remove('hidden');
+    if (loginOverlay) loginOverlay.classList.remove('hidden'); loginOverlay.style.display = '';
     if (currentUid !== 'visitor') {
       showToast('🚫 تم تسجيل خروجك تلقائياً لأن مدير الموقع قام بحذف هذا الحساب!', '🚪');
     }
@@ -1782,7 +1782,7 @@ function renderDaySelector() {
     });
     container.appendChild(addBtn);
   }
-  refreshDayManagementBoxesUI();
+  if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
 }
 
 function renderDailyView() {
@@ -4480,14 +4480,24 @@ function updateLiveFormCalculation() {
   }
 }
 
-window.addEventListener('DOMContentLoaded', async () => {
+function initFarmSalesApp() {
+  if (window.__farmAppInitialized) return;
+  window.__farmAppInitialized = true;
   const loadedFromLocal = loadState();
   renderAll();
   if (!loadedFromLocal) {
-    const idbState = await loadFromIndexedDBAsync();
-    if (idbState && applyParsedStateObject(idbState)) {
-      renderAll();
-    }
+    loadFromIndexedDBAsync().then((idbState) => {
+      const wasLoggedInNow = Boolean(appState.isLoggedIn);
+      const currentActiveUser = appState.activeUserId;
+      if (idbState && applyParsedStateObject(idbState)) {
+        if (wasLoggedInNow) {
+          appState.isLoggedIn = true;
+          appState.activeUserId = currentActiveUser || 'admin';
+          appState.lastActivityAt = Date.now();
+        }
+        renderAll();
+      }
+    }).catch(() => {});
   }
   if ((appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL) && navigator.onLine) {
     pullDatabaseFromCloud(true, true);
@@ -4705,7 +4715,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('inpLoginUsername').value = '';
     document.getElementById('inpLoginPassword').value = '';
     loginErr.classList.add('hidden');
-    loginOverlay.classList.remove('hidden');
+    loginOverlay.classList.remove('hidden'); loginOverlay.style.display = '';
     showToast(reasonMsg, '🚪');
   }
 
@@ -4723,14 +4733,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   const initLimitMs = getInactivityLimitMs();
   const isWithinIdleLimit = (initLimitMs <= 0) || (appState.lastActivityAt && (nowInit - appState.lastActivityAt < initLimitMs));
   if (appState.isLoggedIn && isWithinIdleLimit && verifyActiveUserSession()) {
-    loginOverlay.classList.add('hidden');
+    loginOverlay.classList.add('hidden'); loginOverlay.style.display = 'none';
     appState.lastActivityAt = nowInit;
     switchActiveTabUI(appState.activeTab || 'daily');
     saveState(false);
     renderAll();
   } else {
     appState.isLoggedIn = false;
-    loginOverlay.classList.remove('hidden');
+    loginOverlay.classList.remove('hidden'); loginOverlay.style.display = '';
   }
 
   // Monitor activity and auto-logout after Admin-configured idle time
@@ -4797,7 +4807,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
-      loginOverlay.classList.add('hidden');
+      loginOverlay.classList.add('hidden'); loginOverlay.style.display = 'none';
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
       renderAll();
@@ -4815,7 +4825,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
-      loginOverlay.classList.add('hidden');
+      loginOverlay.classList.add('hidden'); loginOverlay.style.display = 'none';
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
       renderAll();
@@ -5355,7 +5365,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Helper to populate and refresh all Day Management selectors & pills
-  window.refreshDayManagementBoxesUI = function() {
+  function refreshDayManagementBoxesUI() {
+  window.refreshDayManagementBoxesUI = refreshDayManagementBoxesUI;
     const visDays = getVisibleDays();
     const allDays = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     const hiddenDays = allDays.filter(d => !visDays.includes(d));
@@ -5483,7 +5494,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  window.openDayManagementBox = function(mode) {
+  function openDayManagementBox(mode) {
+  window.openDayManagementBox = openDayManagementBox;
     if (!hasPermission('sales')) {
       showToast('عفواً، إدارة الأيام متاحة لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
       return;
@@ -5528,7 +5540,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  window.openDailyQuickAddDayBox = function() {
+  function openDailyQuickAddDayBox() {
+  window.openDailyQuickAddDayBox = openDailyQuickAddDayBox;
     if (!hasPermission('sales')) {
       showToast('عفواً، إضافة يوم جديد متاحة لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
       return;
@@ -6872,4 +6885,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     reader.readAsArrayBuffer(file);
     e.target.value = '';
   });
-});
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initFarmSalesApp);
+} else {
+  initFarmSalesApp();
+}

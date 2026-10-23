@@ -1,5 +1,5 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v18";
+const CACHE_NAME = "farm-sales-committee-v19";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -64,8 +64,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first for HTML pages (so updates on GitHub Pages appear immediately when online, with offline fallback)
-  if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
+  // Network-first for HTML, CSS, JS, and Manifest (so updates on GitHub Pages appear immediately when online, with offline fallback)
+  if (
+    req.mode === "navigate" ||
+    (req.headers.get("accept") || "").includes("text/html") ||
+    url.endsWith("/index.html") ||
+    url.endsWith("/app.js") ||
+    url.endsWith("/style.css") ||
+    url.endsWith("/manifest.json")
+  ) {
     event.respondWith(
       fetch(req)
         .then((networkRes) => {
