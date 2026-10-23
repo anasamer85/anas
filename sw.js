@@ -1,12 +1,12 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v21";
+const CACHE_NAME = "farm-sales-committee-v22";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
   "./style.css",
-  "./style.css?v=21",
+  "./style.css?v=22",
   "./app.js",
-  "./app.js?v=21",
+  "./app.js?v=22",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
@@ -66,17 +66,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first for HTML, CSS, JS, and Manifest (so updates on GitHub Pages appear immediately when online, with offline fallback)
+  // Network-first with cache: 'no-store' for HTML, CSS, JS, and Manifest so GitHub Pages updates appear immediately on all devices
+  const isHtmlNav = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html") || url.endsWith("/") || url.includes("/index.html");
   if (
-    req.mode === "navigate" ||
-    (req.headers.get("accept") || "").includes("text/html") ||
-    url.includes("/index.html") ||
+    isHtmlNav ||
     url.includes("/app.js") ||
     url.includes("/style.css") ||
     url.includes("/manifest.json")
   ) {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then((networkRes) => {
           if (networkRes && networkRes.status === 200) {
             const copy = networkRes.clone();
@@ -84,12 +83,18 @@ self.addEventListener("fetch", (event) => {
           }
           return networkRes;
         })
-        .catch(() => caches.match(req).then((cached) => cached || caches.match("./index.html")))
+        .catch(() =>
+          caches.match(req).then((cached) => {
+            if (cached) return cached;
+            if (isHtmlNav) return caches.match("./index.html");
+            return cached;
+          })
+        )
     );
     return;
   }
 
-  // Cache-first with network fallback for scripts, styles, fonts, and static assets
+  // Cache-first with network fallback for external libraries, fonts, and icons
   event.respondWith(
     caches.match(req).then((cachedRes) => {
       if (cachedRes) return cachedRes;

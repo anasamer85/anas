@@ -2,7 +2,29 @@
 // 1. INITIAL GROUNDED DATA & STATE (WITH DYNAMIC FARM NAME & FULL SYNC)
 // =========================================================================
 const STORAGE_KEY = 'abouzekry_farm_sales_v5_clean_state';
+const LEGACY_STORAGE_KEYS = ['abouzekry_farm_sales_v4_state', 'abouzekry_farm_sales_v3_state'];
 const EMBEDDED_CLOUD_WEBHOOK_URL = '';
+
+function getEmbeddedWebhookUrl() {
+  try {
+    if (typeof window !== 'undefined' && window.EMBEDDED_CLOUD_WEBHOOK_URL && String(window.EMBEDDED_CLOUD_WEBHOOK_URL).trim()) {
+      return String(window.EMBEDDED_CLOUD_WEBHOOK_URL).trim();
+    }
+    if (typeof document !== 'undefined') {
+      const metaEl = document.getElementById('metaEmbeddedCloudWebhookUrl');
+      if (metaEl) {
+        const content = String(metaEl.getAttribute('content') || '').trim();
+        if (content) return content;
+      }
+      const inpEl = document.getElementById('inpCloudWebhookUrl');
+      if (inpEl) {
+        const attrVal = String(inpEl.getAttribute('value') || '').trim();
+        if (attrVal && attrVal.startsWith('http')) return attrVal;
+      }
+    }
+  } catch (e) {}
+  return String(EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
+}
 let liveExcelFileHandle = null;
 
 const EXPENSE_CATEGORIES = [
@@ -66,7 +88,7 @@ function getDefaultState(customFarmName = 'أبوذكري') {
     liveSyncEnabled: true,
     liveSyncIntervalSec: 5,
     deletedIds: { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] },
-    webhookUrl: EMBEDDED_CLOUD_WEBHOOK_URL || '',
+    webhookUrl: getEmbeddedWebhookUrl() || '',
     updatedAt: '',
     farmResetAt: 0,
     defaultPrice: 0,
@@ -165,7 +187,7 @@ function deduplicateDayRecords(dayObj, deletedIds) {
   const delPendSet = new Set(((deletedIds && deletedIds.pendingSales) || []).map(String));
   const delExpSet = new Set(((deletedIds && deletedIds.expenses) || []).map(String));
 
-  // Deduplicate completed sales
+  // Deduplicate completed sales without poisoning deletedIds
   const cleanSales = [];
   (dayObj.sales || []).forEach(item => {
     if (!item) return;
@@ -174,14 +196,6 @@ function deduplicateDayRecords(dayObj, deletedIds) {
     const dupIdx = cleanSales.findIndex(existing => areSalesRowsDuplicate(existing, item));
     if (dupIdx === -1) {
       cleanSales.push(item);
-    } else {
-      // If duplicate found with a different ID, record the redundant ID as deleted
-      const existing = cleanSales[dupIdx];
-      if (sid && existing.id !== undefined && String(existing.id) !== sid) {
-        if (deletedIds && Array.isArray(deletedIds.sales) && !deletedIds.sales.includes(sid)) {
-          deletedIds.sales.push(sid);
-        }
-      }
     }
   });
   dayObj.sales = sortSalesListByScaleNo(cleanSales);
@@ -197,22 +211,10 @@ function deduplicateDayRecords(dayObj, deletedIds) {
       ((Number(s.scaleNo) > 0 && Number(s.scaleNo) === Number(item.scaleNo)) ||
        (String(s.carNo || '').trim() === String(item.carNo || '').trim() && Number(s.w1) === Number(item.w1)))
     );
-    if (alreadyCompleted) {
-      if (pid && deletedIds && Array.isArray(deletedIds.pendingSales) && !deletedIds.pendingSales.includes(pid)) {
-        deletedIds.pendingSales.push(pid);
-      }
-      return;
-    }
+    if (alreadyCompleted) return;
     const dupIdx = cleanPending.findIndex(existing => arePendingSalesDuplicate(existing, item));
     if (dupIdx === -1) {
       cleanPending.push(item);
-    } else {
-      const existing = cleanPending[dupIdx];
-      if (pid && existing.id !== undefined && String(existing.id) !== pid) {
-        if (deletedIds && Array.isArray(deletedIds.pendingSales) && !deletedIds.pendingSales.includes(pid)) {
-          deletedIds.pendingSales.push(pid);
-        }
-      }
     }
   });
   dayObj.pendingSales = sortSalesListByScaleNo(cleanPending);
@@ -226,13 +228,6 @@ function deduplicateDayRecords(dayObj, deletedIds) {
     const dupIdx = cleanExpenses.findIndex(existing => areExpensesDuplicate(existing, item));
     if (dupIdx === -1) {
       cleanExpenses.push(item);
-    } else {
-      const existing = cleanExpenses[dupIdx];
-      if (eid && existing.id !== undefined && String(existing.id) !== eid) {
-        if (deletedIds && Array.isArray(deletedIds.expenses) && !deletedIds.expenses.includes(eid)) {
-          deletedIds.expenses.push(eid);
-        }
-      }
     }
   });
   dayObj.expenses = cleanExpenses;
@@ -272,7 +267,7 @@ function ensureDeletedIdsStructure(obj) {
 
 function applyParsedStateObject(parsed) {
   if (!parsed || !parsed.days || !parsed.merchants) return false;
-  const savedWebhook = (parsed.webhookUrl || appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
+  const savedWebhook = (getEmbeddedWebhookUrl() || parsed.webhookUrl || appState.webhookUrl || '').trim();
   appState = { ...getDefaultState(), ...parsed, webhookUrl: savedWebhook };
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
   if (appState.liveSyncEnabled === undefined) appState.liveSyncEnabled = true;
@@ -359,12 +354,35 @@ function loadState() {
       }
     } catch (e) {}
   }
-  try {
-    const savedUrl = localStorage.getItem(STORAGE_KEY + '_webhook_url');
-    if (savedUrl && !appState.webhookUrl) appState.webhookUrl = savedUrl.trim();
-  } catch (e) {}
-  if (EMBEDDED_CLOUD_WEBHOOK_URL && !appState.webhookUrl) {
-    appState.webhookUrl = EMBEDDED_CLOUD_WEBHOOK_URL.trim();
+  // استرجاع رابط السحابة من الملف المدمج (index.html) أو من الكاش الحالي أو السابق
+  const embeddedUrl = getEmbeddedWebhookUrl();
+  if (embeddedUrl) {
+    appState.webhookUrl = embeddedUrl;
+  }
+  if (!appState.webhookUrl) {
+    try {
+      const savedUrl = localStorage.getItem(STORAGE_KEY + '_webhook_url');
+      if (savedUrl && savedUrl.trim()) appState.webhookUrl = savedUrl.trim();
+    } catch (e) {}
+  }
+  if (!appState.webhookUrl) {
+    for (const legKey of LEGACY_STORAGE_KEYS) {
+      try {
+        const legUrl = localStorage.getItem(legKey + '_webhook_url');
+        if (legUrl && legUrl.trim()) {
+          appState.webhookUrl = legUrl.trim();
+          break;
+        }
+        const legRaw = localStorage.getItem(legKey);
+        if (legRaw) {
+          const legParsed = JSON.parse(legRaw);
+          if (legParsed && legParsed.webhookUrl && String(legParsed.webhookUrl).trim()) {
+            appState.webhookUrl = String(legParsed.webhookUrl).trim();
+            break;
+          }
+        }
+      } catch (e) {}
+    }
   }
   return loaded;
 }
@@ -851,7 +869,7 @@ function renderAllPreservingActiveInputs() {
   }
 }
 
-// دمج ذكي للسجلات (Smart Record-Level Merge) مع منع تكرار الحركات المتشابهة نهائياً
+// دمج ذكي للسجلات (Smart Record-Level Merge) بين جميع الأجهزة المتصلة بدون حذف متبادل
 function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCloudItem = true, isDuplicateFn = null) {
   const delSet = new Set((deletedList || []).map(String));
   const result = [];
@@ -867,12 +885,6 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
     );
     if (existingIdx === -1) {
       result.push(item);
-    } else {
-      const ex = result[existingIdx];
-      if (String(ex[idKey]) !== k && Array.isArray(deletedList) && !deletedList.includes(k)) {
-        deletedList.push(k);
-        delSet.add(k);
-      }
     }
   };
 
@@ -887,73 +899,61 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
   const cReset = Number(cloudResetAt) || 0;
 
   for (let d = 1; d <= 10; d++) {
-    const lDay = (localDays && localDays[d]) || { dayNumber: d, dateLabel: `اليوم ${d}`, sales: [], pendingSales: [], expenses: [], deliveredCash: 0, clearedAt: 0 };
-    const cDay = (cloudDays && cloudDays[d]) || { dayNumber: d, dateLabel: `اليوم ${d}`, sales: [], pendingSales: [], expenses: [], deliveredCash: 0, clearedAt: 0 };
+    const defaultLbl = `اليوم ${d}`;
+    const lDay = (localDays && localDays[d]) || { dayNumber: d, dateLabel: defaultLbl, sales: [], pendingSales: [], expenses: [], deliveredCash: 0, clearedAt: 0 };
+    const cDay = (cloudDays && cloudDays[d]) || { dayNumber: d, dateLabel: defaultLbl, sales: [], pendingSales: [], expenses: [], deliveredCash: 0, clearedAt: 0 };
     const lDayClear = Math.max(lReset, Number(lDay.clearedAt) || 0);
     const cDayClear = Math.max(cReset, Number(cDay.clearedAt) || 0);
 
     const lAdded = Number(lDay.addedAt) || 0;
     const cAdded = Number(cDay.addedAt) || 0;
     const maxAdded = Math.max(lAdded, cAdded);
-
-    // إذا تم تصفير المزرعة أو اليوم محلياً بوقت أحدث من نسخة السحابة، نتجاهل بيانات السحابة القديمة ونسجل معرفاتها كمحذوفة
-    if (lDayClear > cDayClear && lDayClear >= cAdded) {
-      (cDay.sales || []).forEach(r => { if (r && r.id && !deletedIds.sales.includes(String(r.id))) deletedIds.sales.push(String(r.id)); });
-      (cDay.pendingSales || []).forEach(r => { if (r && r.id && !deletedIds.pendingSales.includes(String(r.id))) deletedIds.pendingSales.push(String(r.id)); });
-      (cDay.expenses || []).forEach(e => { if (e && e.id && !deletedIds.expenses.includes(String(e.id))) deletedIds.expenses.push(String(e.id)); });
-      const dayCopy = {
-        dayNumber: d,
-        dateLabel: lDay.dateLabel || `اليوم ${d}`,
-        sales: sortSalesListByScaleNo([...(lDay.sales || [])]),
-        pendingSales: sortSalesListByScaleNo([...(lDay.pendingSales || [])]),
-        expenses: [...(lDay.expenses || [])],
-        deliveredCash: Number(lDay.deliveredCash) || 0,
-        clearedAt: lDayClear,
-        addedAt: lAdded,
-        isHidden: Boolean(lDay.isHidden)
-      };
-      deduplicateDayRecords(dayCopy, deletedIds);
-      mergedDays[d] = dayCopy;
-      continue;
-    }
-
-    // إذا تم تصفير المزرعة أو اليوم في السحابة بوقت أحدث من النسخة المحلية، نعتمد التصفير الأحدث
-    if (cDayClear > lDayClear && cDayClear >= lAdded) {
-      (lDay.sales || []).forEach(r => { if (r && r.id && !deletedIds.sales.includes(String(r.id))) deletedIds.sales.push(String(r.id)); });
-      (lDay.pendingSales || []).forEach(r => { if (r && r.id && !deletedIds.pendingSales.includes(String(r.id))) deletedIds.pendingSales.push(String(r.id)); });
-      (lDay.expenses || []).forEach(e => { if (e && e.id && !deletedIds.expenses.includes(String(e.id))) deletedIds.expenses.push(String(e.id)); });
-      const dayCopy = {
-        dayNumber: d,
-        dateLabel: cDay.dateLabel || `اليوم ${d}`,
-        sales: sortSalesListByScaleNo([...(cDay.sales || [])]),
-        pendingSales: sortSalesListByScaleNo([...(cDay.pendingSales || [])]),
-        expenses: [...(cDay.expenses || [])],
-        deliveredCash: Number(cDay.deliveredCash) || 0,
-        clearedAt: cDayClear,
-        addedAt: cAdded,
-        isHidden: Boolean(cDay.isHidden)
-      };
-      deduplicateDayRecords(dayCopy, deletedIds);
-      mergedDays[d] = dayCopy;
-      continue;
-    }
-
     const maxClear = Math.max(lDayClear, cDayClear);
-    const mergedIsHidden = maxAdded > maxClear
+
+    const mergedSales = sortSalesListByScaleNo(mergeArraysById(lDay.sales, cDay.sales, deletedIds.sales, 'id', preferCloud, areSalesRowsDuplicate));
+    const mergedPending = sortSalesListByScaleNo(mergeArraysById(lDay.pendingSales, cDay.pendingSales, deletedIds.pendingSales, 'id', preferCloud, arePendingSalesDuplicate));
+    const mergedExpenses = mergeArraysById(lDay.expenses, cDay.expenses, deletedIds.expenses, 'id', preferCloud, areExpensesDuplicate);
+    const hasAnyMovement = mergedSales.length > 0 || mergedPending.length > 0 || mergedExpenses.length > 0;
+
+    // اختيار اسم/تاريخ اليوم بذكاء (تفضيل التسمية المخصصة عن التسمية الافتراضية "اليوم X")
+    const lLbl = String(lDay.dateLabel || '').trim() || defaultLbl;
+    const cLbl = String(cDay.dateLabel || '').trim() || defaultLbl;
+    let chosenLabel = preferCloud ? cLbl : lLbl;
+    if (lDayClear > cDayClear && !hasAnyMovement) {
+      chosenLabel = lLbl;
+    } else if (cDayClear > lDayClear && !hasAnyMovement) {
+      chosenLabel = cLbl;
+    } else if (chosenLabel === defaultLbl && (lLbl !== defaultLbl || cLbl !== defaultLbl)) {
+      chosenLabel = cLbl !== defaultLbl ? cLbl : lLbl;
+    }
+
+    // اختيار النقدية المسلمة للخزينة بذكاء دون مسح قيم الأيام الأخرى أثناء الرفع
+    const lDeliv = Number(lDay.deliveredCash) || 0;
+    const cDeliv = Number(cDay.deliveredCash) || 0;
+    let chosenDeliveredCash = preferCloud ? cDeliv : lDeliv;
+    if (lDayClear > cDayClear && !hasAnyMovement) {
+      chosenDeliveredCash = lDeliv;
+    } else if (cDayClear > lDayClear && !hasAnyMovement) {
+      chosenDeliveredCash = cDeliv;
+    } else if (!preferCloud && lDeliv === 0 && cDeliv > 0 && d !== Number(appState.currentDay)) {
+      chosenDeliveredCash = cDeliv;
+    }
+
+    const mergedIsHidden = hasAnyMovement
       ? false
-      : (preferCloud ? Boolean(cDay.isHidden) : Boolean(lDay.isHidden));
+      : (maxAdded > maxClear
+        ? false
+        : (lDayClear > cDayClear ? Boolean(lDay.isHidden) : (cDayClear > lDayClear ? Boolean(cDay.isHidden) : (preferCloud ? Boolean(cDay.isHidden) : Boolean(lDay.isHidden)))));
 
     const mergedDayObj = {
       dayNumber: d,
-      dateLabel: preferCloud ? (cDay.dateLabel || lDay.dateLabel) : (lDay.dateLabel || cDay.dateLabel),
-      sales: sortSalesListByScaleNo(mergeArraysById(lDay.sales, cDay.sales, deletedIds.sales, 'id', preferCloud, areSalesRowsDuplicate)),
-      pendingSales: sortSalesListByScaleNo(mergeArraysById(lDay.pendingSales, cDay.pendingSales, deletedIds.pendingSales, 'id', preferCloud, arePendingSalesDuplicate)),
-      expenses: mergeArraysById(lDay.expenses, cDay.expenses, deletedIds.expenses, 'id', preferCloud, areExpensesDuplicate),
-      deliveredCash: preferCloud
-        ? (cDay.deliveredCash !== undefined ? cDay.deliveredCash : lDay.deliveredCash)
-        : (lDay.deliveredCash !== undefined ? lDay.deliveredCash : cDay.deliveredCash),
+      dateLabel: chosenLabel,
+      sales: mergedSales,
+      pendingSales: mergedPending,
+      expenses: mergedExpenses,
+      deliveredCash: chosenDeliveredCash,
       clearedAt: maxClear,
-      addedAt: maxAdded,
+      addedAt: hasAnyMovement ? Math.max(maxAdded, maxClear + 1) : maxAdded,
       isHidden: mergedIsHidden
     };
     deduplicateDayRecords(mergedDayObj, deletedIds);
@@ -1003,8 +1003,22 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   mergedDeletedIds.farms.forEach(fn => { delete mergedArchive[fn]; });
   appState.farmsArchive = mergedArchive;
 
-  if (!appState.hasLocalEdits) {
-    // متصفح جديد يسحب من السحابة لأول مرة: يعتمد المزرعة النشطة في السحابة كما هي
+  const countMovements = (daysMap) => {
+    if (!daysMap || typeof daysMap !== 'object') return 0;
+    let cnt = 0;
+    for (let d = 1; d <= 10; d++) {
+      const dm = daysMap[d];
+      if (!dm) continue;
+      cnt += (dm.sales ? dm.sales.length : 0) + (dm.pendingSales ? dm.pendingSales.length : 0) + (dm.expenses ? dm.expenses.length : 0);
+    }
+    return cnt;
+  };
+  const localMovementsCount = countMovements(appState.days);
+  const cloudMovementsCount = countMovements(cloudData.days);
+  const isLocalEffectivelyFresh = !appState.hasLocalEdits || (localMovementsCount === 0 && cloudMovementsCount > 0 && localResetAt <= cloudResetAt);
+
+  if (isLocalEffectivelyFresh) {
+    // متصفح جديد أو فارغ يسحب من السحابة: يعتمد المزرعة النشطة وبيانات السحابة كما هي
     appState.farmName = cloudFarmName;
     appState.farmResetAt = cloudResetAt;
     appState.merchants = mergeArraysById([], cloudData.merchants, mergedDeletedIds.merchants, 'code', true)
@@ -1033,8 +1047,12 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
         appState.visibleDays = Array.from(visSet).filter(d => !(appState.days[d] && appState.days[d].isHidden)).sort((a, b) => a - b);
         getVisibleDays();
       }
-      if (preferCloud && cloudData.defaultPrice !== undefined) appState.defaultPrice = Number(cloudData.defaultPrice);
-      if (preferCloud && cloudData.defaultTip !== undefined) appState.defaultTip = Number(cloudData.defaultTip);
+      if (cloudData.defaultPrice !== undefined && (preferCloud || !Number(appState.defaultPrice))) {
+        appState.defaultPrice = Number(cloudData.defaultPrice) || Number(appState.defaultPrice) || 0;
+      }
+      if (cloudData.defaultTip !== undefined && (preferCloud || !Number(appState.defaultTip))) {
+        appState.defaultTip = Number(cloudData.defaultTip) || Number(appState.defaultTip) || 0;
+      }
       if (cloudData.lastScaleNo !== undefined) {
         appState.lastScaleNo = Math.max(Number(appState.lastScaleNo) || 0, Number(cloudData.lastScaleNo) || 0);
       }
@@ -1070,7 +1088,7 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
 async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFetchMerge = false) {
   if (isCloudSyncInProgress && !forcePush) return false;
   syncActiveFarmIntoArchive();
-  const url = (appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
+  const url = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
   if (!navigator.onLine) {
     if (!silent) showToast('أنت في وضع الأوفلاين — تم حفظ البيانات على المتصفح وستُرفع للسحابة تلقائياً فور توفر الإنترنت.', '🟠');
     return false;
@@ -1186,7 +1204,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
 
 async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, isLiveBackgroundTick = false) {
   if (isCloudSyncInProgress && isLiveBackgroundTick) return false;
-  const url = (appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
+  const url = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
   if (!url) {
     if (!silent) showToast('⚠️ الصق رابط السحابة (Google Apps Script URL) أولاً ثم اضغط حفظ وسحب من السحابة!', 'ℹ️');
     return false;
@@ -1246,7 +1264,7 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
 function updateLiveSyncIndicatorsUI() {
   const enabled = Boolean(appState.liveSyncEnabled);
   const intervalSec = Number(appState.liveSyncIntervalSec) || 5;
-  const hasUrl = Boolean((appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL || '').trim());
+  const hasUrl = Boolean((appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim());
   const btn = document.getElementById('btnToggleLiveSync');
   const dot = document.getElementById('liveSyncHeaderDot');
   const txt = document.getElementById('liveSyncHeaderTxt');
@@ -1275,7 +1293,7 @@ function updateLiveSyncIndicatorsUI() {
       badge.textContent = '⏸️ المزامنة اللحظية متوقفة مؤقتاً (تعمل المزامنة اليدوية وعند الحفظ)';
       badge.className = 'text-[11px] font-extrabold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-300';
     } else if (hasUrl) {
-      const isFb = (appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL || '').includes('firebase');
+      const isFb = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').includes('firebase');
       badge.textContent = isFb
         ? '⚡ بث لحظي حي عبر Firebase Stream + دمج ذكي للسجلات ✓'
         : `⚡ مزامنة لحظية حية نشطة (كل ${intervalSec} ثوانٍ) + دمج ذكي متوافق مع السحابة ✓`;
@@ -1300,7 +1318,7 @@ function startLiveRealtimeSyncEngine() {
 
   if (!appState.liveSyncEnabled) return;
 
-  const url = (appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
+  const url = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
   const intervalMs = Math.max(3, Number(appState.liveSyncIntervalSec) || 5) * 1000;
 
   // 1. إذا كان الرابط Firebase Realtime Database، نفتح اتصال EventSource لحظي حي (Server-Sent Events)
@@ -1326,7 +1344,7 @@ function startLiveRealtimeSyncEngine() {
   // 2. مؤقت النبض اللحظي الذكي (يعمل مع Google Apps Script ومع Firebase)
   liveSyncTimerId = setInterval(() => {
     if (!appState.liveSyncEnabled || !navigator.onLine || document.hidden) return;
-    const activeUrl = (appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
+    const activeUrl = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
     if (activeUrl && !isCloudSyncInProgress) {
       pullDatabaseFromCloud(true, true, true);
     }
@@ -1441,7 +1459,7 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
   if (incrementPending && liveBroadcastChannel) {
     try { liveBroadcastChannel.postMessage({ type: 'LOCAL_STATE_CHANGED', updatedAt: appState.updatedAt }); } catch (e) {}
   }
-  if (incrementPending && navigator.onLine && (appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL)) {
+  if (incrementPending && navigator.onLine && (appState.webhookUrl || getEmbeddedWebhookUrl())) {
     pushDatabaseToCloud(true, skipCloudPreMerge, skipCloudPreMerge);
   }
   updateConnectionAndSyncUI();
@@ -3011,7 +3029,12 @@ function renderMerchantsAndStatements() {
 }
 
 function renderExpensesStatementView() {
-  document.getElementById('inpCloudWebhookUrl').value = appState.webhookUrl || '';
+  const inpW = document.getElementById('inpCloudWebhookUrl');
+  if (inpW && document.activeElement !== inpW) {
+    const resolvedUrl = (appState.webhookUrl || getEmbeddedWebhookUrl() || inpW.value || '').trim();
+    if (resolvedUrl && !appState.webhookUrl) appState.webhookUrl = resolvedUrl;
+    inpW.value = resolvedUrl;
+  }
 
   const catMatrix = {};
   EXPENSE_CATEGORIES.forEach(c => {
@@ -4489,7 +4512,7 @@ function initFarmSalesApp() {
     loadFromIndexedDBAsync().then((idbState) => {
       const wasLoggedInNow = Boolean(appState.isLoggedIn);
       const currentActiveUser = appState.activeUserId;
-      if (idbState && applyParsedStateObject(idbState)) {
+      if (!appState.hasLocalEdits && idbState && applyParsedStateObject(idbState)) {
         if (wasLoggedInNow) {
           appState.isLoggedIn = true;
           appState.activeUserId = currentActiveUser || 'admin';
@@ -4497,12 +4520,23 @@ function initFarmSalesApp() {
         }
         renderAll();
       }
-    }).catch(() => {});
-  }
-  if ((appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL) && navigator.onLine) {
-    pullDatabaseFromCloud(true, true);
-  }
+      if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
+        pullDatabaseFromCloud(true, true);
+      }
+      window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
   startLiveRealtimeSyncEngine();
+    }).catch(() => {
+      if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
+        pullDatabaseFromCloud(true, true);
+      }
+      startLiveRealtimeSyncEngine();
+    });
+  } else {
+    if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
+      pullDatabaseFromCloud(true, true);
+    }
+    startLiveRealtimeSyncEngine();
+  }
 
   // Toggle Live Sync from Header Button
   const btnToggleLive = document.getElementById('btnToggleLiveSync');
@@ -4512,7 +4546,7 @@ function initFarmSalesApp() {
       saveState(false);
       startLiveRealtimeSyncEngine();
       if (appState.liveSyncEnabled) {
-        if ((appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL) && navigator.onLine) {
+        if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
           pullDatabaseFromCloud(true, true, true);
         }
         showToast(`⚡ تم تفعيل المزامنة اللحظية الحية (كل ${appState.liveSyncIntervalSec || 5} ثوانٍ)`, '⚡');
@@ -4575,7 +4609,7 @@ function initFarmSalesApp() {
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && appState.liveSyncEnabled && navigator.onLine && (appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL)) {
+    if (!document.hidden && appState.liveSyncEnabled && navigator.onLine && (appState.webhookUrl || getEmbeddedWebhookUrl())) {
       pullDatabaseFromCloud(true, true, true);
     }
   });
@@ -4811,6 +4845,10 @@ function initFarmSalesApp() {
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
       renderAll();
+      if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
+        pullDatabaseFromCloud(true, true);
+      }
+      startLiveRealtimeSyncEngine();
       showToast(`مرحباً بك (${adminObj.name || 'مدير الموقع'})! تم تسجيل الدخول بصلاحيات المدير الكاملة 👑`);
       return;
     }
@@ -4829,6 +4867,10 @@ function initFarmSalesApp() {
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
       renderAll();
+      if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
+        pullDatabaseFromCloud(true, true);
+      }
+      startLiveRealtimeSyncEngine();
       showToast(`مرحباً بك (${matchedUser.name})! تم تسجيل الدخول بنجاح`, '👤');
       return;
     }
@@ -6772,7 +6814,7 @@ function initFarmSalesApp() {
       showToast('أنت الآن في وضع الأوفلاين — جميع بياناتك محفوظة بأمان على المتصفح.', '🟠');
       return;
     }
-    if (appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL) {
+    if (appState.webhookUrl || getEmbeddedWebhookUrl()) {
       if (!appState.hasLocalEdits) {
         const pulled = await pullDatabaseFromCloud(false, true);
         if (!pulled) {
@@ -6789,43 +6831,120 @@ function initFarmSalesApp() {
   });
 
   // Save Webhook URL & Smart Sync (Pulls from cloud first if this browser has no local edits, preventing accidental overwrite!)
+  const inpCloudWebhookEl = document.getElementById('inpCloudWebhookUrl');
+  if (inpCloudWebhookEl) {
+    inpCloudWebhookEl.addEventListener('input', () => {
+      const v = inpCloudWebhookEl.value.trim();
+      if (v.startsWith('http')) {
+        appState.webhookUrl = v;
+        try { localStorage.setItem(STORAGE_KEY + '_webhook_url', v); } catch (e) {}
+      }
+    });
+  }
+
   document.getElementById('btnSaveWebhook').addEventListener('click', async () => {
     const enteredUrl = document.getElementById('inpCloudWebhookUrl').value.trim();
     appState.webhookUrl = enteredUrl;
+    if (enteredUrl) {
+      window.EMBEDDED_CLOUD_WEBHOOK_URL = enteredUrl;
+      const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
+      if (liveMeta) liveMeta.setAttribute('content', enteredUrl);
+    }
     saveState(false);
     startLiveRealtimeSyncEngine();
     if (enteredUrl) {
-      if (!appState.hasLocalEdits) {
-        const pulled = await pullDatabaseFromCloud(false, true);
-        if (!pulled) {
-          await pushDatabaseToCloud(false, true);
-        }
-      } else {
-        await pushDatabaseToCloud(false, true);
+      const pulled = await pullDatabaseFromCloud(false, true);
+      if (!pulled || appState.hasLocalEdits) {
+        await pushDatabaseToCloud(true, true);
       }
     } else {
       showToast('تم مسح رابط المزامنة السحابية');
     }
   });
 
-  // Generate HTML with permanently embedded Webhook URL & current state for Google Sites
+  // Generate clean index.html with permanently embedded Webhook URL for GitHub Pages & Google Sites
   function buildEmbeddedGoogleSitesHtml() {
-    const url = (document.getElementById('inpCloudWebhookUrl').value || appState.webhookUrl || EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
+    window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
+    const inpEl = document.getElementById('inpCloudWebhookUrl');
+    const url = ((inpEl ? inpEl.value : '') || appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
     if (url) {
+      window.EMBEDDED_CLOUD_WEBHOOK_URL = url;
       appState.webhookUrl = url;
+      const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
+      if (liveMeta) liveMeta.setAttribute('content', url);
+      if (inpEl) inpEl.setAttribute('value', url);
       saveState(false);
+      startLiveRealtimeSyncEngine();
     }
-    let rawHtml = '<!DOC' + 'TYPE html>\n' + document.documentElement.outerHTML;
+
+    // Clone the document and clean runtime DOM mutations so the downloaded index.html is pristine for GitHub Pages
+    const cloneDoc = document.documentElement.cloneNode(true);
+
+    // 1. Remove runtime <style> tags injected by Tailwind Play CDN if ./style.css link is present
+    const hasExternalStyleLink = Boolean(cloneDoc.querySelector('link[href*="style.css"]'));
+    if (hasExternalStyleLink) {
+      cloneDoc.querySelectorAll('head style').forEach(st => st.remove());
+    }
+
+    // 2. Embed the Webhook URL in <meta id="metaEmbeddedCloudWebhookUrl"> and <script id="embeddedWebhookConfigScript">
+    const safeUrl = url.replace(/'/g, "\\'");
+    let metaNode = cloneDoc.querySelector('#metaEmbeddedCloudWebhookUrl');
+    if (!metaNode) {
+      metaNode = document.createElement('meta');
+      metaNode.id = 'metaEmbeddedCloudWebhookUrl';
+      metaNode.setAttribute('name', 'cloud-webhook-url');
+      const headEl = cloneDoc.querySelector('head') || cloneDoc;
+      headEl.insertBefore(metaNode, headEl.firstChild);
+    }
+    metaNode.setAttribute('content', url);
+
+    let cfgScript = cloneDoc.querySelector('#embeddedWebhookConfigScript');
+    if (!cfgScript) {
+      cfgScript = document.createElement('script');
+      cfgScript.id = 'embeddedWebhookConfigScript';
+      const headEl = cloneDoc.querySelector('head') || cloneDoc;
+      headEl.appendChild(cfgScript);
+    }
+    cfgScript.textContent = `\n    // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';\n  `;
+
+    const cloneInp = cloneDoc.querySelector('#inpCloudWebhookUrl');
+    if (cloneInp) {
+      cloneInp.setAttribute('value', url);
+    }
+
+    // 3. Reset login overlay & default tab state in the cloned HTML so opening on any device starts cleanly
+    const cloneLogin = cloneDoc.querySelector('#loginGatewayOverlay');
+    if (cloneLogin) {
+      cloneLogin.classList.remove('hidden');
+      cloneLogin.removeAttribute('style');
+    }
+    const cloneToast = cloneDoc.querySelector('#toastContainer');
+    if (cloneToast) {
+      cloneToast.classList.add('hidden');
+    }
+    ['daily', 'dashboard', 'merchants', 'transfers', 'expenses', 'sync'].forEach(v => {
+      const sec = cloneDoc.querySelector(`#view-${v}`);
+      if (sec) sec.classList.toggle('hidden', v !== 'daily');
+    });
+    cloneDoc.querySelectorAll('.nav-tab-btn').forEach(b => {
+      b.classList.toggle('tab-btn-active', b.getAttribute('data-nav') === 'daily');
+    });
+
+    let rawHtml = '<!DOC' + 'TYPE html>\n' + cloneDoc.outerHTML;
     if (url) {
       rawHtml = rawHtml.replace(
-        /const EMBEDDED_CLOUD_WEBHOOK_URL = '[^']*';/,
-        `const EMBEDDED_CLOUD_WEBHOOK_URL = '${url}';`
+        /const EMBEDDED_CLOUD_WEBHOOK_URL = '[^']*';/g,
+        `const EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';`
+      );
+      rawHtml = rawHtml.replace(
+        /window\.EMBEDDED_CLOUD_WEBHOOK_URL = '[^']*';/g,
+        `window.EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';`
       );
     }
     return { rawHtml, url };
   }
 
-  document.getElementById('btnCopyHtmlWithWebhook').addEventListener('click', () => {
+  document.getElementById('btnCopyHtmlWithWebhook').addEventListener('click', async () => {
     const { rawHtml, url } = buildEmbeddedGoogleSitesHtml();
     if (!url) {
       showToast('⚠️ الصق رابط السكربت (script.google.com) في الخانة أعلاه أولاً قبل نسخ الكود لـ Google Sites!', '⚠️');
@@ -6838,11 +6957,14 @@ function initFarmSalesApp() {
     ta.select();
     try { document.execCommand('copy'); } catch (err) {}
     document.body.removeChild(ta);
-    pushDatabaseToCloud(true);
-    showToast('✅ تم نسخ كود الموقع كاملاً مدمجاً به رابط السحابة! الصقه الآن في Google Sites (Embed Code).', '📋');
+    const pulled = await pullDatabaseFromCloud(true, true);
+    if (!pulled || appState.hasLocalEdits) {
+      await pushDatabaseToCloud(true, true);
+    }
+    showToast('✅ تم نسخ كود index.html مدمجاً به رابط السحابة! الصقه أو ارفعه الآن ليسمع في جميع الأجهزة.', '📋');
   });
 
-  document.getElementById('btnDownloadHtmlWithWebhook').addEventListener('click', () => {
+  document.getElementById('btnDownloadHtmlWithWebhook').addEventListener('click', async () => {
     const { rawHtml, url } = buildEmbeddedGoogleSitesHtml();
     if (!url) {
       showToast('⚠️ الصق رابط السكربت (script.google.com) في الخانة أعلاه أولاً قبل التحميل!', '⚠️');
@@ -6856,8 +6978,11 @@ function initFarmSalesApp() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    pushDatabaseToCloud(true);
-    showToast('✅ تم تحميل ملف HTML المدمج به رابط السحابة نهائياً!', '📥');
+    const pulled = await pullDatabaseFromCloud(true, true);
+    if (!pulled || appState.hasLocalEdits) {
+      await pushDatabaseToCloud(true, true);
+    }
+    showToast('✅ تم تحميل ملف index.html مدمجاً به رابط السحابة! ارفعه إلى GitHub ليسمع تلقائياً في كل الأجهزة.', '📥');
   });
 
   // Reset / Clear Current Farm Movements while keeping Merchants & Cloud Sync
