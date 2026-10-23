@@ -815,7 +815,7 @@ function verifyActiveUserSession() {
       loginErr.textContent = '🚫 تم إنهاء جلستك وتسجيل خروجك تلقائياً نظراً لحذف هذا الحساب من قِبل مدير الموقع!';
       loginErr.classList.remove('hidden');
     }
-    if (loginOverlay) loginOverlay.classList.remove('hidden'); loginOverlay.style.display = '';
+    if (loginOverlay) loginOverlay.classList.remove('hidden');
     if (currentUid !== 'visitor') {
       showToast('🚫 تم تسجيل خروجك تلقائياً لأن مدير الموقع قام بحذف هذا الحساب!', '🚪');
     }
@@ -4715,7 +4715,7 @@ function initFarmSalesApp() {
     document.getElementById('inpLoginUsername').value = '';
     document.getElementById('inpLoginPassword').value = '';
     loginErr.classList.add('hidden');
-    loginOverlay.classList.remove('hidden'); loginOverlay.style.display = '';
+    loginOverlay.classList.remove('hidden');
     showToast(reasonMsg, '🚪');
   }
 
@@ -4733,14 +4733,14 @@ function initFarmSalesApp() {
   const initLimitMs = getInactivityLimitMs();
   const isWithinIdleLimit = (initLimitMs <= 0) || (appState.lastActivityAt && (nowInit - appState.lastActivityAt < initLimitMs));
   if (appState.isLoggedIn && isWithinIdleLimit && verifyActiveUserSession()) {
-    loginOverlay.classList.add('hidden'); loginOverlay.style.display = 'none';
+    loginOverlay.classList.add('hidden');
     appState.lastActivityAt = nowInit;
     switchActiveTabUI(appState.activeTab || 'daily');
     saveState(false);
     renderAll();
   } else {
     appState.isLoggedIn = false;
-    loginOverlay.classList.remove('hidden'); loginOverlay.style.display = '';
+    loginOverlay.classList.remove('hidden');
   }
 
   // Monitor activity and auto-logout after Admin-configured idle time
@@ -4807,7 +4807,7 @@ function initFarmSalesApp() {
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
-      loginOverlay.classList.add('hidden'); loginOverlay.style.display = 'none';
+      loginOverlay.classList.add('hidden');
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
       renderAll();
@@ -4825,7 +4825,7 @@ function initFarmSalesApp() {
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
-      loginOverlay.classList.add('hidden'); loginOverlay.style.display = 'none';
+      loginOverlay.classList.add('hidden');
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
       renderAll();
@@ -5366,7 +5366,7 @@ function initFarmSalesApp() {
 
   // Helper to populate and refresh all Day Management selectors & pills
   function refreshDayManagementBoxesUI() {
-  window.refreshDayManagementBoxesUI = refreshDayManagementBoxesUI;
+    window.refreshDayManagementBoxesUI = refreshDayManagementBoxesUI;
     const visDays = getVisibleDays();
     const allDays = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     const hiddenDays = allDays.filter(d => !visDays.includes(d));
@@ -5495,7 +5495,7 @@ function initFarmSalesApp() {
   };
 
   function openDayManagementBox(mode) {
-  window.openDayManagementBox = openDayManagementBox;
+    window.openDayManagementBox = openDayManagementBox;
     if (!hasPermission('sales')) {
       showToast('عفواً، إدارة الأيام متاحة لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
       return;
@@ -5507,7 +5507,7 @@ function initFarmSalesApp() {
     if (boxEdit) boxEdit.classList.toggle('hidden', mode !== 'edit');
     if (boxDel) boxDel.classList.toggle('hidden', mode !== 'delete');
 
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
 
     if (mode === 'add') {
       const vis = getVisibleDays();
@@ -5522,7 +5522,7 @@ function initFarmSalesApp() {
         inpAdd.value = (appState.days[nextFree] && appState.days[nextFree].dateLabel) || `اليوم ${nextFree}`;
         setTimeout(() => { inpAdd.focus(); inpAdd.select(); }, 60);
       }
-      refreshDayManagementBoxesUI();
+      if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
     } else if (mode === 'edit') {
       const selEdit = document.getElementById('selEditDayTarget');
       const inpEdit = document.getElementById('inpEditDayCustomLabel');
@@ -5532,16 +5532,16 @@ function initFarmSalesApp() {
         inpEdit.value = (appState.days[curD] && appState.days[curD].dateLabel) || `اليوم ${curD}`;
         setTimeout(() => { inpEdit.focus(); inpEdit.select(); }, 60);
       }
-      refreshDayManagementBoxesUI();
+      if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
     } else if (mode === 'delete') {
       const selDel = document.getElementById('selDeleteDayTarget');
       if (selDel) selDel.value = String(appState.currentDay || 1);
-      refreshDayManagementBoxesUI();
+      if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
     }
   };
 
   function openDailyQuickAddDayBox() {
-  window.openDailyQuickAddDayBox = openDailyQuickAddDayBox;
+    window.openDailyQuickAddDayBox = openDailyQuickAddDayBox;
     if (!hasPermission('sales')) {
       showToast('عفواً، إضافة يوم جديد متاحة لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
       return;
@@ -5557,7 +5557,7 @@ function initFarmSalesApp() {
     const sel = document.getElementById('selDailyQuickAddDay');
     const inp = document.getElementById('inpDailyQuickAddLabel');
     if (sel) sel.value = String(nextFree);
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
     if (inp) {
       inp.value = (appState.days[nextFree] && appState.days[nextFree].dateLabel) || `اليوم ${nextFree}`;
       setTimeout(() => { inp.focus(); inp.select(); }, 60);
@@ -5588,7 +5588,7 @@ function initFarmSalesApp() {
     const d = Number(e.target.value) || 1;
     const inp = document.getElementById('inpAddDayCustomLabel');
     if (inp) inp.value = (appState.days[d] && appState.days[d].dateLabel) || `اليوم ${d}`;
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
   document.getElementById('addDayQuickPills').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-pick-add-day]');
@@ -5600,7 +5600,7 @@ function initFarmSalesApp() {
       inp.value = (appState.days[d] && appState.days[d].dateLabel) || `اليوم ${d}`;
       inp.focus();
     }
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
   document.getElementById('btnConfirmAddSelectedDay').addEventListener('click', () => {
     const d = Number(document.getElementById('selAddDayTarget').value) || 1;
@@ -5615,7 +5615,7 @@ function initFarmSalesApp() {
     const d = Number(e.target.value) || 1;
     const inp = document.getElementById('inpDailyQuickAddLabel');
     if (inp) inp.value = (appState.days[d] && appState.days[d].dateLabel) || `اليوم ${d}`;
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
   document.getElementById('dailyQuickAddDayPills').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-pick-daily-add-day]');
@@ -5627,7 +5627,7 @@ function initFarmSalesApp() {
       inp.value = (appState.days[d] && appState.days[d].dateLabel) || `اليوم ${d}`;
       inp.focus();
     }
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
   document.getElementById('btnConfirmDailyQuickAddDay').addEventListener('click', () => {
     const d = Number(document.getElementById('selDailyQuickAddDay').value) || 1;
@@ -5646,7 +5646,7 @@ function initFarmSalesApp() {
       inp.focus();
       inp.select();
     }
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
   document.getElementById('editDayQuickPills').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-pick-edit-day]');
@@ -5659,7 +5659,7 @@ function initFarmSalesApp() {
       inp.focus();
       inp.select();
     }
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
   document.getElementById('btnConfirmEditSelectedDay').addEventListener('click', () => {
     const d = Number(document.getElementById('selEditDayTarget').value) || appState.currentDay || 1;
@@ -5677,14 +5677,14 @@ function initFarmSalesApp() {
 
   // Sync dropdown changes & pill clicks in Delete Day Box
   document.getElementById('selDeleteDayTarget').addEventListener('change', () => {
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
   document.getElementById('deleteDayQuickPills').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-pick-del-day]');
     if (!btn) return;
     const d = Number(btn.getAttribute('data-pick-del-day')) || 1;
     document.getElementById('selDeleteDayTarget').value = String(d);
-    refreshDayManagementBoxesUI();
+    if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
   document.getElementById('btnConfirmDeleteSelectedDay').addEventListener('click', () => {
     const d = Number(document.getElementById('selDeleteDayTarget').value) || appState.currentDay || 1;

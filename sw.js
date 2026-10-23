@@ -1,10 +1,12 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v19";
+const CACHE_NAME = "farm-sales-committee-v21";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
   "./style.css",
+  "./style.css?v=21",
   "./app.js",
+  "./app.js?v=21",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
@@ -68,16 +70,18 @@ self.addEventListener("fetch", (event) => {
   if (
     req.mode === "navigate" ||
     (req.headers.get("accept") || "").includes("text/html") ||
-    url.endsWith("/index.html") ||
-    url.endsWith("/app.js") ||
-    url.endsWith("/style.css") ||
-    url.endsWith("/manifest.json")
+    url.includes("/index.html") ||
+    url.includes("/app.js") ||
+    url.includes("/style.css") ||
+    url.includes("/manifest.json")
   ) {
     event.respondWith(
       fetch(req)
         .then((networkRes) => {
-          const copy = networkRes.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          if (networkRes && networkRes.status === 200) {
+            const copy = networkRes.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
           return networkRes;
         })
         .catch(() => caches.match(req).then((cached) => cached || caches.match("./index.html")))
