@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>نظام محاضر لجان بيع المزارع (ربط ثنائي مع الإكسيل + يعمل بدون إنترنت)</title>
+  <meta name="theme-color" content="#1b365d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="مبيعات المزرعة" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="min-h-screen pb-24 md:pb-10">
+
+  <!-- ======================================================================= -->
+  <!-- INITIAL LOGIN GATEWAY OVERLAY (واجهة تسجيل الدخول عند فتح الموقع)         -->
+  <!-- ======================================================================= -->
+  <div id="loginGatewayOverlay" class="fixed inset-0 z-50 navy-gradient flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white text-slate-900 rounded-3xl shadow-2xl border-4 border-amber-400 max-w-md w-full p-6 space-y-5 text-right">
+      <div class="text-center space-y-1.5 border-b border-slate-200 pb-4">
+        <div class="inline-flex items-center justify-center px-4 py-1.5 rounded-2xl gold-badge font-extrabold text-base shadow">
+          🏡 نظام محاضر لجان بيع المزارع
+        </div>
+        <h2 class="text-lg md:text-xl font-extrabold text-slate-900 pt-1">تسجيل الدخول إلى النظام</h2>
+        <p class="text-xs text-slate-500 font-semibold">
+          يرجى إدخال اسم المستخدم وكلمة المرور الخاصة بك للدخول إلى النظام
+        </p>
+      </div>
+
+      <!-- Admin / User Login Form -->
+      <form id="gatewayLoginForm" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 mb-1">👤 اسم المستخدم</label>
+          <input id="inpLoginUsername" type="text" autocomplete="username" placeholder="أدخل اسم المستخدم..."
+            class="w-full px-3.5 py-2.5 text-sm font-bold border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-700" />
+        </div>
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 mb-1">🔑 كلمة المرور</label>
+          <input id="inpLoginPassword" type="password" autocomplete="current-password" placeholder="أدخل كلمة المرور..."
+            class="w-full px-3.5 py-2.5 text-sm font-bold border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-700" />
+        </div>
+
+        <div id="loginErrorMsg" class="hidden p-2.5 rounded-xl bg-rose-100 border border-rose-400 text-rose-900 text-xs font-extrabold text-center">
+          ❌ اسم المستخدم أو كلمة المرور غير صحيحة! يرجى التأكد والمحاولة مرة أخرى.
+        </div>
+
+        <button type="submit" id="btnLoginAdminSubmit" class="w-full py-3 px-4 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-sm shadow-lg transition flex items-center justify-center gap-2">
+          <span>🔐</span>
+          <span>تسجيل الدخول (مدير الموقع / مستخدم مسجل)</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Compact 2-Row Top App Header (سطرين فقط على الموبايل بدون شريط تمرير، وعرض كامل للكمبيوتر) -->
+  <header class="navy-gradient text-white sticky top-0 z-40 shadow-lg">
+    <!-- Row 1 & Row 2 on Mobile (2 compact lines without scrollbar), Full Row 1 on Desktop (md:) -->
+    <div class="max-w-7xl mx-auto px-2 md:px-3 py-1 md:py-1.5 flex flex-col md:flex-row md:flex-nowrap items-stretch md:items-center justify-between gap-1 md:gap-2">
+      <!-- Mobile Line 1 / Desktop Right Group: Farm Badge, Editable Farm Name & Switcher, Connection Status -->
+      <div class="flex items-center justify-between md:justify-start gap-1.5 md:gap-2 flex-nowrap min-w-0">
+        <div class="flex items-center gap-1 md:gap-2 min-w-0">
+          <div id="headerFarmBadge" class="px-2 md:px-2.5 h-6 md:h-8 rounded-lg gold-badge flex items-center justify-center font-extrabold text-[11px] md:text-sm shadow whitespace-nowrap shrink-0">
+            أبوذكري
+          </div>
+          <h1 class="hidden md:block text-xs md:text-sm font-extrabold leading-tight">
+            نظام محاضر لجان بيع المزارع:
+          </h1>
+          <div class="inline-flex items-center bg-white/15 border border-amber-300/60 rounded-lg px-1.5 md:px-2 py-0.5 gap-1 min-w-0">
+            <span class="text-[10px] md:text-xs shrink-0">✏️</span>
+            <input id="inpTopFarmName" type="text" value="أبوذكري"
+              title="اكتب هنا اسم أي مزرعة لتغييره فوراً في قاعدة البيانات السحابية وفي شيت الإكسيل"
+              placeholder="اسم المزرعة..."
+              class="md:hidden bg-transparent text-amber-300 font-extrabold text-[11px] focus:outline-none w-16 sm:w-24" />
+            <select id="selTopCloudFarm" title="التبديل السريع بين المزارع المحفوظة في قاعدة البيانات السحابية"
+              class="bg-slate-900 text-white text-[10px] md:text-[11px] font-bold rounded px-1 md:px-1.5 py-0.5 border border-white/20 focus:outline-none max-w-[85px] md:max-w-none truncate">
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1 md:gap-1.5 text-[10px] md:text-[11px] text-slate-200 shrink-0">
+          <span id="connStatusBadge" class="inline-flex items-center gap-1 px-1.5 md:px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-semibold whitespace-nowrap">
+            <span id="connDot" class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="connText">متصل (حفظ فوري)</span>
+          </span>
+          <span id="linkedExcelBadge" class="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/25 border border-blue-300/40 text-blue-100 font-semibold" title="حالة شيت الإكسيل">
+            📄 <span id="linkedExcelNameTxt" class="inline truncate max-w-[200px] lg:max-w-xs">متزامن لحظياً ✓</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Mobile Line 2 / Desktop Left Group: Sync, Live Toggle, Permissions & User Account Dropdown -->
+      <div class="flex items-center justify-between md:justify-end gap-1 md:gap-1.5 flex-nowrap border-t border-white/10 pt-1 md:border-t-0 md:pt-0 shrink-0">
+        <div class="flex items-center gap-1 md:gap-1.5 shrink-0">
+                    <button id="btnInstallPwaApp" type="button" class="hidden md:hidden px-2 py-0.5 md:py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] md:text-xs transition flex items-center gap-1 shadow-sm" title="تثبيت التطبيق على جهازك للعمل بدون إنترنت">
+            <span>📲</span>
+            <span>تثبيت التطبيق</span>
+          </button>
+          <button id="btnSyncNow" type="button" class="px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] md:text-xs transition flex items-center gap-1 shadow-sm" title="مزامنة وحفظ التعديلات الآن">
+            <span>🔄</span>
+            <span class="hidden md:inline">مزامنة</span>
+          </button>
+          <button id="btnToggleLiveSync" type="button" class="px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white font-extrabold text-[11px] md:text-xs transition flex items-center gap-1 md:gap-1.5 shadow-sm border border-emerald-300/50" title="تشغيل أو إيقاف المزامنة اللحظية الحية (Live Realtime Sync) بين الأجهزة المتصلة">
+            <span id="liveSyncHeaderDot" class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-amber-300 animate-ping"></span>
+            <span id="liveSyncHeaderTxt">⚡ مباشر (Live)</span>
+          </button>
+          <a href="#syncPermissionsSection" id="btnOpenUsersModal" class="px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg bg-amber-400/95 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] md:text-xs md:underline transition flex items-center gap-1 shadow-sm" title="الانتقال لتبويب التحكم والمزامنة وإدارة المستخدمين والصلاحيات">
+            <span>⚙️</span>
+            <span class="hidden md:inline">الصلاحيات</span>
+          </a>
+        </div>
+
+        <!-- Unified User Account Button with Dropdown Menu (الملف الشخصي، الصلاحيات، تسجيل الخروج، إلخ) -->
+        <div id="headerUserDropdownContainer" class="relative shrink-0">
+          <button id="btnHeaderUserMenuToggle" type="button" class="px-2.5 md:px-3 py-0.5 md:py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white font-extrabold text-[11px] md:text-xs transition flex items-center gap-1 md:gap-1.5 border border-amber-400/70 shadow-sm" title="قائمة حساب المستخدم والملف الشخصي وتسجيل الخروج">
+            <span id="hdrActiveUserIcon">👑</span>
+            <span id="hdrActiveUserDisplayName" class="max-w-[110px] md:max-w-[150px] truncate">مدير الموقع</span>
+            <span class="text-[10px] text-amber-300 mr-0.5">▾</span>
+          </button>
+
+          <div id="headerUserDropdownMenu" class="hidden absolute left-0 mt-1.5 w-60 bg-white text-slate-900 rounded-2xl shadow-2xl border-2 border-slate-200 py-2 z-50 text-right">
+            <div class="px-3.5 py-2 border-b border-slate-100 bg-slate-50/80">
+              <div id="ddUserFullName" class="text-xs font-extrabold text-slate-900 truncate">مدير الموقع (كامل الصلاحيات)</div>
+              <div id="ddUserRoleSub" class="text-[11px] font-bold text-blue-700 mt-0.5">👑 مدير عام المزرعة</div>
+            </div>
+
+            <div class="py-1">
+              <a href="#myProfileCardSection" id="btnOpenMyProfile" class="w-full px-3.5 py-2 text-xs font-extrabold text-slate-800 hover:bg-blue-50 hover:text-blue-900 flex items-center gap-2 transition">
+                <span>👤</span>
+                <span>الملف الشخصي وتعديل كلمة المرور</span>
+              </a>
+              <button type="button" id="btnDropdownPermissions" class="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-950 flex items-center gap-2 transition text-right">
+                <span>⚙️</span>
+                <span>إدارة المستخدمين والصلاحيات</span>
+              </button>
+              <button type="button" id="btnDropdownExportExcel" class="w-full px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition text-right">
+                <span>📥</span>
+                <span>تحميل شيت الإكسيل (.xlsx)</span>
+              </button>
+              <button type="button" id="btnDropdownForceUpdate" class="w-full px-3.5 py-2 text-xs font-extrabold text-sky-800 hover:bg-sky-50 flex items-center gap-2 transition text-right">
+                <span>🔄</span>
+                <span>تحديث التطبيق للنسخة الجديدة ومسح الكاش</span>
+              </button>
+            </div>
+
+            <div class="border-t border-slate-200 pt-1 mt-0.5">
+              <button id="btnShowLoginScreen" type="button" class="w-full px-3.5 py-2 text-xs font-extrabold text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                <span>🚪</span>
+                <span id="hdrCurrentUserShort">تسجيل خروج</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Navigation Ribbon (6 Tabs — مخفي على الموبايل لأنه موجود في الشريط السفلي، وظاهر بالكامل على الكمبيوتر) -->
+    <div class="hidden md:block bg-slate-900/50 border-t border-white/10">
+      <div class="max-w-7xl mx-auto px-2 py-1 flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+        <button type="button" data-nav="daily" class="nav-tab-btn tab-btn-active whitespace-nowrap px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold text-white hover:bg-white/10 transition">
+          📝 محضر البيع اليومي والميزان
+        </button>
+        <button type="button" data-nav="dashboard" class="nav-tab-btn whitespace-nowrap px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold text-white hover:bg-white/10 transition">
+          📊 الملخص التنفيذي
+        </button>
+        <button type="button" data-nav="merchants" class="nav-tab-btn whitespace-nowrap px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold text-white hover:bg-white/10 transition">
+          👥 تكويد وكشف حساب التجار
+        </button>
+        <button type="button" data-nav="transfers" class="nav-tab-btn whitespace-nowrap px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold text-white hover:bg-white/10 transition">
+          💳 بيان التحويلات والمزارع السابقة
+        </button>
+        <button type="button" data-nav="expenses" class="nav-tab-btn whitespace-nowrap px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold text-white hover:bg-white/10 transition">
+          💸 بيان المصروفات
+        </button>
+        <button type="button" data-nav="sync" class="nav-tab-btn whitespace-nowrap px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold text-white hover:bg-white/10 transition">
+          ⚙️ التحكم والمزامنة والصلاحيات
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Toast Notification Banner -->
+  <div id="toastContainer" class="fixed bottom-20 md:bottom-6 left-4 z-50 hidden max-w-sm bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border-r-4 border-amber-400 text-xs md:text-sm font-bold flex items-center gap-2">
+    <span id="toastIcon">✅</span>
+    <span id="toastMsg">تم الحفظ بنجاح</span>
+  </div>
+
+  <!-- Main Content Container -->
+  <main class="max-w-[99.5%] mx-auto px-1.5 sm:px-3 pt-3 space-y-4">
+
+    <!-- Visitor / Restricted User Notice Banner -->
+    <div id="visitorModeBanner" class="hidden bg-amber-100 border-2 border-amber-500 text-amber-950 px-4 py-2.5 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2 text-xs font-extrabold">
+      <div class="flex items-center gap-2">
+        <span class="text-base">🔒</span>
+        <span id="visitorBannerText">أنت تتصفح الموقع الآن بصلاحية (زائر / مستخدم عادي): متاح لك عرض جميع البيانات وسحب شيت الإكسيل (.xlsx) فقط.</span>
+      </div>
+      <span class="text-[11px] bg-amber-300/70 px-2.5 py-1 rounded-lg">لتفعيل الإضافة والتعديل والحذف، اختر (مدير الموقع) من القائمة العلوية 👤</span>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 1: DAILY SALES, EXPENSES & TRIAL BALANCE (صفحة الإدخال اليومي)    -->
+    <!-- ===================================================================== -->
+    <section id="view-daily" class="space-y-4">
+
+      <!-- Clean Day Selector Bar + Date Display + Quick Jump Links -->
+      <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-200 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-xs font-extrabold text-slate-600">التاريخ / البيان:</span>
+            <input id="currentDayDateInput" type="text" class="px-2.5 py-1 text-xs md:text-sm font-bold border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-44" placeholder="تاريخ اليوم (مثال: الإثنين 12-10)" />
+            <span class="text-xs font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
+              المزرعة: <strong id="dailyFarmNameBadge">أبوذكري</strong>
+            </span>
+          </div>
+          <!-- Quick In-Page Jump Links for Mobile -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button type="button" id="btnJumpSaleForm" class="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-200 text-xs font-bold hover:bg-blue-100">
+              ➕ إضافة وزنة بيع
+            </button>
+            <button type="button" id="btnJumpExpenseForm" class="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200 text-xs font-bold hover:bg-rose-100">
+              💸 صرف مكافأة/مصروف
+            </button>
+            <button type="button" id="btnJumpTrialBalance" class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-100">
+              ⚖️ ميزان الخزنة اليومي
+            </button>
+          </div>
+        </div>
+
+        <!-- 10 Days Buttons -->
+        <div id="daySelectorContainer" class="grid grid-cols-5 sm:grid-cols-10 gap-1.5"></div>
+
+        <!-- Quick Inline Day Picker when clicking "+ إضافة يوم" on Daily View -->
+        <div id="dailyQuickAddDayBox" class="hidden bg-emerald-50/90 border-2 border-emerald-400 rounded-xl p-3 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-xs font-extrabold text-emerald-950 flex items-center gap-1.5">
+              <span>➕</span>
+              <span>اختر اليوم المراد إضافته وفتحه في الدورة الحالية:</span>
+            </div>
+            <button type="button" id="btnCloseDailyQuickAddDay" class="px-2.5 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-extrabold">
+              إغلاق ✕
+            </button>
+          </div>
+          <div id="dailyQuickAddDayPills" class="flex flex-wrap items-center gap-1.5"></div>
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end pt-1">
+            <div class="sm:col-span-4">
+              <label class="block text-[11px] font-extrabold text-slate-700 mb-1">اليوم المراد إضافته:</label>
+              <select id="selDailyQuickAddDay" class="w-full px-2.5 py-1.5 text-xs font-extrabold border-2 border-emerald-500 rounded-xl bg-white text-slate-900 focus:outline-none"></select>
+            </div>
+            <div class="sm:col-span-5">
+              <label class="block text-[11px] font-extrabold text-slate-700 mb-1">التاريخ / اسم اليوم (اختياري):</label>
+              <input id="inpDailyQuickAddLabel" type="text" placeholder="مثال: الثلاثاء 13-10-2026"
+                class="w-full px-3 py-1.5 text-xs font-bold border border-emerald-400 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600" />
+            </div>
+            <div class="sm:col-span-3">
+              <button type="button" id="btnConfirmDailyQuickAddDay" class="w-full py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition">
+                ✅ إضافة وفتح اليوم
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Top KPI Strip for Selected Day -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+            <div class="text-[11px] font-bold text-slate-500">عدد السيارات / الوزن الصافي</div>
+            <div class="text-sm md:text-base font-extrabold text-slate-900 mt-0.5">
+              <span id="dayKpiCount">0</span> سيارة | <span id="dayKpiNetWeight" class="text-blue-800">0</span> كجم
+            </div>
+          </div>
+          <div class="bg-amber-50/70 border border-amber-200 rounded-xl p-2.5">
+            <div class="text-[11px] font-bold text-amber-900">إجمالي مبيعات اليوم بالإكرامية</div>
+            <div class="text-sm md:text-base font-extrabold text-amber-950 mt-0.5">
+              <span id="dayKpiTotalSales">0.00</span> ج.م
+            </div>
+          </div>
+          <div class="bg-rose-50/70 border border-rose-200 rounded-xl p-2.5">
+            <div class="text-[11px] font-bold text-rose-900">إجمالي المصروفات / التحويلات</div>
+            <div class="text-xs md:text-sm font-extrabold text-rose-900 mt-0.5">
+              مصاريف: <span id="dayKpiExpenses">0</span> | تحويلات: <span id="dayKpiTransfers">0</span>
+            </div>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-300 rounded-xl p-2.5">
+            <div class="text-[11px] font-bold text-emerald-900">صافي النقدية بالخزنة (بعد المصاريف)</div>
+            <div class="text-sm md:text-base font-extrabold text-emerald-900 mt-0.5">
+              <span id="dayKpiNetCash">0</span> ج.م
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile-Friendly Fast Sale Entry Card (إدخال حركة بيع جديدة أو تعديل) -->
+      <div id="saleFormCard" class="bg-white rounded-2xl shadow-sm border-2 border-blue-900/20 overflow-hidden">
+        <div class="navy-gradient text-white px-4 py-2.5 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🚛</span>
+            <h2 id="saleFormTitle" class="text-sm md:text-base font-extrabold">تسجيل حركة بيع / تحصيل جديدة (<span id="saleFormDayLabel">يوم 1</span>)</h2>
+          </div>
+          <span class="text-xs bg-white/15 px-2.5 py-0.5 rounded-full font-semibold">سعة 45 حركة يومياً</span>
+        </div>
+
+        <form id="saleEntryForm" class="p-3.5 space-y-3.5">
+          <input type="hidden" id="editSaleId" value="" />
+
+          <!-- Row 1: Merchant AutoComplete + Unified Code + Scale No + Car No -->
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+            <div class="sm:col-span-5 relative">
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">
+                اسم التاجر / عهدة السيارة <span class="text-blue-700 font-normal">(اكتب حرفين للإكمال التلقائي)</span>
+              </label>
+              <input id="inpMerchantName" type="text" autocomplete="off" required
+                placeholder="مثال: رضا المنياوى أو كرنك 1 أو كرنك 2..."
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600" />
+              <!-- Instant Custom Auto-Suggest Box (No arrow needed!) -->
+              <div id="merchantSuggestBox" class="hidden absolute z-30 w-full mt-1 bg-white border-2 border-blue-700 rounded-xl shadow-xl max-h-52 overflow-y-auto"></div>
+            </div>
+
+            <div class="sm:col-span-3">
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">كود التاجر الموحد [تلقائي]</label>
+              <div id="dispMerchantCode" class="w-full px-3 py-2 text-sm font-extrabold bg-slate-100 text-blue-900 border border-slate-300 rounded-xl text-center">
+                يُحدد تلقائياً
+              </div>
+            </div>
+
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">ميزان رقم <span class="text-emerald-700 font-normal">(متسلسل تلقائي)</span></label>
+              <input id="inpScaleNo" type="number" inputmode="numeric" placeholder="5222"
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl text-center focus:ring-2 focus:ring-blue-600" />
+            </div>
+
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">رقم السيارة</label>
+              <input id="inpCarNo" type="number" inputmode="numeric" placeholder="6923"
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl text-center focus:ring-2 focus:ring-blue-600" />
+            </div>
+          </div>
+
+          <!-- Row 2: Weights, Price, Tip & Auto-Calculated Invoice Banner -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">وزنة أولى (فارغ - كجم)</label>
+              <input id="inpW1" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">وزنة ثانية (قائم - كجم)</label>
+              <input id="inpW2" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">السعر (ج.م / كجم) <span class="text-emerald-700 font-normal">(ثابت وقابل للتعديل)</span></label>
+              <input id="inpPrice" type="text" inputmode="decimal" data-money-input="1" placeholder="78.02"
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">الإكرامية (ج.م) <span class="text-emerald-700 font-normal">(ثابتة وقابلة للتعديل)</span></label>
+              <input id="inpTip" type="text" inputmode="decimal" data-money-input="1" placeholder="250"
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
+            </div>
+            <div id="weightValidationAlert" class="hidden col-span-2 sm:col-span-4 p-2.5 rounded-xl bg-rose-100 border-2 border-rose-500 text-rose-900 text-xs font-extrabold flex items-center gap-2">
+              <span class="text-base">⚠️</span>
+              <span>خطأ في الميزان: الوزنة الثانية (القائم) يجب أن تكون أكبر من أو تساوي الوزنة الأولى (الفارغ)!</span>
+            </div>
+          </div>
+
+          <!-- Live Calculated Weight, Invoice Diff, Previous Merchant Debt Statement & Custody Balance Strip -->
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-blue-950 text-white p-2.5 rounded-xl text-center">
+            <div class="border-l border-white/10 pl-1 flex flex-col justify-center">
+              <div class="text-[11px] text-blue-200">الصافي [تلقائي]</div>
+              <div id="calcNetWeight" class="text-sm md:text-base font-extrabold text-amber-400">0 كجم</div>
+            </div>
+            <div class="sm:border-l border-white/10 pl-1 flex flex-col justify-center">
+              <div class="text-[11px] text-blue-200">إجمالي السعر بالإكرامية</div>
+              <div id="calcTotalWithTip" class="text-sm md:text-base font-extrabold text-emerald-300">0.00 ج.م</div>
+            </div>
+            <div class="border-l border-white/10 pl-1 flex flex-col justify-center">
+              <div class="text-[11px] text-blue-200">فرق الفاتورة (المدفوع والآجل - السعر)</div>
+              <div id="calcInvoiceDiff" class="text-sm md:text-base font-extrabold text-white">0 ج.م</div>
+            </div>
+            <div class="bg-indigo-500/25 border border-indigo-300/50 rounded-lg p-1.5 flex flex-col justify-center">
+              <div class="text-[11px] text-indigo-200 font-bold">بيان إجمالي المديونية السابقة (المزرعة الحالية)</div>
+              <div id="calcPrevMerchantDebt" class="text-sm md:text-base font-extrabold text-white">0 ج.م</div>
+              <div id="calcPrevMerchantDebtSub" class="text-[10px] text-indigo-200">اختر التاجر لعرض مديونيته السابقة</div>
+            </div>
+            <div class="bg-amber-500/20 border border-amber-400/60 rounded-lg p-1.5 flex flex-col justify-center">
+              <div class="text-[11px] text-amber-200 font-bold">صافي رصيد العهدة التلقائي [بيان]</div>
+              <div id="calcMerchantBalance" class="text-sm md:text-base font-extrabold text-amber-300">0 ج.م</div>
+              <div id="calcMerchantBalanceSub" class="text-[10px] text-slate-200">العهدة (0) - تحصيل المديونيات (0)</div>
+            </div>
+          </div>
+
+          <!-- Standalone Custody Statement Row: العهدة التي دفعها التاجر (مجرد بيان مستقل يُخصم منه تحصيل المديونيات تلقائياً) -->
+          <div class="border-2 border-amber-500/40 bg-amber-50/60 rounded-xl p-2.5">
+            <div class="flex flex-wrap items-center justify-between border-b border-amber-300 pb-1.5 mb-2 gap-1">
+              <span class="text-xs font-extrabold text-amber-950">💼 العهدة التي دفعها التاجر (نقدية / تحويلات: كاش - تحويل بنكي - إنستا - شيك) — [بيان مستقل]</span>
+              <span class="text-[11px] font-extrabold text-amber-950 bg-amber-200/80 px-2.5 py-0.5 rounded-lg">
+                إجمالي العهدة: <strong id="lblTotalCustodyEntered">0</strong> ج.م | المتبقي بعد خصم تحصيل المديونيات: <strong id="lblNetCustodyRemaining" class="text-emerald-900">0</strong> ج.م
+              </span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">عهدة نقدية دفعها التاجر (بيان)</label>
+                <input id="inpCustodyCash" type="text" inputmode="decimal" data-money-input="1" placeholder="مثال: 200000"
+                  class="w-full px-2.5 py-1.5 text-sm font-extrabold border border-amber-400 rounded-lg bg-white text-emerald-900" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">عهدة تحويل دفعها التاجر (بيان)</label>
+                <input id="inpCustodyTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="مثال: 50000"
+                  class="w-full px-2.5 py-1.5 text-sm font-extrabold border border-amber-400 rounded-lg bg-white text-blue-900" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">نوع تحويل العهدة (كاش / تحويل / إنستا / شيك)</label>
+                <select id="selCustodyTransferType" class="w-full px-2 py-1.5 text-xs font-extrabold border border-amber-400 rounded-lg bg-white">
+                  <option value="">-- اختر نوع تحويل العهدة --</option>
+                  <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                  <option value="تحويل بنكي">تحويل بنكي</option>
+                  <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                  <option value="شيكات">شيكات</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 3: The 3 Collection Sections (Current Invoice / Current Farm Debt / Previous Farms Debt) -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+
+            <!-- Group 1: سداد فاتورة اليوم (المزرعة الحالية) -->
+            <div class="border-2 border-blue-800/20 bg-blue-50/40 rounded-xl p-2.5 space-y-2">
+              <div class="flex items-center justify-between border-b border-blue-200 pb-1.5">
+                <span class="text-xs font-extrabold text-blue-950">1. سداد فاتورة اليوم (المزرعة الحالية)</span>
+                <button type="button" id="btnAutoFillCredit" class="text-[11px] px-2 py-0.5 rounded bg-blue-700 text-white font-bold hover:bg-blue-800">
+                  باقي الفاتورة آجل ⚡
+                </button>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي مبيعات (للخزنة)</label>
+                  <input id="inpCashSales" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">آجل فاتورة اليوم</label>
+                  <input id="inpCreditSales" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">تحويل مبيعات (يخصم من التاجر)</label>
+                  <input id="inpTransferSales" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">نوع تحويل المبيعات</label>
+                  <select id="selTransferSalesType" class="w-full px-2 py-1.5 text-xs font-bold border border-amber-400 rounded-lg bg-white">
+                    <option value="">-- اختر النوع --</option>
+                    <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                    <option value="تحويل بنكي">تحويل بنكي</option>
+                    <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                    <option value="شيكات">شيكات</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 2: تحصيل مديونيات المزرعة الحالية (يبدأ من يوم 2) -->
+            <div class="border-2 border-teal-800/20 bg-teal-50/40 rounded-xl p-2.5 space-y-2">
+              <div class="flex items-center justify-between border-b border-teal-200 pb-1.5">
+                <span class="text-xs font-extrabold text-teal-950">2. تحصيل مديونيات المزرعة الحالية</span>
+                <span class="text-[10px] font-bold text-teal-800 bg-teal-100 px-1.5 py-0.5 rounded">يخصم من مديونية التاجر</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="col-span-2">
+                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي تحصيل مديونيات (يدخل الخزنة ويخصم من التاجر)</label>
+                  <input id="inpDebtCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">تحويل مديونيات (معاملة التحويل)</label>
+                  <input id="inpDebtTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">نوع تحويل المديونية</label>
+                  <select id="selDebtTransferType" class="w-full px-2 py-1.5 text-xs font-bold border border-amber-400 rounded-lg bg-white">
+                    <option value="">-- اختر النوع --</option>
+                    <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                    <option value="تحويل بنكي">تحويل بنكي</option>
+                    <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                    <option value="شيكات">شيكات</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 3: تحصيلات مديونيات سابقة (مزارع أخرى) -->
+            <div class="border-2 border-purple-800/20 bg-purple-50/40 rounded-xl p-2.5 space-y-2">
+              <div class="flex items-center justify-between border-b border-purple-200 pb-1.5">
+                <span class="text-xs font-extrabold text-purple-950">3. تحصيلات مزارع سابقة (مواقع أخرى)</span>
+                <span class="text-[10px] font-bold text-purple-800 bg-purple-100 px-1.5 py-0.5 rounded">لا تخصم من الحالية</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي سابقة (للخزنة فقط)</label>
+                  <input id="inpPrevCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">اسم المزرعة السابقة / ملاحظات</label>
+                  <input id="inpNotes" type="text" placeholder="مثال: ابو الخمسان"
+                    class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">تحويل سابقة (معاملة التحويل)</label>
+                  <input id="inpPrevTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">نوع تحويل السابقة</label>
+                  <select id="selPrevTransferType" class="w-full px-2 py-1.5 text-xs font-bold border border-amber-400 rounded-lg bg-white">
+                    <option value="">-- اختر النوع --</option>
+                    <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                    <option value="تحويل بنكي">تحويل بنكي</option>
+                    <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                    <option value="شيكات">شيكات</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Submit, Pending Weight-1 Save & Reset Buttons -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200">
+            <div class="text-[11px] font-bold text-slate-600">
+              💡 يمكنك حفظ <strong>الوزنة الأولى والبيانات مؤقتاً</strong> لحين تحميل السيارة، ولا يُحفظ السجل النهائي إلا بعد إدخال <strong>الوزنة الثانية</strong>.
+            </div>
+            <div class="flex flex-wrap items-center gap-2 mr-auto">
+              <button type="button" id="btnCancelEditSale" class="hidden px-4 py-2 rounded-xl bg-slate-200 text-slate-800 font-bold text-xs md:text-sm hover:bg-slate-300">
+                إلغاء التعديل
+              </button>
+              <button type="button" id="btnSavePendingW1" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs md:text-sm shadow transition flex items-center gap-1.5">
+                <span>⏳</span>
+                <span>حفظ مؤقت (وزنة أولى فقط لاستكمالها لاحقاً)</span>
+              </button>
+              <button type="submit" id="btnSaveSale" class="px-6 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-2">
+                <span>💾</span>
+                <span id="btnSaveSaleText">حفظ حركة البيع في محضر اليوم (تخزين فوري)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Pending First-Weigh Cars Waiting for Weight 2 (قائمة الوزنات الأولى المحفوظة مؤقتاً) -->
+          <div id="pendingWeighInsSection" class="hidden mt-3 border-2 border-amber-400 bg-amber-50/70 rounded-xl overflow-hidden">
+            <div class="bg-amber-400 text-slate-950 px-3 py-1.5 text-xs font-extrabold flex flex-wrap items-center justify-between gap-2">
+              <span>⏳ سيارات محفوظة مؤقتاً (وزنة أولى فقط — اضغط "استرجاع لإكمال الوزنة الثانية" عند عودة السيارة للميزان)</span>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <input id="inpFilterPendingSales" type="text" placeholder="🔍 بحث سريع في المؤقت..."
+                  class="px-2 py-0.5 text-[11px] font-bold text-slate-900 rounded-lg bg-white border border-amber-500 w-36" />
+                <button type="button" data-toggle-col-filters="pendingWeighIns" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+                  <span>🔽</span><span>تفعيل الفلاتر</span>
+                </button>
+                <button type="button" id="btnClearPendingSalesFilters" class="px-2 py-0.5 rounded-lg bg-slate-900 text-amber-300 text-[10px] font-extrabold hover:bg-slate-800">
+                  🔄 مسح الفلتر
+                </button>
+                <span id="pendingWeighInsCountBadge" class="px-2 py-0.5 rounded-full bg-slate-900 text-amber-300 text-[11px]">0 سيارة</span>
+              </div>
+            </div>
+            <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+              <table id="pendingWeighInsTable" class="w-full text-xs text-right border-collapse">
+                <thead>
+                  <tr id="pendingWeighInsTheadRow" class="bg-amber-100 text-slate-800 border-b border-amber-300 font-extrabold text-center"></tr>
+                </thead>
+                <tbody id="pendingWeighInsTbody" class="divide-y divide-amber-200 bg-white"></tbody>
+              </table>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Daily Sales Table (جدول حركات البيع لليوم المحدد) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="bg-slate-800 text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-sm md:text-base font-extrabold">📋 جدول حركات البيع المسجلة (<span id="tblDayTitle">يوم 1</span>)</h3>
+          <div class="flex items-center gap-2 flex-wrap">
+            <input id="inpFilterDailySales" type="text" placeholder="🔍 بحث سريع باسم التاجر أو السيارة..."
+              class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-48" />
+            <button type="button" data-toggle-col-filters="dailySales" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+              <span>🔽</span><span>تفعيل الفلاتر</span>
+            </button>
+            <button type="button" id="btnClearDailySalesFilters" class="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs transition">
+              🔄 مسح الفلتر
+            </button>
+          </div>
+        </div>
+
+        <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+          <table id="dailySalesTable" class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr id="dailySalesTheadRow" class="bg-slate-100 text-slate-800 border-b border-slate-300 font-extrabold text-center"></tr>
+            </thead>
+            <tbody id="dailySalesTbody" class="divide-y divide-slate-200"></tbody>
+            <tfoot id="dailySalesTfoot" class="bg-amber-400/90 text-slate-950 font-extrabold border-t-2 border-slate-900"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Daily Expenses & Bonuses Section (رابعاً: بيان المصروفات والمكافآت اليومية) -->
+      <div id="dailyExpensesSection" class="bg-white rounded-2xl shadow-sm border-2 border-rose-900/20 overflow-hidden">
+        <div class="bg-rose-900 text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm md:text-base font-extrabold">💸 بيان المصروفات والمكافآت والمنصرف من النقدية (<span id="expDayTitle">يوم 1</span>)</h3>
+            <p class="text-[11px] text-rose-200">يُخصم تلقائياً من رصيد النقدية بالخزنة في ميزان مراجعة اليوم ويُرحّل لشيت بيان المصروفات الشامل</p>
+          </div>
+          <div class="text-xs font-extrabold px-3 py-1 rounded-lg bg-white/15">
+            إجمالي منصرف اليوم: <span id="dayTotalExpensesBadge" class="text-amber-300">0</span> ج.م
+          </div>
+        </div>
+
+        <form id="expenseEntryForm" class="p-3 bg-rose-50/40 border-b border-rose-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+          <input type="hidden" id="editExpenseId" value="" />
+          <div class="sm:col-span-3">
+            <label class="block text-xs font-extrabold text-slate-700 mb-1">بند / تصنيف المنصرف</label>
+            <select id="selExpCategory" required class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white">
+              <option value="مكافآت وحوافز">مكافآت وحوافز</option>
+              <option value="مصاريف موقع وتشغيل">مصاريف موقع وتشغيل</option>
+              <option value="مشال وتحميل وعمال">مشال وتحميل وعمال</option>
+              <option value="إكراميات وميزان">إكراميات وميزان</option>
+              <option value="تغذية وضيافة">تغذية وضيافة</option>
+              <option value="انتقالات وسولار">انتقالات وسولار</option>
+              <option value="سلف وعهد نقدية">سلف وعهد نقدية</option>
+              <option value="مصاريف نثرية أخرى">مصاريف نثرية أخرى</option>
+            </select>
+          </div>
+          <div class="sm:col-span-3">
+            <label class="block text-xs font-extrabold text-slate-700 mb-1">بيان الصرف التفصيلي / السبب</label>
+            <input id="inpExpDesc" type="text" required placeholder="مثال: مكافأة عمال التحميل / سولار..."
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم المستلم</label>
+            <input id="inpExpRecipient" type="text" placeholder="اسم المستلم"
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-extrabold text-rose-900 mb-1">المبلغ المنصرف (ج.م)</label>
+            <input id="inpExpAmount" type="text" inputmode="decimal" data-money-input="1" required placeholder="0"
+              class="w-full px-2.5 py-2 text-sm font-extrabold border border-rose-400 rounded-xl bg-white text-rose-900" />
+          </div>
+          <div class="sm:col-span-2 flex items-center gap-1.5">
+            <button type="submit" id="btnSubmitExpenseForm" class="w-full py-2 px-3 rounded-xl bg-rose-800 hover:bg-rose-700 text-white font-extrabold text-xs shadow transition">
+              ➕ خصم وإضافة للبيان
+            </button>
+            <button type="button" id="btnCancelEditExpense" class="hidden py-2 px-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs whitespace-nowrap">
+              إلغاء
+            </button>
+          </div>
+        </form>
+
+        <div class="bg-slate-50 px-3 py-1.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <span class="text-[11px] font-extrabold text-slate-700">🔽 فلتر وفرز مصروفات اليوم (Sort &amp; Filter):</span>
+          <div class="flex items-center gap-1.5">
+            <input id="inpFilterDailyExpenses" type="text" placeholder="🔍 بحث سريع في مصروفات اليوم..."
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" />
+            <button type="button" data-toggle-col-filters="dailyExpenses" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+              <span>🔽</span><span>تفعيل الفلاتر</span>
+            </button>
+            <button type="button" id="btnClearDailyExpensesFilters" class="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs">
+              🔄 مسح الفلتر
+            </button>
+          </div>
+        </div>
+        <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+          <table id="dailyExpensesTable" class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr id="dailyExpensesTheadRow" class="bg-slate-100 text-slate-700 border-b font-extrabold text-center"></tr>
+            </thead>
+            <tbody id="dailyExpensesTbody" class="divide-y divide-slate-200"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Daily Trial Balance (ميزان مراجعة وتصفية اليوم - الركائز الثلاث) -->
+      <div id="dailyTrialBalanceCard" class="bg-white rounded-2xl shadow-sm border-2 border-slate-800 overflow-hidden">
+        <div class="bg-slate-900 text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-sm md:text-base font-extrabold">⚖️ ميزان مراجعة وتصفية اليوم (<span id="tbDayTitle">يوم 1</span>) — المطابقة الوزنية والمحاسبية والنقدية</h3>
+          <button type="button" id="btnShareWhatsappSummary" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1">
+            <span>📲</span>
+            <span>نسخ ملخص اليوم للواتساب</span>
+          </button>
+        </div>
+
+        <div class="p-3.5 grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+          <!-- Pillar 1: Weight Audit -->
+          <div class="border border-slate-300 rounded-xl overflow-hidden">
+            <div class="bg-sky-900 text-white px-3 py-2 text-xs font-extrabold text-center">
+              أولاً: ميزان مراجعة الأوزان والحركات (كجم)
+            </div>
+            <div class="p-2.5 space-y-2 text-xs" id="tbPillar1"></div>
+          </div>
+
+          <!-- Pillar 2: Sales, Credit & All Transfers Audit -->
+          <div class="border border-slate-300 rounded-xl overflow-hidden">
+            <div class="bg-indigo-900 text-white px-3 py-2 text-xs font-extrabold text-center">
+              ثانياً: ميزان المبيعات والآجل والتحويلات الشامل
+            </div>
+            <div class="p-2.5 space-y-2 text-xs" id="tbPillar2"></div>
+          </div>
+
+          <!-- Pillar 3: Treasury & Physical Cash Box Audit -->
+          <div class="border border-slate-300 rounded-xl overflow-hidden">
+            <div class="bg-emerald-900 text-white px-3 py-2 text-xs font-extrabold text-center">
+              ثالثاً: ميزان الخزينة النقدية (بعد خصم المصروفات)
+            </div>
+            <div class="p-2.5 space-y-2 text-xs">
+              <div id="tbPillar3"></div>
+              <div class="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                <label class="font-extrabold text-slate-800 text-xs">(-) النقدية المسلمة فعلياً للخزينة:</label>
+                <input id="inpDeliveredCash" type="text" inputmode="decimal" data-money-input="1"
+                  class="w-36 px-2.5 py-1.5 text-sm font-extrabold border-2 border-blue-600 rounded-lg text-left bg-white" />
+              </div>
+              <div id="tbCashDiffBox" class="p-2 rounded-lg font-extrabold flex items-center justify-between text-xs"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 2: EXECUTIVE SUMMARY (الملخص التنفيذي)                           -->
+    <!-- ===================================================================== -->
+    <section id="view-dashboard" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold text-slate-900">📊 الملخص التنفيذي — <span id="dashFarmNameTitle" class="text-blue-800">أبوذكري</span></h2>
+            <p class="text-xs text-slate-500">يتم عرض الأيام المفتوحة والتي عليها سجل حركات فقط (الأيام غير النشطة تظل مخفية) — اضغط على أي يوم لفتح محضره فوراً</p>
+          </div>
+          <span id="dashActiveDaysBadge" class="px-3 py-1 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-extrabold">
+            الأيام النشطة والمفتوحة: 1 يوم
+          </span>
+        </div>
+
+        <!-- 7 Executive KPI Cards -->
+        <div id="dashKpiGrid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5"></div>
+
+        <!-- Chart Container (Fixed Height per Web App Rule 4) -->
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h3 class="text-xs font-extrabold text-slate-700">مقارنة المبيعات وصافي النقدية بالخزنة والمديونية يومياً (ج.م)</h3>
+            <span class="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+              يُعرض في الرسم البياني الأيام المفتوحة والتي عليها سجل حركات فقط
+            </span>
+          </div>
+          <div class="relative h-64 w-full">
+            <canvas id="dashSalesChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Excel Sort & Filter Toolbar for Executive Summary Table -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2 flex-wrap flex-1">
+            <span class="text-xs font-extrabold text-slate-700">🔽 فلتر وفرز جدول الملخص التنفيذي (Sort &amp; Filter):</span>
+            <input id="inpDashQuickSearch" type="text" placeholder="🔍 بحث سريع في جدول الملخص التنفيذي..."
+              class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" />
+            <span id="dashFilterStatusHint" class="text-[11px] font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
+              اضغط على زر (▼) في رأس أي عمود للفرز التصاعدي/التنازلي أو الفلترة مثل الإكسيل
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button type="button" data-toggle-col-filters="dash" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+              <span>🔽</span><span>تفعيل الفلاتر</span>
+            </button>
+            <button type="button" id="btnClearDashExcelFilters" class="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow-sm transition flex items-center gap-1">
+              <span>🔄</span>
+              <span>مسح الفلتر</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Executive Summary Table (with Excel Sort & Filter Headers) -->
+        <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+          <table id="dashSummaryTable" class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr id="dashTableTheadRow" class="navy-gradient text-white font-extrabold text-center"></tr>
+            </thead>
+            <tbody id="dashTableTbody" class="divide-y divide-slate-200"></tbody>
+            <tfoot id="dashTableTfoot" class="bg-amber-400 text-slate-950 font-extrabold border-t-2 border-slate-900"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 3: UNIFIED MERCHANT CODING & LEDGER (تكويد التجار وكشف الحساب)     -->
+    <!-- ===================================================================== -->
+    <section id="view-merchants" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold text-slate-900">👥 شاشة تكويد التجار الموحد وكشف حساب مديونيات المزرعة الحالية</h2>
+            <p class="text-xs text-slate-600">
+              <strong class="text-emerald-800">الكود الموحد واسم التاجر الأساسي ثابت وموحد تلقائياً في جميع المزارع والدورات</strong> (التاجر يُكوّد مرة واحدة فقط ويظهر بنفس الكود والاسم عند فتح أو إنشاء أي مزرعة، وأي سيارة فرعية مثل <strong class="text-blue-900">كرنك 1</strong> و<strong class="text-blue-900">كرنك 2</strong> تأخذ تلقائياً نفس كود التاجر الأساسي <strong class="text-blue-900">104 - كرنك</strong>).
+            </p>
+          </div>
+          <form id="addMerchantForm" class="flex flex-wrap items-center gap-2">
+            <input type="hidden" id="editMerchantCodeInput" value="" />
+            <input id="inpNewMerchantBase" type="text" required placeholder="اسم تاجر أساسي جديد..."
+              class="px-3 py-1.5 text-xs md:text-sm font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white" />
+            <button type="submit" id="btnSubmitMerchantForm" class="px-3.5 py-1.5 rounded-xl bg-blue-900 text-white font-extrabold text-xs md:text-sm hover:bg-blue-800">
+              ➕ تكويد تاجر جديد
+            </button>
+            <button type="button" id="btnCancelMerchantEdit" class="hidden px-3 py-1.5 rounded-xl bg-slate-200 text-slate-800 font-bold text-xs">
+              إلغاء التعديل
+            </button>
+          </form>
+        </div>
+
+        <!-- Smart Filter Bar + Excel Sort & Filter Toolbar for Merchants Table -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 text-xs font-extrabold text-slate-700 flex-wrap">
+              <span>🔽 فلتر وفرز كشف حساب التجار (Sort &amp; Filter):</span>
+              <input id="inpMerchQuickSearch" type="text" placeholder="🔍 بحث سريع باسم التاجر أو الكود الموحد..."
+                class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" />
+              <span id="merchFilterStatusHint" class="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                اضغط على زر (▼) في رأس أي عمود للفرز أو التصفية المتعددة مثل الإكسيل
+              </span>
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
+                <button type="button" id="btnFilterMerchActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
+                  <span>✅</span>
+                  <span>عرض تجار المزرعة النشطين فقط</span>
+                  <span id="badgeActiveMerchCount" class="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold">0</span>
+                </button>
+                <button type="button" id="btnFilterMerchAll" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 bg-blue-900 text-white shadow-sm">
+                  <span>📋</span>
+                  <span>عرض دليل جميع التجار المكودين</span>
+                  <span id="badgeAllMerchCount" class="px-1.5 py-0.5 rounded-full bg-slate-300 text-slate-800 text-[10px] font-extrabold">0</span>
+                </button>
+              </div>
+              <button type="button" data-toggle-col-filters="merch" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+                <span>🔽</span><span>تفعيل الفلاتر</span>
+              </button>
+              <button type="button" id="btnClearMerchExcelFilters" class="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow-sm transition flex items-center gap-1">
+                <span>🔄</span>
+                <span>مسح الفلتر</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+          <table id="merchantsLedgerTable" class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr id="merchantsTheadRow" class="navy-gradient text-white font-extrabold text-center"></tr>
+            </thead>
+            <tbody id="merchantsTbody" class="divide-y divide-slate-200"></tbody>
+            <tfoot id="merchantsTfoot" class="bg-amber-400 text-slate-950 font-extrabold border-t-2 border-slate-900"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 4: TRANSFERS & PREVIOUS FARMS STATEMENTS (بيان التحويلات والسابقة) -->
+    <!-- ===================================================================== -->
+    <section id="view-transfers" class="hidden space-y-4">
+      <!-- Transfers Statement Card -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold text-slate-900">💳 بيان التحويلات والشيكات الشامل (مبيعات + تحصيل مديونيات + مزارع سابقة)</h2>
+            <p class="text-xs text-slate-600">تُعامل جميع التحويلات معاملة الآجل بالنسبة لخزنة الموقع النقدية، ويُخصم نصيب المزرعة الحالية منها (مبيعات + مديونيات) من حساب التاجر.</p>
+          </div>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <input id="inpFilterTransfers" type="text" placeholder="🔍 بحث سريع في التحويلات..."
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" />
+            <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
+              <button type="button" id="btnFilterTransfersActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
+                <span>✅</span>
+                <span>عرض تجار المزرعة النشطين فقط</span>
+                <span id="badgeActiveTransfersCount" class="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold">0</span>
+              </button>
+              <button type="button" id="btnFilterTransfersAll" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 bg-blue-900 text-white shadow-sm">
+                <span>📋</span>
+                <span>عرض دليل جميع التجار المكودين</span>
+                <span id="badgeAllTransfersCount" class="px-1.5 py-0.5 rounded-full bg-slate-300 text-slate-800 text-[10px] font-extrabold">0</span>
+              </button>
+            </div>
+            <button type="button" data-toggle-col-filters="transfers" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+              <span>🔽</span><span>تفعيل الفلاتر</span>
+            </button>
+            <button type="button" id="btnClearTransfersFilters" class="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs">
+              🔄 مسح الفلتر
+            </button>
+          </div>
+        </div>
+
+        <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+          <table id="transfersTable" class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr id="transfersTheadRow" class="bg-teal-900 text-white font-extrabold text-center"></tr>
+            </thead>
+            <tbody id="transfersTbody" class="divide-y divide-slate-200"></tbody>
+            <tfoot id="transfersTfoot" class="bg-amber-400 text-slate-950 font-extrabold border-t-2 border-slate-900"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Previous Farms Statement Card -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold text-purple-950">🏦 بيان تحصيلات مديونيات المواقع والمزارع السابقة (نقدي للخزنة + تحويلات)</h2>
+            <p class="text-xs text-slate-600">هذه المبالغ تخص مزارع أخرى ولا تُخصم من مديونية المزرعة الحالية؛ النقدي منها يُضاف لميزان الخزنة والتحويل يُدرج في بيان التحويلات.</p>
+          </div>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <input id="inpFilterPrevFarms" type="text" placeholder="🔍 بحث سريع في المزارع السابقة..."
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" />
+            <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
+              <button type="button" id="btnFilterPrevFarmsActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
+                <span>✅</span>
+                <span>عرض تجار المزرعة النشطين فقط</span>
+                <span id="badgeActivePrevFarmsCount" class="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold">0</span>
+              </button>
+              <button type="button" id="btnFilterPrevFarmsAll" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 bg-blue-900 text-white shadow-sm">
+                <span>📋</span>
+                <span>عرض دليل جميع التجار المكودين</span>
+                <span id="badgeAllPrevFarmsCount" class="px-1.5 py-0.5 rounded-full bg-slate-300 text-slate-800 text-[10px] font-extrabold">0</span>
+              </button>
+            </div>
+            <button type="button" data-toggle-col-filters="prevFarms" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+              <span>🔽</span><span>تفعيل الفلاتر</span>
+            </button>
+            <button type="button" id="btnClearPrevFarmsFilters" class="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs">
+              🔄 مسح الفلتر
+            </button>
+          </div>
+        </div>
+
+        <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+          <table id="prevFarmsTable" class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr id="prevFarmsTheadRow" class="bg-purple-950 text-white font-extrabold text-center"></tr>
+            </thead>
+            <tbody id="prevFarmsTbody" class="divide-y divide-slate-200"></tbody>
+            <tfoot id="prevFarmsTfoot" class="bg-amber-400 text-slate-950 font-extrabold border-t-2 border-slate-900"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 6: CONTROL, SYNC, EXCEL, DAYS & PERMISSIONS (التحكم والمزامنة)    -->
+    <!-- ===================================================================== -->
+    <section id="view-sync" class="hidden space-y-4">
+
+      <!-- Quick Excel Sync, Day Management & Active User Bar (Moved from Header & Daily Page) -->
+      <div id="syncQuickControlCard" class="bg-white rounded-2xl p-4 shadow-sm border-2 border-indigo-900/20 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold text-slate-900">⚙️ لوحة التحكم السريع: ملفات الإكسيل، إدارة الأيام، وتبديل المستخدم</h2>
+            <p class="text-xs text-slate-600">تجمع هذه الشاشة جميع أدوات التحكم والمزامنة وإدارة الأيام والصلاحيات بعيداً عن شاشة الإدخال اليومي.</p>
+          </div>
+          <!-- Excel Import / Export / Live Link Buttons + Pending Sync Counter -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <span id="pendingSyncBadge" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-100 border-2 border-amber-400 text-amber-950 font-extrabold text-xs shadow-sm">
+              <span>📊</span>
+              <span>تعديلات جاهزة للتصدير للإكسيل:</span>
+              <strong id="pendingCountTxt" class="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950">0</strong>
+            </span>
+            <label for="fileImportXlsx" class="cursor-pointer px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow">
+              <span>📤</span>
+              <span>تحديث الموقع من الإكسيل</span>
+            </label>
+            <input id="fileImportXlsx" type="file" accept=".xlsx,.xls,.json" class="hidden" />
+
+            <button id="btnQuickExportXlsx" type="button" class="px-3.5 py-2 rounded-xl gold-badge font-extrabold text-xs hover:opacity-95 transition flex items-center gap-1.5 shadow">
+              <span>📥</span>
+              <span>تحميل شيت الإكسيل (.xlsx)</span>
+            </button>
+            <button id="btnQuickForceUpdate" type="button" class="px-3.5 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow" title="تحديث ملفات التطبيق فوراً ومسح الكاش القديم">
+              <span>🔄</span>
+              <span>تحديث نسخة التطبيق</span>
+            </button>
+
+            <button id="btnLinkLiveExcel" type="button" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition flex items-center gap-1.5 shadow">
+              <span>🔗</span>
+              <span>ربط ملف مباشر</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Day Management Controls (Add / Edit / Delete Day with Day Selection & Edit Box) -->
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-xs font-extrabold text-slate-800">
+              📅 التحكم في أيام الدورة الحالية (إضافة يوم مع تحديده / تعديل يوم مع فتح خانة التعديل / حذف يوم مع تحديده):
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button type="button" id="btnAddDayTop" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-sm transition">
+                ➕ إضافة يوم جديد
+              </button>
+              <button type="button" id="btnSaveDayLabel" class="px-3 py-1.5 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-300 text-xs font-extrabold transition">
+                ✏️ تعديل اليوم
+              </button>
+              <button type="button" id="btnDeleteDayTop" class="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 text-xs font-extrabold transition">
+                🗑️ حذف اليوم
+              </button>
+            </div>
+          </div>
+
+          <!-- 1) Sub-Panel: Add Specific Day (➕ إضافة يوم جديد — اختيار اليوم المراد إضافته) -->
+          <div id="dayMgmtBoxAdd" class="hidden bg-emerald-50/90 border-2 border-emerald-400 rounded-xl p-3 space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 pb-2">
+              <div class="text-xs font-extrabold text-emerald-950 flex items-center gap-1.5">
+                <span>➕</span>
+                <span>إضافة يوم جديد للدورة — اختر اليوم المراد إضافته وكتابة تاريخه أو بيانه:</span>
+              </div>
+              <button type="button" id="btnCancelAddDayBox" class="px-2.5 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-extrabold">
+                إغلاق ✕
+              </button>
+            </div>
+            <div id="addDayQuickPills" class="flex flex-wrap items-center gap-1.5"></div>
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+              <div class="sm:col-span-4">
+                <label class="block text-xs font-extrabold text-slate-700 mb-1">اختر اليوم المراد إضافته:</label>
+                <select id="selAddDayTarget" class="w-full px-3 py-2 text-xs font-extrabold border-2 border-emerald-500 rounded-xl bg-white text-slate-900 focus:outline-none"></select>
+              </div>
+              <div class="sm:col-span-5">
+                <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم / تاريخ اليوم المضاف (مربع التسمية):</label>
+                <input id="inpAddDayCustomLabel" type="text" placeholder="مثال: الثلاثاء 13-10-2026"
+                  class="w-full px-3 py-2 text-xs font-bold border-2 border-emerald-400 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600" />
+              </div>
+              <div class="sm:col-span-3">
+                <button type="button" id="btnConfirmAddSelectedDay" class="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
+                  <span>➕</span>
+                  <span>تأكيد إضافة وفتح اليوم</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2) Sub-Panel: Edit Specific Day (✏️ تعديل اليوم — اختيار اليوم المراد تعديله مع فتح مربع لتعديله) -->
+          <div id="dayMgmtBoxEdit" class="hidden bg-blue-50/90 border-2 border-blue-400 rounded-xl p-3 space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-blue-200 pb-2">
+              <div class="text-xs font-extrabold text-blue-950 flex items-center gap-1.5">
+                <span>✏️</span>
+                <span>تعديل اسم / تاريخ اليوم — اختر اليوم المراد تعديله وعدّل اسمه أو تاريخه في الخانة بالأسفل:</span>
+              </div>
+              <button type="button" id="btnCancelEditDayBox" class="px-2.5 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-extrabold">
+                إغلاق ✕
+              </button>
+            </div>
+            <div id="editDayQuickPills" class="flex flex-wrap items-center gap-1.5"></div>
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+              <div class="sm:col-span-4">
+                <label class="block text-xs font-extrabold text-slate-700 mb-1">اختر اليوم المراد تعديله:</label>
+                <select id="selEditDayTarget" class="w-full px-3 py-2 text-xs font-extrabold border-2 border-blue-500 rounded-xl bg-white text-slate-900 focus:outline-none"></select>
+              </div>
+              <div class="sm:col-span-5">
+                <label class="block text-xs font-extrabold text-blue-950 mb-1">✏️ مربع / خانة تعديل اسم أو تاريخ اليوم:</label>
+                <input id="inpEditDayCustomLabel" type="text" placeholder="اكتب اسم أو تاريخ اليوم الجديد..."
+                  class="w-full px-3 py-2 text-xs md:text-sm font-extrabold border-2 border-blue-600 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-700" />
+              </div>
+              <div class="sm:col-span-3">
+                <button type="button" id="btnConfirmEditSelectedDay" class="w-full py-2 px-3 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
+                  <span>💾</span>
+                  <span>حفظ تعديل اليوم</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3) Sub-Panel: Delete Specific Day (🗑️ حذف اليوم — اختيار اليوم المراد حذفه) -->
+          <div id="dayMgmtBoxDelete" class="hidden bg-rose-50/90 border-2 border-rose-400 rounded-xl p-3 space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-rose-200 pb-2">
+              <div class="text-xs font-extrabold text-rose-950 flex items-center gap-1.5">
+                <span>🗑️</span>
+                <span>حذف / تصفير يوم من الدورة — اختر اليوم المراد حذفه من القائمة أو الأزرار بالأسفل:</span>
+              </div>
+              <button type="button" id="btnCancelDeleteDayBox" class="px-2.5 py-0.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-extrabold">
+                إغلاق ✕
+              </button>
+            </div>
+            <div id="deleteDayQuickPills" class="flex flex-wrap items-center gap-1.5"></div>
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+              <div class="sm:col-span-5">
+                <label class="block text-xs font-extrabold text-slate-700 mb-1">اختر اليوم المراد حذفه:</label>
+                <select id="selDeleteDayTarget" class="w-full px-3 py-2 text-xs font-extrabold border-2 border-rose-500 rounded-xl bg-white text-slate-900 focus:outline-none"></select>
+              </div>
+              <div class="sm:col-span-4">
+                <div id="deleteDaySummaryText" class="px-3 py-2 rounded-xl bg-white border border-rose-300 text-rose-900 text-xs font-extrabold text-center">
+                  سيتم حذف جميع حركات اليوم المحدد وتحديث الحسابات التراكمية
+                </div>
+              </div>
+              <div class="sm:col-span-3">
+                <button type="button" id="btnConfirmDeleteSelectedDay" class="w-full py-2 px-3 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
+                  <span>🗑️</span>
+                  <span>تأكيد حذف اليوم المختار</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Personal Profile Card for Every Logged-In User (الملف الشخصي وتعديل البيانات وكلمة المرور) -->
+      <div id="myProfileCardSection" class="bg-white rounded-2xl p-4 shadow-sm border-2 border-blue-900/30 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">👤</span>
+            <div>
+              <h2 class="text-sm md:text-base font-extrabold text-slate-900">الملف الشخصي للمستخدم الحالي (<span id="profHeaderUserName" class="text-blue-800">مدير الموقع</span>)</h2>
+              <p class="text-[11px] text-slate-500">يمكنك من هنا إدخال وتحديث بياناتك الشخصية (الاسم الكامل، اسم الدخول، رقم الهاتف، الوظيفة) وتعديل كلمة المرور الخاصة بك.</p>
+            </div>
+          </div>
+          <span id="profRoleBadge" class="px-3 py-1 rounded-full bg-amber-100 text-amber-950 border border-amber-300 text-xs font-extrabold">
+            👑 مدير الموقع
+          </span>
+        </div>
+
+        <form id="myProfileForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 items-end bg-blue-50/40 p-3 rounded-xl border border-blue-200">
+          <div>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1">الاسم الكامل / الظاهر</label>
+            <input id="inpProfFullName" type="text" required placeholder="الاسم الكامل..."
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم الدخول (Username)</label>
+            <input id="inpProfUsername" type="text" required placeholder="اسم المستخدم للدخول..."
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1">رقم الهاتف</label>
+            <input id="inpProfPhone" type="text" placeholder="010xxxxxxxx"
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-extrabold text-slate-700 mb-1">المسمى الوظيفي / الصفة</label>
+            <input id="inpProfJobTitle" type="text" placeholder="مثال: مدير المزرعة / محاسب..."
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-extrabold text-rose-900 mb-1">🔑 كلمة المرور (تعديل)</label>
+            <input id="inpProfPassword" type="password" placeholder="أدخل كلمة المرور الجديدة..."
+              class="w-full px-2.5 py-2 text-xs font-extrabold border border-rose-300 rounded-lg bg-white text-rose-950" />
+          </div>
+          <div>
+            <button type="submit" id="btnSaveMyProfile" class="w-full py-2 px-3 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow transition">
+              💾 حفظ ملفي الشخصي وكلمة المرور
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Users & Permissions Management Section (Target of ⚙️ الصلاحيات Hyperlink) -->
+      <div id="syncPermissionsSection"></div>
+      <div id="usersPermissionsModal" class="bg-white rounded-2xl p-4 shadow-sm border-2 border-indigo-900/30 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">🔐</span>
+            <div>
+              <h2 class="text-sm md:text-base font-extrabold text-slate-900">إدارة المستخدمين وتعديل بياناتهم وصلاحياتهم (للمدير)</h2>
+              <p class="text-[11px] text-slate-500">يمتلك مدير الموقع صلاحية كاملة لإضافة مستخدمين أو تعديل أي بيان من بيانات أي مستخدم (الاسم، اسم الدخول، كلمة المرور، الهاتف، الوظيفة، والصلاحيات).</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="inline-flex items-center bg-slate-900 text-white border border-amber-400 rounded-xl px-3 py-1.5 gap-1.5">
+              <span class="text-xs">👤 المستخدم النشط:</span>
+              <select id="selActiveUserRole" title="تبديل المستخدم الحالي"
+                class="bg-slate-900 text-amber-300 text-xs font-extrabold focus:outline-none">
+              </select>
+            </div>
+            <button type="button" id="btnCloseUsersModal" class="hidden px-3 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-extrabold text-xs">
+              إغلاق ✕
+            </button>
+          </div>
+        </div>
+
+        <!-- Admin Control: Auto-Logout Inactivity Timeout (تحديد الزمن غير النشط لتسجيل الخروج التلقائي) -->
+        <div class="bg-amber-50/90 border-2 border-amber-400 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">⏱️</span>
+            <div>
+              <div class="text-xs md:text-sm font-extrabold text-slate-900">
+                تحديد الزمن غير النشط لتسجيل الخروج التلقائي (صلاحية مدير الموقع)
+              </div>
+              <p class="text-[11px] font-bold text-slate-600">
+                يتم تسجيل خروج المستخدم تلقائياً عند عدم وجود أي حركة أو إدخال خلال المدة المحددة (اكتب 0 لإيقاف الخروج التلقائي).
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span id="inactivityStatusBadge" class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold">
+              نشط: 20 دقيقة
+            </span>
+            <select id="selInactivityPreset" class="px-2.5 py-1.5 text-xs font-extrabold border-2 border-amber-500 rounded-xl bg-white text-slate-900 focus:outline-none">
+              <option value="5">5 دقائق</option>
+              <option value="10">10 دقائق</option>
+              <option value="15">15 دقيقة</option>
+              <option value="20" selected>20 دقيقة (افتراضي)</option>
+              <option value="30">30 دقيقة</option>
+              <option value="45">45 دقيقة</option>
+              <option value="60">60 دقيقة (ساعة)</option>
+              <option value="120">120 دقيقة (ساعتان)</option>
+              <option value="0">إيقاف الخروج التلقائي (مفتوح)</option>
+            </select>
+            <div class="inline-flex items-center bg-white border-2 border-slate-300 rounded-xl px-2 py-1 gap-1">
+              <span class="text-[11px] font-bold text-slate-600">أو بالدقائق:</span>
+              <input id="inpInactivityTimeoutMin" type="number" min="0" max="1440" value="20"
+                class="w-16 text-center text-xs font-extrabold text-blue-900 focus:outline-none" />
+              <span class="text-[11px] font-bold text-slate-500">دقيقة</span>
+            </div>
+            <button type="button" id="btnSaveInactivityTimeout" class="px-3.5 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow transition">
+              💾 حفظ الزمن
+            </button>
+          </div>
+        </div>
+
+        <form id="addUserForm" class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2.5">
+          <input type="hidden" id="editUserIdInput" value="" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">الاسم الكامل للمستخدم</label>
+              <input id="inpNewUserFullName" type="text" placeholder="مثال: أحمد محمد (محاسب)"
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم الدخول (Username)</label>
+              <input id="inpNewUserName" type="text" required placeholder="مثال: accountant"
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">كلمة المرور</label>
+              <input id="inpNewUserPassword" type="text" placeholder="كلمة المرور..." value="1234"
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">رقم الهاتف</label>
+              <input id="inpNewUserPhone" type="text" placeholder="010xxxxxxxx"
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">المسمى الوظيفي</label>
+              <input id="inpNewUserJobTitle" type="text" placeholder="مثال: مشرف الميزان"
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div class="space-y-2 bg-white p-2.5 rounded-lg border border-slate-200 text-xs font-bold flex-1">
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="text-slate-700 font-extrabold">1. صلاحيات العمل والإدخال:</span>
+                <label class="inline-flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" id="chkPermSales" class="rounded text-blue-900" checked />
+                  <span>تسجيل وتعديل المبيعات</span>
+                </label>
+                <label class="inline-flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" id="chkPermExpenses" class="rounded text-blue-900" checked />
+                  <span>تسجيل وحذف المصروفات</span>
+                </label>
+                <label class="inline-flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" id="chkPermMerchants" class="rounded text-blue-900" />
+                  <span>إضافة وتعديل وحذف التجار</span>
+                </label>
+                <label class="inline-flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" id="chkPermFarms" class="rounded text-blue-900" />
+                  <span>إدارة المزارع واستيراد الإكسيل</span>
+                </label>
+                <label class="inline-flex items-center gap-1 cursor-pointer text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-300">
+                  <input type="checkbox" id="chkPermAdmin" class="rounded text-amber-600" />
+                  <span>👑 صلاحيات مدير كامل (يعرض كل شيء)</span>
+                </label>
+              </div>
+              <div class="flex flex-wrap items-center gap-3 pt-1.5 border-t border-slate-100 text-[11px]">
+                <span class="text-indigo-900 font-extrabold">2. ما يُعرض للمستخدم في تبويب (⚙️ التحكم والمزامنة) بجانب حسابه الشخصي:</span>
+                <label class="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+                  <input type="checkbox" id="chkPermShowSyncExcel" class="rounded text-indigo-900" />
+                  <span>عرض لوحة الإكسيل وإدارة الأيام</span>
+                </label>
+                <label class="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+                  <input type="checkbox" id="chkPermShowSyncCloud" class="rounded text-indigo-900" />
+                  <span>عرض قاعدة البيانات السحابية وسجل المزارع</span>
+                </label>
+                <label class="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+                  <input type="checkbox" id="chkPermShowSyncWebhook" class="rounded text-indigo-900" />
+                  <span>عرض مركز الربط الثنائي وإعدادات السحابة</span>
+                </label>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="btnCancelUserEdit" class="hidden py-2 px-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs">
+                إلغاء التعديل
+              </button>
+              <button type="submit" id="btnSaveUserSubmit" class="py-2 px-4 rounded-lg bg-indigo-900 hover:bg-indigo-800 text-white font-extrabold text-xs shadow">
+                ➕ حفظ المستخدم
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div class="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <span class="text-xs font-extrabold text-slate-700">🔽 فلتر وفرز جدول المستخدمين والصلاحيات (Sort &amp; Filter):</span>
+          <div class="flex items-center gap-1.5">
+            <input id="inpFilterUsersList" type="text" placeholder="🔍 بحث سريع في المستخدمين..."
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" />
+            <button type="button" data-toggle-col-filters="usersList" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+              <span>🔽</span><span>تفعيل الفلاتر</span>
+            </button>
+            <button type="button" id="btnClearUsersListFilters" class="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs">
+              🔄 مسح الفلتر
+            </button>
+          </div>
+        </div>
+        <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+          <table id="usersListTable" class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr id="usersListTheadRow" class="bg-slate-100 text-slate-800 border-b font-extrabold text-center"></tr>
+            </thead>
+            <tbody id="usersListTbody" class="divide-y divide-slate-200"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Cloud Database & On-Demand Excel Extraction Hub -->
+      <div id="syncCloudDbHubCard" class="bg-white rounded-2xl p-4 shadow-sm border-2 border-emerald-600/30 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-extrabold text-xs">☁️ قاعدة البيانات السحابية المركزية</span>
+              <span id="cloudDbStatusPill" class="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-900 border border-blue-200 text-[11px] font-bold">
+                الحفظ التلقائي نشط (IndexedDB + Cloud Sync)
+              </span>
+            </div>
+            <h2 class="text-base md:text-lg font-extrabold text-slate-900 mt-1">
+              إدارة المزارع المحفوظة في قاعدة البيانات السحابية وسحب شيت الإكسيل عند الطلب
+            </h2>
+            <p class="text-xs text-slate-600">
+              الموقع يعمل بقاعدة بيانات مستقلة تحفظ جميع المزارع والتجار والحركات تلقائياً (حتى بدون إنترنت ثم ترفعها للسحابة فور الاتصال)، وفي أي وقت تحتاج ملف إكسيل اضغط <strong>(سحب شيت إكسيل .xlsx)</strong> أمام أي مزرعة.
+            </p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button type="button" id="btnPushCloudNow" class="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow flex items-center gap-1">
+              <span>☁️⬆️</span>
+              <span>رفع ومزامنة للسحابة الآن</span>
+            </button>
+            <button type="button" id="btnPullCloudNow" class="px-3.5 py-2 rounded-xl bg-blue-800 hover:bg-blue-700 text-white font-extrabold text-xs shadow flex items-center gap-1">
+              <span>☁️⬇️</span>
+              <span>سحب آخر تحديث من السحابة</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Cloud Database KPIs -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <div class="text-[11px] font-bold text-slate-500">المزارع المحفوظة بقاعدة البيانات</div>
+            <div id="cloudKpiFarmsCount" class="text-sm md:text-base font-extrabold text-slate-900 mt-0.5">1 مزرعة</div>
+          </div>
+          <div class="bg-blue-50/70 p-2.5 rounded-xl border border-blue-200">
+            <div class="text-[11px] font-bold text-blue-900">قاعدة بيانات التجار الموحدة</div>
+            <div id="cloudKpiMerchantsCount" class="text-sm md:text-base font-extrabold text-blue-950 mt-0.5">18 تاجر مكود</div>
+          </div>
+          <div class="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+            <div class="text-[11px] font-bold text-emerald-900">إجمالي حركات البيع بالسحابة</div>
+            <div id="cloudKpiTotalSalesRows" class="text-sm md:text-base font-extrabold text-emerald-950 mt-0.5">0 حركة</div>
+          </div>
+          <div class="bg-amber-50/70 p-2.5 rounded-xl border border-amber-200">
+            <div class="text-[11px] font-bold text-amber-900">آخر مزامنة وحفظ بقاعدة البيانات</div>
+            <div id="cloudKpiLastSyncTime" class="text-xs font-extrabold text-amber-950 mt-1">مُحدّث الآن ✓</div>
+          </div>
+        </div>
+
+        <!-- Saved Farms in Cloud Database Table (with On-Demand Excel Export per Farm) -->
+        <div class="border border-slate-200 rounded-xl overflow-hidden">
+          <div class="bg-slate-800 text-white px-3.5 py-2 flex flex-wrap items-center justify-between gap-2">
+            <span class="text-xs font-extrabold">🗂️ سجل المزارع والدورات المحفوظة في قاعدة البيانات (اختر أي مزرعة لفتحها أو سحب ملف إكسيل خاص بها)</span>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <input type="hidden" id="editCloudFarmOldName" value="" />
+              <input id="inpNewCloudFarmName" type="text" placeholder="اسم مزرعة أو دورة جديدة..."
+                class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-44" />
+              <button type="button" id="btnAddNewCloudFarm" class="px-3 py-1 rounded-lg gold-badge text-xs font-extrabold">
+                ➕ إنشاء مزرعة جديدة بالسحابة
+              </button>
+              <button type="button" id="btnCancelCloudFarmEdit" class="hidden px-2.5 py-1 rounded-lg bg-slate-200 text-slate-800 text-xs font-bold">
+                إلغاء
+              </button>
+            </div>
+          </div>
+          <div class="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <span class="text-[11px] font-extrabold text-slate-700">🔽 فلتر وفرز سجل المزارع المحفوظة (Sort &amp; Filter):</span>
+            <div class="flex items-center gap-1.5">
+              <input id="inpFilterCloudFarms" type="text" placeholder="🔍 بحث سريع باسم المزرعة..."
+                class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" />
+              <button type="button" data-toggle-col-filters="cloudFarms" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+                <span>🔽</span><span>تفعيل الفلاتر</span>
+              </button>
+              <button type="button" id="btnClearCloudFarmsFilters" class="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs">
+                🔄 مسح الفلتر
+              </button>
+            </div>
+          </div>
+          <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+            <table id="cloudFarmsTable" class="w-full text-xs text-right border-collapse">
+              <thead>
+                <tr id="cloudFarmsTheadRow" class="bg-slate-100 text-slate-800 border-b font-extrabold text-center"></tr>
+              </thead>
+              <tbody id="cloudFarmsTbody" class="divide-y divide-slate-200"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Live Realtime Sync Upgrade Control Panel (خيار الترقية للمزامنة اللحظية الحية) -->
+        <div class="bg-emerald-50/90 p-3.5 rounded-xl border-2 border-emerald-500/40 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1">
+                <span>⚡</span>
+                <span>المزامنة اللحظية الحية (Live Realtime Sync)</span>
+              </span>
+              <span id="liveSyncEngineBadge" class="text-[11px] font-extrabold text-emerald-900 bg-white px-2.5 py-0.5 rounded-full border border-emerald-300">
+                نشطة ومتوافقة مع النظام الحالي ✓
+              </span>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-extrabold text-slate-900 bg-white px-3 py-1.5 rounded-xl border border-emerald-400 shadow-sm">
+                <input type="checkbox" id="chkEnableLiveSync" class="rounded text-emerald-700 w-4 h-4" checked />
+                <span>تفعيل المزامنة اللحظية التلقائية بين الأجهزة</span>
+              </label>
+              <div class="inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded-xl border border-slate-300 text-xs font-bold">
+                <span class="text-slate-600">سرعة التحديث:</span>
+                <select id="selLiveSyncInterval" class="bg-transparent font-extrabold text-blue-900 focus:outline-none">
+                  <option value="3">كل 3 ثوانٍ (فوري ⚡)</option>
+                  <option value="5" selected>كل 5 ثوانٍ (متوازن ✓)</option>
+                  <option value="10">كل 10 ثوانٍ (هادئ)</option>
+                  <option value="20">كل 20 ثانية</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <p class="text-[11px] font-bold text-slate-700 leading-relaxed">
+            🔄 <strong>كيف تعمل مع النظام الحالي؟</strong> تدمج المزامنة اللحظية الحية حركات المبيعات والوزنات المؤقتة والمصروفات والتجار من جميع الأجهزة المتصلة في نفس الوقت <strong>(Smart Record Merge)</strong> دون أن يمسح جهاز عمل جهاز آخر، كما تقوم <strong>بتسجيل الخروج الفوري تلقائياً</strong> لأي مستخدم متصل يقوم المدير بحذف حسابه. وتدعم كلاً من <strong>Google Apps Script</strong> و<strong>Firebase Realtime Database (بث لحظي EventSource)</strong>.
+          </p>
+        </div>
+
+        <!-- Helper Box: 1-Minute Free Cloud Setup (Firebase or Google Cloud Script) -->
+        <div class="bg-blue-50/60 p-3 rounded-xl border border-blue-200 flex flex-wrap items-center justify-between gap-2">
+          <div class="text-xs text-slate-700">
+            <strong class="text-blue-950">💡 كيف تشارك قاعدة البيانات السحابية بين الموبايل والكمبيوتر أونلاين؟</strong>
+            يمكنك لصق رابط <strong>Firebase Realtime Database</strong> أو الضغط على الزر المقابل لنسخ كود <strong>Google Cloud Script</strong> المجاني وربطه في دقيقة واحدة.
+          </div>
+          <button type="button" id="btnCopyCloudScriptCode" class="px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold whitespace-nowrap">
+            📋 نسخ كود السحابة المجاني (Google Cloud DB)
+          </button>
+        </div>
+      </div>
+
+      <!-- Two-Way Excel Sync & Farm Name Settings Control Center -->
+      <div id="syncTwoWayExcelCard" class="bg-white rounded-2xl p-4 shadow-sm border-2 border-blue-900/20 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold text-slate-900">🔄 مركز الربط الثنائي الشامل مع ملف الإكسيل وتغيير اسم المزرعة</h2>
+            <p class="text-xs text-slate-600">
+              يربط الموقع بملف الإكسيل في الاتجاهين (من الإكسيل للموقع ومن الموقع للإكسيل) شاملاً: <strong>اسم المزرعة، تكويد التجار، الـ 10 أيام، الوزنات، التحصيلات، التحويلات، المزارع السابقة، المصروفات، والنقدية المسلمة للخزينة</strong>.
+            </p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button type="button" id="btnExportFullExcel2" class="px-4 py-2 rounded-xl gold-badge font-extrabold text-xs md:text-sm shadow">
+              📥 تحديث وتحميل ملف الإكسيل الكامل (15 شيت بالمعادلات)
+            </button>
+            <button type="button" id="btnResetDemoData" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-rose-800 font-bold text-xs border border-slate-300">
+              🗑️ تصفير حركات المزرعة الحالية (مع بقاء التجار)
+            </button>
+          </div>
+        </div>
+
+        <!-- Farm Name Customization Box (Hidden per user request) -->
+        <div class="hidden">
+          <div class="md:col-span-4">
+            <label class="block text-xs font-extrabold text-amber-950 mb-1">
+              🏡 اسم المزرعة / الموقع الحالي (يُحدّث الموقع وشيت الإكسيل معاً):
+            </label>
+            <input id="inpSettingsFarmName" type="text" value="أبوذكري"
+              placeholder="اكتب اسم المزرعة هنا (مثال: أبوذكري، الصالحية...)"
+              class="w-full px-3 py-2 text-sm font-extrabold border-2 border-amber-400 rounded-xl bg-white text-slate-900" />
+          </div>
+          <div class="md:col-span-8 flex flex-wrap items-center gap-2 pt-2 md:pt-5">
+            <span class="text-xs font-bold text-slate-600">اختيار سريع لاسم المزرعة:</span>
+            <button type="button" data-quick-farm="أبوذكري" class="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-extrabold hover:bg-amber-100">مزرعة أبوذكري</button>
+            <button type="button" data-quick-farm="ابو الخمسان" class="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-extrabold hover:bg-amber-100">مزرعة ابو الخمسان</button>
+            <button type="button" data-quick-farm="الصالحية" class="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-extrabold hover:bg-amber-100">مزرعة الصالحية</button>
+            <button type="button" id="btnNewCleanCycle" class="px-3 py-1.5 rounded-lg bg-blue-900 text-white text-xs font-extrabold hover:bg-blue-800 mr-auto">
+              🆕 بدء دورة 10 أيام جديدة (تصفير الأوزان مع بقاء التجار)
+            </button>
+          </div>
+        </div>
+
+        <!-- Optional Cloud Webhook Sync for Auto-Sync When Online + Google Sites Embed Helper -->
+        <div class="bg-slate-50 p-3.5 rounded-xl border-2 border-blue-200 space-y-3">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+            <div class="md:col-span-8">
+              <label class="block text-xs font-extrabold text-slate-800 mb-1">
+                🔗 رابط المزامنة السحابية التلقائية عند توفر الإنترنت (Google Apps Script Webhook URL):
+              </label>
+              <input id="inpCloudWebhookUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"
+                class="w-full px-3 py-2 text-xs font-bold border-2 border-slate-300 rounded-lg bg-white focus:border-blue-700 focus:outline-none" />
+            </div>
+            <div class="md:col-span-4 flex items-center gap-2">
+              <button type="button" id="btnSaveWebhook" class="w-full py-2 px-3 rounded-lg bg-blue-900 text-white font-bold text-xs hover:bg-blue-800 shadow">
+                حفظ إعدادات المزامنة التلقائية
+              </button>
+            </div>
+          </div>
+          <div class="bg-amber-50 border border-amber-300 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div class="text-[11px] font-bold text-amber-950 max-w-2xl">
+              💡 <strong>هااام لمستخدمي GitHub Pages و Google Sites:</strong> لكي يفتح الموقع على أي متصفح آخر أو موبايل ويسحب التعديلات تلقائياً بدون الحاجة لإدخال الرابط كل مرة، الصق رابط السكربت أعلاه ثم اضغط <strong>(📥 تحميل ملف index.html مدمج بالرابط)</strong> وارفعه على GitHub (أو انسخ الكود لـ Google Sites)!
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button type="button" id="btnCopyHtmlWithWebhook" class="px-3 py-1.5 rounded-lg bg-indigo-900 hover:bg-indigo-800 text-white text-xs font-extrabold shadow-sm">
+                📋 نسخ كود الموقع لـ Google Sites (مدمج بالرابط)
+              </button>
+              <button type="button" id="btnDownloadHtmlWithWebhook" class="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-extrabold shadow-sm">
+                📥 تحميل ملف HTML مدمج بالرابط
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 5: CONSOLIDATED EXPENSES STATEMENT ONLY (بيان المصروفات المجمع)   -->
+    <!-- ===================================================================== -->
+    <section id="view-expenses" class="hidden space-y-4">
+      <!-- Consolidated Expenses Summary by Category (10 Days) -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+          <h2 class="text-base md:text-lg font-extrabold text-rose-950">💸 بيان المصروفات والمكافآت المجمع (حسب البند وعلى مدار الـ 10 أيام)</h2>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <input id="inpFilterExpSummary" type="text" placeholder="🔍 بحث سريع ببند المصروف..."
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" />
+            <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
+              <button type="button" id="btnFilterExpSummaryActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
+                <span>✅</span>
+                <span>عرض البنود النشطة بالمزرعة فقط</span>
+                <span id="badgeActiveExpSummaryCount" class="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold">0</span>
+              </button>
+              <button type="button" id="btnFilterExpSummaryAll" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 bg-blue-900 text-white shadow-sm">
+                <span>📋</span>
+                <span>عرض دليل جميع البنود المكودة</span>
+                <span id="badgeAllExpSummaryCount" class="px-1.5 py-0.5 rounded-full bg-slate-300 text-slate-800 text-[10px] font-extrabold">0</span>
+              </button>
+            </div>
+            <button type="button" data-toggle-col-filters="expSummary" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
+              <span>🔽</span><span>تفعيل الفلاتر</span>
+            </button>
+            <button type="button" id="btnClearExpSummaryFilters" class="px-3 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs">
+              🔄 مسح الفلتر
+            </button>
+          </div>
+        </div>
+
+        <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
+          <table id="expSummaryTable" class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr id="expSummaryTheadRow" class="bg-rose-950 text-white font-extrabold text-center"></tr>
+            </thead>
+            <tbody id="expSummaryTbody" class="divide-y divide-slate-200"></tbody>
+            <tfoot id="expSummaryTfoot" class="bg-amber-400 text-slate-950 font-extrabold border-t-2 border-slate-900"></tfoot>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- FLOATING EXCEL-LIKE SORT & FILTER POPOVER (قائمة فرز وتصفية مثل الإكسيل) -->
+    <!-- ===================================================================== -->
+    <div id="excelFilterPopover" class="hidden fixed z-50 w-72 sm:w-80 bg-white text-slate-900 rounded-2xl shadow-2xl border-2 border-blue-900 p-3 space-y-2.5 text-right">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+        <div class="flex items-center gap-1.5">
+          <span class="text-sm">📊</span>
+          <span id="excelPopoverColTitle" class="text-xs font-extrabold text-blue-950">فرز وتصفية العمود</span>
+        </div>
+        <button type="button" id="btnExcelPopoverClose" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs">✕</button>
+      </div>
+
+      <!-- Sort Buttons -->
+      <div class="grid grid-cols-2 gap-1.5">
+        <button type="button" id="btnExcelSortAsc" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-900 border border-slate-300 text-[11px] font-extrabold flex items-center justify-center gap-1 transition">
+          <span>🔼</span>
+          <span>فرز تصاعدي (أ → ي)</span>
+        </button>
+        <button type="button" id="btnExcelSortDesc" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-900 border border-slate-300 text-[11px] font-extrabold flex items-center justify-center gap-1 transition">
+          <span>🔽</span>
+          <span>فرز تنازلي (ي → أ)</span>
+        </button>
+      </div>
+
+      <!-- Condition Filter -->
+      <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 space-y-1.5">
+        <label class="block text-[11px] font-extrabold text-slate-700">تصفية شرطية (حسب القيمة أو النص):</label>
+        <div class="grid grid-cols-12 gap-1.5">
+          <select id="selExcelCondOp" class="col-span-6 px-2 py-1 text-[11px] font-bold border border-slate-300 rounded-lg bg-white">
+            <option value="">-- بدون شرط --</option>
+            <option value="eq">يساوي (=)</option>
+            <option value="neq">لا يساوي (≠)</option>
+            <option value="gt">أكبر من (&gt;)</option>
+            <option value="gte">أكبر أو يساوي (≥)</option>
+            <option value="lt">أصغر من (&lt;)</option>
+            <option value="lte">أصغر أو يساوي (≤)</option>
+            <option value="contains">يحتوي على...</option>
+          </select>
+          <input id="inpExcelCondVal" type="text" placeholder="القيمة..."
+            class="col-span-6 px-2 py-1 text-[11px] font-bold border border-slate-300 rounded-lg bg-white" />
+        </div>
+      </div>
+
+      <!-- Value Checkboxes List (Excel style) -->
+      <div class="space-y-1.5">
+        <input id="inpExcelValueSearch" type="text" placeholder="🔍 بحث في قيم هذا العمود..."
+          class="w-full px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-none" />
+        <div class="border border-slate-200 rounded-xl max-h-44 overflow-y-auto p-2 bg-slate-50/50 space-y-1 custom-scrollbar">
+          <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-blue-50 cursor-pointer border-b border-slate-200 pb-1.5 font-extrabold text-xs text-blue-950">
+            <input type="checkbox" id="chkExcelSelectAllValues" class="rounded text-blue-900 w-3.5 h-3.5" checked />
+            <span>(تحديد الكل)</span>
+          </label>
+          <div id="excelValuesChecklist" class="space-y-1 pt-0.5 text-xs font-bold"></div>
+        </div>
+      </div>
+
+      <!-- Apply / Clear Footer -->
+      <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-200">
+        <button type="button" id="btnExcelClearColFilter" class="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-extrabold text-xs">
+          🗑️ مسح فلتر العمود
+        </button>
+        <button type="button" id="btnExcelApplyColFilter" class="px-4 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow">
+          ✅ تطبيق (موافق)
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Mobile Bottom Sticky Navigation Bar -->
+  <nav class="md:hidden fixed bottom-0 inset-x-0 bg-slate-900 text-white border-t border-slate-700 z-40 grid grid-cols-6 text-center py-1.5 px-1 shadow-2xl">
+    <button type="button" data-nav="daily" class="nav-tab-btn tab-btn-active rounded-lg py-1 flex flex-col items-center justify-center text-[10px] font-bold">
+      <span class="text-sm">📝</span>
+      <span>بيع اليوم</span>
+    </button>
+    <button type="button" data-nav="dashboard" class="nav-tab-btn rounded-lg py-1 flex flex-col items-center justify-center text-[10px] font-bold">
+      <span class="text-sm">📊</span>
+      <span>الملخص التنفيذي</span>
+    </button>
+    <button type="button" data-nav="merchants" class="nav-tab-btn rounded-lg py-1 flex flex-col items-center justify-center text-[10px] font-bold">
+      <span class="text-sm">👥</span>
+      <span>حساب التجار</span>
+    </button>
+    <button type="button" data-nav="transfers" class="nav-tab-btn rounded-lg py-1 flex flex-col items-center justify-center text-[10px] font-bold">
+      <span class="text-sm">💳</span>
+      <span>التحويلات</span>
+    </button>
+    <button type="button" data-nav="expenses" class="nav-tab-btn rounded-lg py-1 flex flex-col items-center justify-center text-[10px] font-bold">
+      <span class="text-sm">💸</span>
+      <span>المصروفات</span>
+    </button>
+    <button type="button" data-nav="sync" class="nav-tab-btn rounded-lg py-1 flex flex-col items-center justify-center text-[10px] font-bold">
+      <span class="text-sm">⚙️</span>
+      <span>التحكم/مزامنة</span>
+    </button>
+  </nav>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+body {
+  font-family: 'Cairo', 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  overflow-x: hidden;
+}
+.navy-gradient {
+  background: linear-gradient(135deg, #1b365d 0%, #2c5e8a 100%);
+}
+.gold-badge {
+  background-color: #ffc000;
+  color: #0f172a;
+}
+.tab-btn-active {
+  background-color: #ffc000 !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 8px rgba(255, 192, 0, 0.35);
+}
+.day-pill-active {
+  background-color: #1b365d !important;
+  color: #ffffff !important;
+  border-color: #ffc000 !important;
+  font-weight: 800 !important;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+/* على الموبايل (أقل من 768px): عرض الجداول بالطريقة الطبيعية الواضحة مع شريط تمرير أفقي واضح أسفل كل جدول */
+@media (max-width: 767px) {
+  .table-scroll-wrapper {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: scroll !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 6px !important;
+    scrollbar-width: thin;
+    scrollbar-color: #1b365d #e2e8f0;
+  }
+  .table-scroll-wrapper::-webkit-scrollbar {
+    height: 9px !important;
+    display: block !important;
+    -webkit-appearance: none !important;
+  }
+  .table-scroll-wrapper::-webkit-scrollbar-track {
+    background: #e2e8f0 !important;
+    border-radius: 6px !important;
+  }
+  .table-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: #1b365d !important;
+    border-radius: 6px !important;
+    border: 1px solid #94a3b8 !important;
+  }
+  table {
+    width: max-content !important;
+    min-width: 100% !important;
+    border-collapse: collapse;
+    table-layout: auto !important;
+  }
+  table th,
+  table td {
+    padding: 7px 8px !important;
+    font-size: 11.5px !important;
+    line-height: 1.4 !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+  }
+}
+/* على الكمبيوتر (768px فأعلى): منع انقسام الأرقام والبيانات نهائياً في الخلايا (سطر واحد لكل رقم) مع التفاف عناوين الأعمدة بين الكلمات فقط */
+@media (min-width: 768px) {
+  .table-scroll-wrapper {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+  }
+  table {
+    width: 100% !important;
+    border-collapse: collapse;
+    table-layout: auto !important;
+  }
+  table th {
+    padding: 5px 4px !important;
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
+  table td,
+  table tfoot td {
+    padding: 5px 6px !important;
+    font-size: 11.5px !important;
+    line-height: 1.35 !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+  }
+}
+@media (min-width: 1280px) {
+  table th {
+    padding: 6px 5px !important;
+    font-size: 11.5px !important;
+  }
+  table td,
+  table tfoot td {
+    padding: 6px 7px !important;
+    font-size: 12px !important;
+  }
+}
