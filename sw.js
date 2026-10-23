@@ -1,5 +1,5 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v19";
+const CACHE_NAME = "farm-sales-committee-v18";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -64,21 +64,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first for HTML, CSS, and JS app files (so updates on GitHub Pages appear immediately when online, with offline fallback)
-  if (
-    req.mode === "navigate" ||
-    (req.headers.get("accept") || "").includes("text/html") ||
-    url.endsWith("/index.html") ||
-    url.endsWith("/style.css") ||
-    url.endsWith("/app.js")
-  ) {
+  // Network-first for HTML pages (so updates on GitHub Pages appear immediately when online, with offline fallback)
+  if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
     event.respondWith(
       fetch(req)
         .then((networkRes) => {
-          if (networkRes && networkRes.status === 200) {
-            const copy = networkRes.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-          }
+          const copy = networkRes.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
           return networkRes;
         })
         .catch(() => caches.match(req).then((cached) => cached || caches.match("./index.html")))
@@ -86,7 +78,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first with network fallback for external libraries, fonts, and static assets
+  // Cache-first with network fallback for scripts, styles, fonts, and static assets
   event.respondWith(
     caches.match(req).then((cachedRes) => {
       if (cachedRes) return cachedRes;
