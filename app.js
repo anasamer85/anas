@@ -3479,12 +3479,401 @@ function ensureMerchantPrintDomElements() {
 }
 
 let isMerchantPrintActive = false;
+let activePrintTargetKey = '';
 
-function activateMerchantPrintMode() {
-  if (!activeDrillDownMerchantCode) return;
-  renderMerchantDrillDownModal();
+const UNIVERSAL_PRINT_TABLE_CONFIGS = {
+  pendingWeighIns: {
+    tableId: 'pendingWeighInsTable',
+    titleFn: () => `⏳ بيان السيارات المحفوظة مؤقتاً (وزنة أولى فقط) — يوم ${appState.currentDay} (${(appState.days[appState.currentDay] && appState.days[appState.currentDay].dateLabel) || ('اليوم ' + appState.currentDay)})`,
+    subTitleFn: (cnt) => `سيارات تحت التحميل بانتظار استكمال الوزنة الثانية | إجمالي المعروض: ${cnt} سيارة`,
+    excludeColIndices: [6],
+    colWidths: ['9.0%', '24.0%', '11.0%', '14.0%', '18.0%', '24.0%'],
+    alignRightCols: [1, 5],
+    fontSize: '9.5px'
+  },
+  dailySales: {
+    tableId: 'dailySalesTable',
+    titleFn: () => `📋 محضر حركات البيع المسجلة — يوم ${appState.currentDay} (${(appState.days[appState.currentDay] && appState.days[appState.currentDay].dateLabel) || ('اليوم ' + appState.currentDay)})`,
+    subTitleFn: (cnt) => {
+      const s = computeDaySummary(appState.currentDay);
+      const pendCnt = (s.pendingRows && s.pendingRows.length) || 0;
+      return `عدد الحركات المكتملة: ${s.countCars} سيارة${pendCnt > 0 ? ` (+ ${pendCnt} محجوزة مؤقتاً)` : ''} | المعروض بالجدول: ${cnt} حركة`;
+    },
+    kpiHtmlFn: () => {
+      const s = computeDaySummary(appState.currentDay);
+      return `
+        <table style="width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:4px; font-size:9px; text-align:center;">
+          <tbody>
+            <tr>
+              <td style="border:1px solid #94a3b8; padding:3px 4px; background:#f8fafc;">
+                <div style="font-size:8px; color:#475569; font-weight:700;">عدد السيارات / الوزن الصافي</div>
+                <div style="font-weight:800; color:#0f172a;">${fmtInt(s.countCars)} سيارة | ${fmtInt(s.sumNetW)} كجم</div>
+              </td>
+              <td style="border:1px solid #94a3b8; padding:3px 4px; background:#fffbeb;">
+                <div style="font-size:8px; color:#92400e; font-weight:700;">إجمالي مبيعات اليوم بالإكرامية</div>
+                <div style="font-weight:800; color:#451a03;">${fmtDec(s.sumTotalWithTip)} ج.م</div>
+              </td>
+              <td style="border:1px solid #94a3b8; padding:3px 4px; background:#fff1f2;">
+                <div style="font-size:8px; color:#9f1239; font-weight:700;">إجمالي المصروفات / التحويلات</div>
+                <div style="font-weight:800; color:#881337;">مصاريف: ${fmtInt(s.sumExpenses)} | تحويلات: ${fmtInt(s.totalAllTransfers)}</div>
+              </td>
+              <td style="border:1.5px solid #065f46; padding:3px 4px; background:#ecfdf5;">
+                <div style="font-size:8px; color:#065f46; font-weight:800;">صافي النقدية بالخزنة (بعد المصاريف)</div>
+                <div style="font-size:10px; font-weight:800; color:#064e3b;">${fmtInt(s.netCashInBox)} ج.م</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+    },
+    excludeColIndices: [16],
+    colWidths: ['2.4%', '3.6%', '11.2%', '6.0%', '5.4%', '5.4%', '5.8%', '4.6%', '4.2%', '7.6%', '6.8%', '7.8%', '6.8%', '7.8%', '9.8%', '4.8%'],
+    alignRightCols: [2, 14],
+    fontSize: '8.5px'
+  },
+  dailyExpenses: {
+    tableId: 'dailyExpensesTable',
+    titleFn: () => `💸 بيان المصروفات والمكافآت والمنصرف من النقدية — يوم ${appState.currentDay} (${(appState.days[appState.currentDay] && appState.days[appState.currentDay].dateLabel) || ('اليوم ' + appState.currentDay)})`,
+    subTitleFn: (cnt) => {
+      const s = computeDaySummary(appState.currentDay);
+      return `عدد بنود الصرف المعروضة: ${cnt} بند | إجمالي منصرف اليوم المخصوم من الخزنة: ${fmtInt(s.sumExpenses)} ج.م`;
+    },
+    excludeColIndices: [5],
+    colWidths: ['6.0%', '22.0%', '38.0%', '18.0%', '16.0%'],
+    alignRightCols: [1, 2, 3],
+    fontSize: '10px',
+    buildCustomTfootFn: () => {
+      const s = computeDaySummary(appState.currentDay);
+      return `<tr style="background:#fbbf24; color:#0f172a; font-weight:800; text-align:center;">
+        <td colspan="4" style="text-align:center;">إجمالي المصروفات والمكافآت المخصومة من نقدية (يوم ${appState.currentDay})</td>
+        <td style="text-align:center;">${fmtInt(s.sumExpenses)} ج.م</td>
+      </tr>`;
+    }
+  },
+  dash: {
+    tableId: 'dashSummaryTable',
+    titleFn: () => `📊 جدول الملخص التنفيذي الشامل للأيام النشطة والمفتوحة`,
+    subTitleFn: (cnt) => `مقارنة الأوزان والمبيعات والتحصيلات والمصروفات وصافي الخزينة النقدية | عدد الأيام المعروضة: ${cnt} يوم`,
+    kpiHtmlFn: () => {
+      const kpiCards = Array.from(document.querySelectorAll('#dashKpiGrid > div'));
+      if (kpiCards.length === 0) return '';
+      const cells = kpiCards.map(card => {
+        const divs = card.querySelectorAll('div');
+        const lbl = divs[0] ? divs[0].textContent.trim() : '';
+        const val = divs[1] ? divs[1].textContent.trim() : '';
+        return `<td style="border:1px solid #94a3b8; padding:3px 4px; background:#f8fafc;">
+          <div style="font-size:7.5px; color:#475569; font-weight:700;">${lbl}</div>
+          <div style="font-size:9px; font-weight:800; color:#0f172a;">${val}</div>
+        </td>`;
+      }).join('');
+      return `<table style="width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:4px; text-align:center;"><tbody><tr>${cells}</tr></tbody></table>`;
+    },
+    excludeColIndices: [],
+    colWidths: ['4.6%', '7.8%', '4.0%', '5.8%', '7.2%', '6.2%', '6.2%', '6.0%', '6.0%', '5.5%', '5.2%', '6.8%', '5.2%', '6.8%', '6.0%', '5.2%', '5.5%'],
+    alignRightCols: [1],
+    fontSize: '8px'
+  },
+  merch: {
+    tableId: 'merchantsLedgerTable',
+    titleFn: () => `👥 جدول تكويد التجار الموحد وكشف حساب مديونيات المزرعة الحالية (10 أيام)`,
+    subTitleFn: (cnt) => {
+      const modeTxt = appState.merchantsViewFilter === 'active' ? 'تجار المزرعة النشطين فقط' : 'الدليل الكامل لجميع التجار المكودين';
+      return `نطاق العرض: ${modeTxt} | عدد التجار المعروضين بالجدول: ${cnt} تاجر`;
+    },
+    excludeColIndices: [15],
+    colWidths: ['2.6%', '4.4%', '11.4%', '4.4%', '6.6%', '7.8%', '6.8%', '7.4%', '6.8%', '6.4%', '6.8%', '6.4%', '7.8%', '7.8%', '6.6%'],
+    alignRightCols: [2],
+    fontSize: '8.5px'
+  },
+  transfers: {
+    tableId: 'transfersTable',
+    titleFn: () => `💳 بيان التحويلات والشيكات الشامل (مبيعات + تحصيل مديونيات + مزارع سابقة)`,
+    subTitleFn: (cnt) => {
+      const modeTxt = appState.transfersViewFilter === 'active' ? 'التجار النشطين في التحويلات فقط' : 'دليل جميع التجار المكودين';
+      return `نطاق العرض: ${modeTxt} | عدد التجار المعروضين: ${cnt} تاجر`;
+    },
+    excludeColIndices: [],
+    colWidths: ['5.0%', '15.0%', '8.8%', '8.8%', '9.6%', '8.8%', '8.5%', '8.5%', '8.5%', '8.5%', '10.0%'],
+    alignRightCols: [1],
+    fontSize: '9px'
+  },
+  prevFarms: {
+    tableId: 'prevFarmsTable',
+    titleFn: () => `🏦 بيان تحصيلات مديونيات المواقع والمزارع السابقة (نقدي للخزنة + تحويلات)`,
+    subTitleFn: (cnt) => {
+      const modeTxt = appState.prevFarmsViewFilter === 'active' ? 'التجار النشطين في تحصيلات المزارع السابقة فقط' : 'دليل جميع التجار المكودين';
+      return `هذه المبالغ تخص مزارع سابقة ولا تُخصم من مديونية المزرعة الحالية (${modeTxt} — ${cnt} تاجر)`;
+    },
+    excludeColIndices: [],
+    colWidths: ['7.0%', '19.0%', '15.0%', '15.0%', '16.0%', '28.0%'],
+    alignRightCols: [1, 5],
+    fontSize: '9.5px'
+  },
+  expSummary: {
+    tableId: 'expSummaryTable',
+    titleFn: () => `💸 بيان المصروفات والمكافآت المجمع (حسب البند وعلى مدار الـ 10 أيام)`,
+    subTitleFn: (cnt) => {
+      const modeTxt = appState.expensesViewFilter === 'active' ? 'البنود النشطة بالمزرعة فقط' : 'دليل جميع البنود المكودة';
+      return `نطاق العرض: ${modeTxt} | عدد البنود المعروضة: ${cnt} بند`;
+    },
+    excludeColIndices: [],
+    colWidths: ['3.5%', '18.5%', '9.5%', '5.5%', '6.3%', '6.3%', '6.3%', '6.3%', '6.3%', '6.3%', '6.3%', '6.3%', '6.3%', '6.3%'],
+    alignRightCols: [1],
+    fontSize: '8.5px'
+  }
+};
+
+function cleanPrintCellText(cellEl) {
+  if (!cellEl) return '';
+  const clone = cellEl.cloneNode(true);
+  clone.querySelectorAll('[data-excel-filter-btn], .print-hide-col').forEach(el => el.remove());
+  // Remove interactive drill-down badge ("📋 كشف تفصيلي" / "📋") inside merchant buttons so only the merchant name prints cleanly
+  clone.querySelectorAll('[data-drill-merchant] span.text-\[10px\]').forEach(el => el.remove());
+  return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function renderDailyTrialBalancePrintView() {
   const printContainer = ensureMerchantPrintDomElements();
-  if (!printContainer) return;
+  if (!printContainer) return false;
+  const d = appState.currentDay || 1;
+  const s = computeDaySummary(d);
+  const fName = appState.farmName || 'أبوذكري';
+  const printDateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+  const statusTxt = s.cashBoxDiff === 0
+    ? 'خزينة مطابقة ✓'
+    : (s.cashBoxDiff < 0 ? 'زيادة توريد' : 'عجز توريد');
+  const diffBg = s.cashBoxDiff === 0 ? '#d1fae5' : '#ffe4e6';
+  const diffColor = s.cashBoxDiff === 0 ? '#064e3b' : '#881337';
+
+  printContainer.innerHTML = `
+    <div style="border:2px solid #1b365d; border-radius:6px; padding:8px 10px; background:#ffffff; color:#0f172a; font-family:'Cairo',sans-serif;">
+      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:5px; margin-bottom:8px;">
+        <div>
+          <div style="font-size:14px; font-weight:800; color:#1b365d;">
+            ⚖️ ميزان مراجعة وتصفية اليوم (يوم ${d} — ${s.dateLabel}) — مزرعة <span style="color:#b45309;">${fName}</span>
+          </div>
+          <div style="font-size:9.5px; font-weight:700; color:#475569; margin-top:2px;">
+            المطابقة الوزنية والمحاسبية والنقدية الشاملة (الركائز الثلاث لليوم)
+          </div>
+        </div>
+        <div style="text-align:left; font-size:9px; font-weight:700; color:#334155;">
+          <div>نظام محاضر لجان بيع المزارع</div>
+          <div>تاريخ الطباعة: ${printDateStr}</div>
+        </div>
+      </div>
+
+      <table id="merchantPrintTable" dir="rtl" style="width:100%; max-width:100%; table-layout:fixed; border-collapse:collapse;">
+        <colgroup>
+          <col style="width:23.0%;" />
+          <col style="width:10.3%;" />
+          <col style="width:23.0%;" />
+          <col style="width:10.3%;" />
+          <col style="width:23.0%;" />
+          <col style="width:10.4%;" />
+        </colgroup>
+        <thead>
+          <tr style="background:#1b365d; color:#ffffff; font-weight:800; text-align:center;">
+            <th colspan="2" style="background:#0c4a6e; font-size:10px; padding:5px;">أولاً: ميزان مراجعة الأوزان والحركات (كجم)</th>
+            <th colspan="2" style="background:#312e81; font-size:10px; padding:5px;">ثانياً: ميزان المبيعات والآجل والتحويلات الشامل</th>
+            <th colspan="2" style="background:#064e3b; font-size:10px; padding:5px;">ثالثاً: ميزان الخزينة النقدية (بعد خصم المصروفات)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">عدد حركات البيع (سيارات):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.countCars)} سيارة</td>
+            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#fffbeb;">إجمالي المبيعات شامل الإكرامية:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#fffbeb;">${fmtDec(s.sumTotalWithTip)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">(+) نقدي المبيعات + نقدي مديونيات الحالية:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumCashSales + s.sumDebtCash)} ج.م</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">إجمالي الوزنة الثانية (القائم):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumW2)} كجم</td>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">إجمالي غير النقدي يوم البيع (آجل+تحويل):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumCreditSales + s.sumTransferSales)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">(+) نقدي مزارع سابقة (للخزنة فقط):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumPrevCash)} ج.م</td>
+          </tr>
+          <tr>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">(-) إجمالي الوزنة الأولى (الفارغ):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumW1)} كجم</td>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px; color:#115e59;">تحويلات المزرعة الحالية (مبيعات+مديونيات):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; color:#115e59;">${fmtInt(s.currentFarmTransfers)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#fef3c7;">إجمالي النقدية بالخزنة (قبل المصاريف):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#fef3c7;">${fmtInt(s.totalCashBeforeExpenses)} ج.م</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#eff6ff;">صافي الوزن المحسوب (ثانية - أولى):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#eff6ff;">${fmtInt(s.sumNetW)} كجم</td>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px; color:#581c87;">تحويلات مزارع سابقة (لا تخصم من الحالية):</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; color:#581c87;">${fmtInt(s.sumPrevTransfer)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px; color:#9f1239;">(-) يخصم: إجمالي المصروفات والمكافآت:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; color:#9f1239;">${fmtInt(s.sumExpenses)} ج.م</td>
+          </tr>
+          <tr>
+            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">فرق ميزان الأوزان:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">${fmtInt(s.weightAuditDiff)} (${s.weightAuditDiff === 0 ? 'مطابق ✓' : 'راجع الوزن!'})</td>
+            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">إجمالي جميع التحويلات اليوم:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">${fmtInt(s.totalAllTransfers)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">(=) صافي رصيد النقدية المطلوب توريده:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">${fmtInt(s.netCashInBox)} ج.م</td>
+          </tr>
+          <tr>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">متوسط صافي وزن السيارة الواحدة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${s.countCars > 0 ? fmtInt(Math.round(s.sumNetW / s.countCars)) : '0'} كجم</td>
+            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">صافي فروق التقريب بالفواتير:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtDec(s.sumInvoiceDiff)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#eff6ff;">(-) النقدية المسلمة فعلياً للخزينة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#eff6ff;">${fmtInt(s.deliveredCash)} ج.م</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="background:${diffBg}; color:${diffColor}; font-weight:800;">
+            <td colspan="4" style="text-align:left; font-size:10px; padding:5px;">فرق الخزينة اليومي (صافي النقدية المطلوب توريده بعد المصاريف - النقدية المسلمة فعلياً للخزينة):</td>
+            <td colspan="2" style="text-align:center; font-size:10.5px; padding:5px;">${fmtInt(s.cashBoxDiff)} ج.م (${statusTxt})</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+  return true;
+}
+
+function renderGenericTablePrintView(tableKey) {
+  if (tableKey === 'merchantDrillDown') {
+    if (!activeDrillDownMerchantCode) return false;
+    renderMerchantDrillDownModal();
+    return true;
+  }
+  if (tableKey === 'dailyTrialBalance') {
+    return renderDailyTrialBalancePrintView();
+  }
+  const cfg = UNIVERSAL_PRINT_TABLE_CONFIGS[tableKey];
+  if (!cfg) return false;
+  const printContainer = ensureMerchantPrintDomElements();
+  const tableEl = document.getElementById(cfg.tableId);
+  if (!printContainer || !tableEl) return false;
+
+  const fName = appState.farmName || 'أبوذكري';
+  const printDateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+  const excludeSet = new Set(cfg.excludeColIndices || []);
+  const alignRightSet = new Set(cfg.alignRightCols || []);
+  const numCols = cfg.colWidths.length;
+
+  // 1. Extract Header Row
+  const theadTr = tableEl.querySelector('thead tr');
+  const thCells = [];
+  if (theadTr) {
+    Array.from(theadTr.children).forEach((th, idx) => {
+      if (excludeSet.has(idx)) return;
+      thCells.push(`<th style="font-size:${cfg.fontSize || '8.5px'};">${escXmlStr(cleanPrintCellText(th))}</th>`);
+    });
+  }
+
+  // 2. Extract Body Rows
+  const tbodyTrs = Array.from(tableEl.querySelectorAll('tbody tr'));
+  const bodyRowsHtml = [];
+  let validRowsCount = 0;
+
+  tbodyTrs.forEach((tr, rIdx) => {
+    const children = Array.from(tr.children);
+    if (children.length === 1 && children[0].colSpan > 1) {
+      const msg = cleanPrintCellText(children[0]);
+      bodyRowsHtml.push(`<tr><td colspan="${numCols}" style="padding:10px; text-align:center; font-weight:700; font-size:9.5px;">${escXmlStr(msg)}</td></tr>`);
+      return;
+    }
+    validRowsCount++;
+    const isPendingRow = tr.className && tr.className.includes('amber');
+    const rowBg = isPendingRow ? '#fef3c7' : (rIdx % 2 === 0 ? '#ffffff' : '#f8fafc');
+    const tds = [];
+    children.forEach((td, cIdx) => {
+      if (excludeSet.has(cIdx)) return;
+      const txt = cleanPrintCellText(td);
+      const align = alignRightSet.has(cIdx) ? 'right' : 'center';
+      const isStrong = td.className && (td.className.includes('font-extrabold') || cIdx === 0 || alignRightSet.has(cIdx));
+      let cellBg = '';
+      if (td.className && td.className.includes('bg-emerald-50')) cellBg = 'background:#ecfdf5; color:#064e3b;';
+      else if (td.className && td.className.includes('bg-amber-50')) cellBg = 'background:#fffbeb; color:#78350f;';
+      else if (td.className && td.className.includes('bg-blue-50')) cellBg = 'background:#eff6ff; color:#1e3a8a;';
+      else if (td.className && td.className.includes('bg-rose-50')) cellBg = 'background:#fff1f2; color:#881337;';
+      else if (td.className && td.className.includes('bg-purple-50')) cellBg = 'background:#faf5ff; color:#581c87;';
+      tds.push(`<td style="text-align:${align}; font-weight:${isStrong ? '800' : '700'}; font-size:${cfg.fontSize || '8.5px'}; ${cellBg}">${escXmlStr(txt)}</td>`);
+    });
+    bodyRowsHtml.push(`<tr style="background:${rowBg};">${tds.join('')}</tr>`);
+  });
+
+  // 3. Extract or Build Footer Row
+  let tfootHtml = '';
+  if (typeof cfg.buildCustomTfootFn === 'function') {
+    tfootHtml = cfg.buildCustomTfootFn();
+  } else {
+    const tfootTr = tableEl.querySelector('tfoot tr');
+    if (tfootTr) {
+      const fCells = [];
+      let spannedCols = 0;
+      Array.from(tfootTr.children).forEach((td, idx) => {
+        const span = Number(td.getAttribute('colspan')) || 1;
+        // Skip trailing action column cell in tfoot if total columns reached numCols
+        if (spannedCols >= numCols) return;
+        const effectiveSpan = Math.min(span, numCols - spannedCols);
+        spannedCols += effectiveSpan;
+        const txt = cleanPrintCellText(td);
+        const spanAttr = effectiveSpan > 1 ? ` colspan="${effectiveSpan}"` : '';
+        fCells.push(`<td${spanAttr} style="text-align:center; font-size:${cfg.fontSize || '8.5px'};">${escXmlStr(txt)}</td>`);
+      });
+      tfootHtml = `<tr style="background:#fbbf24; color:#0f172a; font-weight:800; text-align:center;">${fCells.join('')}</tr>`;
+    }
+  }
+
+  const colgroupHtml = cfg.colWidths.map(w => `<col style="width:${w};" />`).join('');
+  const kpiBlockHtml = typeof cfg.kpiHtmlFn === 'function' ? cfg.kpiHtmlFn() : '';
+  const reportTitle = cfg.titleFn();
+  const reportSubTitle = cfg.subTitleFn(validRowsCount);
+
+  printContainer.innerHTML = `
+    <div style="border:2px solid #1b365d; border-radius:6px; padding:6px 8px; background:#ffffff; color:#0f172a; font-family:'Cairo',sans-serif;">
+      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:4px; margin-bottom:5px;">
+        <div>
+          <div style="font-size:13px; font-weight:800; color:#1b365d;">
+            ${reportTitle} — مزرعة <span style="color:#b45309;">${fName}</span>
+          </div>
+          <div style="font-size:9px; font-weight:700; color:#475569; margin-top:1px;">
+            ${reportSubTitle}
+          </div>
+        </div>
+        <div style="text-align:left; font-size:9px; font-weight:700; color:#334155;">
+          <div>نظام محاضر لجان بيع المزارع</div>
+          <div>تاريخ الطباعة: ${printDateStr}</div>
+        </div>
+      </div>
+
+      ${kpiBlockHtml}
+
+      <table id="merchantPrintTable" dir="rtl" style="width:100%; max-width:100%; table-layout:fixed; border-collapse:collapse; margin-top:4px;">
+        <colgroup>${colgroupHtml}</colgroup>
+        <thead>
+          <tr style="background:#1b365d; color:#ffffff; font-weight:800; text-align:center;">
+            ${thCells.join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${bodyRowsHtml.join('')}
+        </tbody>
+        ${tfootHtml ? `<tfoot>${tfootHtml}</tfoot>` : ''}
+      </table>
+    </div>
+  `;
+  return true;
+}
+
+function activateIsolatedPrintMode(targetKey = '') {
+  const keyToPrint = targetKey || activePrintTargetKey || (activeDrillDownMerchantCode ? 'merchantDrillDown' : '');
+  if (!keyToPrint) return false;
+  activePrintTargetKey = keyToPrint;
+  if (!renderGenericTablePrintView(keyToPrint)) return false;
+  const printContainer = ensureMerchantPrintDomElements();
+  if (!printContainer) return false;
   isMerchantPrintActive = true;
   document.body.classList.add('printing-merchant-modal');
   Array.from(document.body.children).forEach(el => {
@@ -3499,11 +3888,17 @@ function activateMerchantPrintMode() {
       el.style.setProperty('display', 'none', 'important');
     }
   });
+  return true;
+}
+
+function activateMerchantPrintMode() {
+  return activateIsolatedPrintMode('merchantDrillDown');
 }
 
 function deactivateMerchantPrintMode() {
   if (!isMerchantPrintActive) return;
   isMerchantPrintActive = false;
+  activePrintTargetKey = '';
   Array.from(document.body.children).forEach(el => {
     if (!el || !el.style || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
     if (el.id === 'merchantPrintOnlyContainer') {
@@ -3526,16 +3921,22 @@ function deactivateMerchantPrintMode() {
   }
 }
 
+function triggerTablePrint(tableKey) {
+  if (!tableKey) return;
+  if (activateIsolatedPrintMode(tableKey)) {
+    setTimeout(() => {
+      try {
+        window.print();
+      } finally {
+        setTimeout(deactivateMerchantPrintMode, 250);
+      }
+    }, 60);
+  }
+}
+
 function triggerMerchantStatementPrint() {
   if (!activeDrillDownMerchantCode) return;
-  activateMerchantPrintMode();
-  setTimeout(() => {
-    try {
-      window.print();
-    } finally {
-      setTimeout(deactivateMerchantPrintMode, 250);
-    }
-  }, 60);
+  triggerTablePrint('merchantDrillDown');
 }
 
 function renderMerchantPrintOnlyContainer(ledger, filteredMovements) {
@@ -5680,7 +6081,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v27') {
+          if (k !== 'farm-sales-committee-v28') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -7882,10 +8283,31 @@ function initFarmSalesApp() {
       triggerMerchantStatementPrint();
     });
   }
+  document.addEventListener('click', (e) => {
+    const printTblBtn = e.target.closest('[data-print-table]');
+    if (printTblBtn) {
+      e.preventDefault();
+      const tblKey = printTblBtn.getAttribute('data-print-table');
+      if (tblKey) triggerTablePrint(tblKey);
+    }
+  });
   window.addEventListener('beforeprint', () => {
+    if (isMerchantPrintActive) return;
     const mdl = document.getElementById('merchantDrillDownModal');
     if ((mdl && !mdl.classList.contains('hidden')) || activeDrillDownMerchantCode > 0) {
-      activateMerchantPrintMode();
+      activateIsolatedPrintMode('merchantDrillDown');
+      return;
+    }
+    const tabMap = {
+      daily: 'dailySales',
+      dashboard: 'dash',
+      merchants: 'merch',
+      transfers: 'transfers',
+      expenses: 'expSummary'
+    };
+    const defaultKey = tabMap[appState.activeTab];
+    if (defaultKey) {
+      activateIsolatedPrintMode(defaultKey);
     }
   });
   window.addEventListener('afterprint', () => {

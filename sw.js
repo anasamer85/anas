@@ -1,12 +1,14 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v27";
+const CACHE_NAME = "farm-sales-committee-v28";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
   "./style.css",
   "./style.css?v=27",
+  "./style.css?v=28",
   "./app.js",
   "./app.js?v=27",
+  "./app.js?v=28",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
