@@ -11,3 +11,19 @@
 6. **`HANDOVER_TECHNICAL_SUMMARY.md`**: وثيقة الملخص التقني الشامل للمشروع.
 7. **`نظام_محاضر_بيع_مزرعة_ابوذكري_10_ايام.xlsx`**: شيت الإكسيل المرجعي (15 شيت بالمعادلات).
 8. **`نظام_مبيعات_مزرعة_أبوذكري.html`**: نسخة احتياطية مدمجة في ملف واحد للاستخدام المحلي المستقل.
+
+---
+
+## 🛡️ تحديث الإصدار `v38` — الفحص الأمني والبرمجي العميق لمحرك المزامنة (Bulletproof Offline-First Sync Engine)
+
+1. **منع تصادم التعديلات المتزامنة (Simultaneous Offline Edits Protection):**
+   - تحصين دوال فحص التكرار (`areSalesRowsDuplicate`, `arePendingSalesDuplicate`, `areExpensesDuplicate`) عبر الدالة `isCollisionProofUUID(id)`؛ بحيث إذا أضاف مندوبان يعملان بدون إنترنت حركتي بيع مختلفتين في نفس اليوم (حتى لو تصادف حصولهما على نفس رقم الميزان التلقائي أو تشابهت الأوزان والتاجر)، فإن وجود معرّفين فريدين مختلفين (`UUID A !== UUID B`) يمنع دمجهما أو مسح إحداهما للأخرى بنسبة 100%.
+   - تحويل عملية الرفع السحابي (`pushDatabaseToCloud`) إلى عملية ذرية محمية (Atomic Read-Modify-Write): إذا فشل طلب الجلب المسبق (`Pre-Fetch GET`) بسبب تذبذب شبكة الهاتف، يتوقف الرفع مؤقتاً مع الاحتفاظ بالتعديلات في الطابور المحلي (`pendingChanges`) بدلاً من الكتابة الفوقية العمياء على بيانات السحابة.
+
+2. **حماية تأخر الساعة ومعايرة التوقيت (Clock Skew Tolerance & Auto-Calibration):**
+   - رفع هامش تسامح اختلاف التوقيت (`CLOCK_SKEW_BUFFER_MS`) إلى **60 دقيقة كاملة (`3,600,000 ms`)** مع إضافة معايرة تلقائية لفرق التوقيت مع السحابة (`calibrateCloudClockOffset` و `getSyncedNow()`).
+   - تحويل دمج الأيام (`mergeDaysObjects`) إلى بنية **المجموعات المراقبة (Observed-Remove Set / OR-Set)**: إلغاء المسح الجماعي الأعمى لحركات اليوم بناءً على مقارنة `clearedAt` مع `Date.now()`، بحيث لا يُحذف أي سجل يحمل معرّف `UUID` إلا إذا كان معرّفه مسجلاً صراحةً في سجل المحذوفات (`deletedIds`).
+
+3. **القضاء التام على الارتداد العكسي للحذف (Anti-Ghost Deletion & Timestamped Tombstones):**
+   - ترقية استيراد الإكسيل (`importWorkbookIntoAppState`) واسترجاع النسخ الاحتياطية (`restoreFullJsonBackupFromText`) لتوليد معرّفات `UUID` فريدة لكل حركة مستوردة مع ختمها بطابع الاستيراد (`importedAt`, `updatedAt`, و `lastBulkImportAt`).
+   - إضافة سجل طوابع زمنية للمحذوفات (`deletedTimestamps`) وفلتر تطهير ذكي (`sanitizeMergedTombstonesAgainstLiveData`) يقوم تلقائياً بإبطال وحذف أي معرّف قديم في `deletedIds` أو حالة تصفير قديمة (`farmResetAt`) إذا اتصل جهاز قديم بالسحابة التي تحتوي على بيانات حديثة مستوردة من الإكسيل.

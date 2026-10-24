@@ -99,9 +99,11 @@ function getDefaultState(customFarmName = 'أبوذكري') {
     liveSyncEnabled: true,
     liveSyncIntervalSec: 5,
     deletedIds: { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] },
+    deletedTimestamps: { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} },
     webhookUrl: getEmbeddedWebhookUrl() || '',
     updatedAt: '',
     farmResetAt: 0,
+    lastBulkImportAt: 0,
     defaultPrice: 0,
     defaultTip: 0,
     lastScaleNo: 0,
@@ -121,9 +123,30 @@ let dashChartInstance = null;
 let activeRecalledPendingId = '';
 let localMutationEpoch = 0;
 
-// هامش تسامح اختلاف توقيت الساعات بين الأجهزة (Clock Skew Tolerance Buffer = 10 دقائق)
-// يحمي حركات المندوبين من الحذف الخاطئ إذا كانت ساعة هاتف أحد المستخدمين متأخرة أو متقدمة عدة دقائق
-const CLOCK_SKEW_BUFFER_MS = 10 * 60 * 1000;
+// هامش تسامح اختلاف توقيت الساعات بين الأجهزة (Clock Skew Tolerance Buffer = 60 دقيقة)
+// يحمي حركات المندوبين من الحذف أو الرفض الخاطئ حتى لو كانت ساعة هاتف المندوب متأخرة 15 دقيقة أو أكثر (حتى ساعة كاملة)
+const CLOCK_SKEW_BUFFER_MS = 60 * 60 * 1000;
+let cloudClockOffsetMs = 0;
+
+// معايرة فرق التوقيت مع السحابة تلقائياً لتعويض تأخر ساعة هاتف المندوب
+function calibrateCloudClockOffset(cloudUpdatedAtIso) {
+  if (!cloudUpdatedAtIso) return;
+  try {
+    const cloudMs = typeof cloudUpdatedAtIso === 'number' ? cloudUpdatedAtIso : Date.parse(String(cloudUpdatedAtIso));
+    if (!isNaN(cloudMs) && cloudMs > 0) {
+      const localMs = Date.now();
+      const diff = cloudMs - localMs;
+      // إذا كانت ساعة الجهاز متأخرة عن السحابة (diff > 0)، نعوض التأخر تلقائياً في الطوابع الزمنية الجديدة
+      if (diff > 5000 && diff < 24 * 60 * 60 * 1000) {
+        cloudClockOffsetMs = Math.max(cloudClockOffsetMs, diff);
+      }
+    }
+  } catch (e) {}
+}
+
+function getSyncedNow() {
+  return Date.now() + (Number(cloudClockOffsetMs) || 0);
+}
 
 function isTimestampSignificantlyNewer(newerTs, olderTs, bufferMs = CLOCK_SKEW_BUFFER_MS) {
   const a = Number(newerTs) || 0;
@@ -140,9 +163,16 @@ function areTimestampsWithinSkewBuffer(tsA, tsB, bufferMs = CLOCK_SKEW_BUFFER_MS
   return Math.abs(a - b) <= bufferMs;
 }
 
-// توليد معرّف فريد عالمياً (Collision-Proof UUID) للإدخالات اليدوية لمنع تصادم المعرفات بين الأجهزة في وضع الأوفلاين
+// فحص ما إذا كان المعرّف (ID) معرّفاً فريداً عالمياً (UUID) مانعاً للتصادم
+function isCollisionProofUUID(idVal) {
+  if (idVal === undefined || idVal === null) return false;
+  const s = String(idVal).trim();
+  return /_[0-9]{10,}_[0-9a-z]{6,}_[0-9a-z]{8,}$/i.test(s);
+}
+
+// توليد معرّف فريد عالمياً (Collision-Proof UUID) للإدخالات اليدوية والمستوردة لمنع تصادم المعرفات بين الأجهزة في وضع الأوفلاين
 function generateRecordUUID(prefix = 'rec') {
-  const nowMs = Date.now();
+  const nowMs = getSyncedNow();
   const tsBase36 = nowMs.toString(36);
   let randomHex = '';
   try {
@@ -162,8 +192,11 @@ function generateRecordUUID(prefix = 'rec') {
 
 function extractTimestampFromRecord(rec) {
   if (!rec || typeof rec !== 'object') return 0;
-  if (Number(rec.updatedAt) > 0) return Number(rec.updatedAt);
-  if (Number(rec.createdAt) > 0) return Number(rec.createdAt);
+  const u = Number(rec.updatedAt) || 0;
+  const c = Number(rec.createdAt) || 0;
+  const imp = Number(rec.importedAt) || 0;
+  const best = Math.max(u, c, imp);
+  if (best > 0) return best;
   const idStr = String(rec.id || '');
   const m = idStr.match(/_(17\d{11})/);
   if (m && m[1]) return Number(m[1]) || 0;
@@ -203,6 +236,9 @@ function sortSalesListByScaleNo(list) {
 function areSalesRowsDuplicate(a, b) {
   if (!a || !b) return false;
   if (a.id !== undefined && b.id !== undefined && String(a.id) === String(b.id)) return true;
+  // حماية مطلقة للتعديلات المتزامنة (Simultaneous Offline Edits):
+  // إذا كان كلا السجلين يحملان معرّفين فريدين مختلفين (UUIDs)، فهما حركتان مستقلتان تماماً ولا يجوز اعتبارهما مكررتين أبداً حتى لو تصادف تشابه رقم الميزان التلقائي أو الأوزان!
+  if (isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
   const ma = String(a.merchant || '').trim();
   const mb = String(b.merchant || '').trim();
   if (!ma || !mb || ma !== mb) return false;
@@ -239,6 +275,7 @@ function areSalesRowsDuplicate(a, b) {
 function arePendingSalesDuplicate(a, b) {
   if (!a || !b) return false;
   if (a.id !== undefined && b.id !== undefined && String(a.id) === String(b.id)) return true;
+  if (isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
   const ma = String(a.merchant || '').trim();
   const mb = String(b.merchant || '').trim();
   if (!ma || !mb || ma !== mb) return false;
@@ -255,6 +292,7 @@ function arePendingSalesDuplicate(a, b) {
 function areExpensesDuplicate(a, b) {
   if (!a || !b) return false;
   if (a.id !== undefined && b.id !== undefined && String(a.id) === String(b.id)) return true;
+  if (isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
   return (
     String(a.category || '').trim() === String(b.category || '').trim() &&
     String(a.desc || '').trim() === String(b.desc || '').trim() &&
@@ -347,11 +385,26 @@ function ensureDeletedIdsStructure(obj) {
   };
 }
 
+function ensureDeletedTimestampsStructure(obj) {
+  const base = { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} };
+  if (!obj || typeof obj !== 'object') return base;
+  const copyMap = (m) => (m && typeof m === 'object' && !Array.isArray(m)) ? { ...m } : {};
+  return {
+    sales: copyMap(obj.sales),
+    pendingSales: copyMap(obj.pendingSales),
+    expenses: copyMap(obj.expenses),
+    merchants: copyMap(obj.merchants),
+    users: copyMap(obj.users),
+    farms: copyMap(obj.farms)
+  };
+}
+
 function applyParsedStateObject(parsed) {
   if (!parsed || !parsed.days || !parsed.merchants) return false;
   const savedWebhook = (getEmbeddedWebhookUrl() || parsed.webhookUrl || appState.webhookUrl || '').trim();
   appState = { ...getDefaultState(), ...parsed, webhookUrl: savedWebhook };
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
+  appState.deletedTimestamps = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
   if (appState.liveSyncEnabled === undefined) appState.liveSyncEnabled = true;
   if (!appState.liveSyncIntervalSec) appState.liveSyncIntervalSec = 5;
   if (appState.inactivityTimeoutMin === undefined || appState.inactivityTimeoutMin === null || isNaN(Number(appState.inactivityTimeoutMin))) {
@@ -518,7 +571,7 @@ function formatAuditTimeArabic(tsInput) {
 
 function buildRecordAuditMeta(existingRec = null, isEdit = false) {
   const actor = getActiveUserShortLabel();
-  const nowMs = Date.now();
+  const nowMs = getSyncedNow();
   const nowTxt = formatAuditTimeArabic(nowMs);
   if (existingRec && (existingRec.createdBy || existingRec.createdAt)) {
     const origCreatedAt = Number(existingRec.createdAt) || extractTimestampFromRecord(existingRec) || nowMs;
@@ -915,6 +968,7 @@ function syncActiveFarmIntoArchive() {
     farmName: fName,
     updatedAt: new Date().toLocaleTimeString('ar-EG'),
     farmResetAt: Number(appState.farmResetAt) || 0,
+    lastBulkImportAt: Number(appState.lastBulkImportAt) || 0,
     visibleDays: getVisibleDays(),
     defaultPrice: appState.defaultPrice !== undefined ? appState.defaultPrice : 0,
     defaultTip: appState.defaultTip !== undefined ? appState.defaultTip : 0,
@@ -930,6 +984,7 @@ function activateFarmFromArchive(targetFarm) {
   const fObj = appState.farmsArchive[targetFarm];
   appState.farmName = targetFarm;
   appState.farmResetAt = Number(fObj.farmResetAt) || 0;
+  appState.lastBulkImportAt = Number(fObj.lastBulkImportAt) || 0;
   appState.days = JSON.parse(JSON.stringify(fObj.days || {}));
   appState.visibleDays = Array.isArray(fObj.visibleDays) && fObj.visibleDays.length > 0 ? [...fObj.visibleDays] : [1];
   appState.defaultPrice = fObj.defaultPrice !== undefined ? Number(fObj.defaultPrice) : 0;
@@ -956,8 +1011,9 @@ try {
   }
 } catch (e) {}
 
-function recordDeletedItem(category, itemId) {
+function recordDeletedItem(category, itemId, customTs = 0) {
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
+  appState.deletedTimestamps = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
   const list = appState.deletedIds[category];
   if (Array.isArray(list) && itemId !== undefined && itemId !== null && itemId !== '') {
     const normId = category === 'merchants' ? Number(itemId) : String(itemId);
@@ -965,15 +1021,23 @@ function recordDeletedItem(category, itemId) {
       list.push(normId);
       if (list.length > 5000) list.shift();
     }
+    const tsMap = appState.deletedTimestamps[category];
+    if (tsMap && typeof tsMap === 'object') {
+      tsMap[String(normId)] = Number(customTs) > 0 ? Number(customTs) : getSyncedNow();
+    }
   }
 }
 
 function unrecordDeletedItem(category, itemId) {
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
+  appState.deletedTimestamps = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
   const list = appState.deletedIds[category];
   if (Array.isArray(list) && itemId !== undefined && itemId !== null) {
     const strId = String(itemId);
     appState.deletedIds[category] = list.filter(x => String(x) !== strId);
+    if (appState.deletedTimestamps[category]) {
+      delete appState.deletedTimestamps[category][strId];
+    }
   }
 }
 
@@ -1103,10 +1167,37 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
   return result;
 }
 
+// بنية الدمج القائمة على المجموعات المراقبة (Observed-Remove Set / OR-Set Architecture):
+// لا نقوم أبداً بالحذف الجماعي الأعمى للسجلات ذات المعرفات الفريدة (UUID) غير الموجودة في سجل المحذوفات (deletedIds)،
+// مما يحمي حركات المندوبين بنسبة 100% ضد تأخر ساعة الهاتف (Clock Skew) أو التصفير القديم على جهاز آخر (Ghost Deletion).
 function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localResetAt = 0, cloudResetAt = 0) {
   const mergedDays = {};
   const lReset = Number(localResetAt) || 0;
   const cReset = Number(cloudResetAt) || 0;
+
+  // تصفية السجلات القديمة فقط التي تفتقر لمعرف UUID وليس لها طابع زمني إذا كانت أقدم بشكل قاطع من تصفير صريح
+  const filterLegacyPreClearItems = (arr, otherSideClearTs, delCategoryList) => {
+    if (!Array.isArray(arr)) return [];
+    if (!otherSideClearTs || otherSideClearTs <= 0) return arr;
+    const delSet = new Set((delCategoryList || []).map(String));
+    return arr.filter(item => {
+      if (!item) return false;
+      const idStr = item.id !== undefined ? String(item.id) : '';
+      if (idStr && delSet.has(idStr)) return false;
+      // السجلات المزودة بمعرف UUID فريد أو المستوردة حديثاً لا تُمسح أبداً بالتصفير الجماعي إلا إذا كان معرفها مسجلاً صراحةً في deletedIds!
+      if (isCollisionProofUUID(idStr) || Number(item.importedAt) > 0) {
+        return true;
+      }
+      const itemTs = extractTimestampFromRecord(item);
+      if (itemTs > 0 && isTimestampSignificantlyNewer(otherSideClearTs, itemTs, CLOCK_SKEW_BUFFER_MS)) {
+        if (idStr && Array.isArray(delCategoryList) && !delCategoryList.includes(idStr)) {
+          delCategoryList.push(idStr);
+        }
+        return false;
+      }
+      return true;
+    });
+  };
 
   for (let d = 1; d <= 10; d++) {
     const defaultLbl = `اليوم ${d}`;
@@ -1115,86 +1206,33 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
     const lDayClear = Math.max(lReset, Number(lDay.clearedAt) || 0);
     const cDayClear = Math.max(cReset, Number(cDay.clearedAt) || 0);
 
-    const lHasMov = ((lDay.sales && lDay.sales.length > 0) || (lDay.pendingSales && lDay.pendingSales.length > 0) || (lDay.expenses && lDay.expenses.length > 0));
-    const cHasMov = ((cDay.sales && cDay.sales.length > 0) || (cDay.pendingSales && cDay.pendingSales.length > 0) || (cDay.expenses && cDay.expenses.length > 0));
-
     const lAdded = getLatestDayActivityTimestamp(lDay, lDayClear);
     const cAdded = getLatestDayActivityTimestamp(cDay, cDayClear);
     const maxAdded = Math.max(lAdded, cAdded);
     const maxClear = Math.max(lDayClear, cDayClear);
 
-    // 1. حالة التصفير الصريح المحلي لليوم أو المزرعة:
-    // لا يتم مسح حركات السحابة إلا إذا كان الجهاز المحلي فارغاً تماماً (!lHasMov) وكان وقت التصفير المحلي أحدث بشكل قاطع (يتجاوز هامش تسامح اختلاف الساعات CLOCK_SKEW_BUFFER_MS) من آخر إضافة في السحابة.
-    // أما إذا كانت حركات السحابة ضمن هامش اختلاف التوقيت (أو أحدث)، فيتم اللجوء للدمج الجزئي بالمعرفات (IDs) بدلاً من الحذف الأعمى!
-    if (lDayClear > cDayClear && !lHasMov && isTimestampSignificantlyNewer(lDayClear, cAdded, CLOCK_SKEW_BUFFER_MS)) {
-      (cDay.sales || []).forEach(r => { if (r && r.id && !deletedIds.sales.includes(String(r.id))) deletedIds.sales.push(String(r.id)); });
-      (cDay.pendingSales || []).forEach(r => { if (r && r.id && !deletedIds.pendingSales.includes(String(r.id))) deletedIds.pendingSales.push(String(r.id)); });
-      (cDay.expenses || []).forEach(e => { if (e && e.id && !deletedIds.expenses.includes(String(e.id))) deletedIds.expenses.push(String(e.id)); });
-      mergedDays[d] = {
-        dayNumber: d,
-        dateLabel: lDay.dateLabel || defaultLbl,
-        sales: [],
-        pendingSales: [],
-        expenses: [],
-        deliveredCash: Number(lDay.deliveredCash) || 0,
-        clearedAt: lDayClear,
-        addedAt: lAdded,
-        isHidden: Boolean(lDay.isHidden)
-      };
-      continue;
-    }
+    const safeLSales = filterLegacyPreClearItems(lDay.sales, cDayClear, deletedIds.sales);
+    const safeLPending = filterLegacyPreClearItems(lDay.pendingSales, cDayClear, deletedIds.pendingSales);
+    const safeLExpenses = filterLegacyPreClearItems(lDay.expenses, cDayClear, deletedIds.expenses);
 
-    // 2. حالة التصفير الصريح السحابي لليوم أو المزرعة:
-    // لا يتم مسح الحركات المحلية إلا إذا كانت السحابة فارغة تماماً (!cHasMov) وكان وقت التصفير السحابي أحدث بشكل قاطع (خارج هامش CLOCK_SKEW_BUFFER_MS) من آخر إضافة محلية.
-    if (cDayClear > lDayClear && !cHasMov && isTimestampSignificantlyNewer(cDayClear, lAdded, CLOCK_SKEW_BUFFER_MS)) {
-      (lDay.sales || []).forEach(r => { if (r && r.id && !deletedIds.sales.includes(String(r.id))) deletedIds.sales.push(String(r.id)); });
-      (lDay.pendingSales || []).forEach(r => { if (r && r.id && !deletedIds.pendingSales.includes(String(r.id))) deletedIds.pendingSales.push(String(r.id)); });
-      (lDay.expenses || []).forEach(e => { if (e && e.id && !deletedIds.expenses.includes(String(e.id))) deletedIds.expenses.push(String(e.id)); });
-      mergedDays[d] = {
-        dayNumber: d,
-        dateLabel: cDay.dateLabel || defaultLbl,
-        sales: [],
-        pendingSales: [],
-        expenses: [],
-        deliveredCash: Number(cDay.deliveredCash) || 0,
-        clearedAt: cDayClear,
-        addedAt: cAdded,
-        isHidden: Boolean(cDay.isHidden)
-      };
-      continue;
-    }
+    const safeCSales = filterLegacyPreClearItems(cDay.sales, lDayClear, deletedIds.sales);
+    const safeCPending = filterLegacyPreClearItems(cDay.pendingSales, lDayClear, deletedIds.pendingSales);
+    const safeCExpenses = filterLegacyPreClearItems(cDay.expenses, lDayClear, deletedIds.expenses);
 
-    // 3. رفع الحظر عن معرفات السجلات المستوردة/المضافة بعد تصفير سابق (أو ضمن هامش اختلاف التوقيت مع تصفير سابق فقط)
-    // ملاحظة هامة: لا نمسح deletedIds في الأيام العادية (حيث lDayClear === 0 و cDayClear === 0) حتى نحترم الحذف الفردي لأي حركة بعينها!
-    if (lDayClear > 0 && cHasMov && !isTimestampSignificantlyNewer(lDayClear, cAdded, CLOCK_SKEW_BUFFER_MS)) {
-      const cSaleIds = new Set((cDay.sales || []).map(r => r && r.id !== undefined ? String(r.id) : ''));
-      const cPendIds = new Set((cDay.pendingSales || []).map(r => r && r.id !== undefined ? String(r.id) : ''));
-      const cExpIds = new Set((cDay.expenses || []).map(e => e && e.id !== undefined ? String(e.id) : ''));
-      deletedIds.sales = (deletedIds.sales || []).filter(id => !cSaleIds.has(String(id)));
-      deletedIds.pendingSales = (deletedIds.pendingSales || []).filter(id => !cPendIds.has(String(id)));
-      deletedIds.expenses = (deletedIds.expenses || []).filter(id => !cExpIds.has(String(id)));
-    }
-    if (cDayClear > 0 && lHasMov && !isTimestampSignificantlyNewer(cDayClear, lAdded, CLOCK_SKEW_BUFFER_MS)) {
-      const lSaleIds = new Set((lDay.sales || []).map(r => r && r.id !== undefined ? String(r.id) : ''));
-      const lPendIds = new Set((lDay.pendingSales || []).map(r => r && r.id !== undefined ? String(r.id) : ''));
-      const lExpIds = new Set((lDay.expenses || []).map(e => e && e.id !== undefined ? String(e.id) : ''));
-      deletedIds.sales = (deletedIds.sales || []).filter(id => !lSaleIds.has(String(id)));
-      deletedIds.pendingSales = (deletedIds.pendingSales || []).filter(id => !lPendIds.has(String(id)));
-      deletedIds.expenses = (deletedIds.expenses || []).filter(id => !lExpIds.has(String(id)));
-    }
-
-    // 4. الدمج الجزئي العميق للمصفوفات (Deep Granular Array Merging by ID):
-    // لا يتم استبدال مصفوفة sales أو pendingSales أو expenses بالكامل أبداً؛ بل تُدمج حركة بحركة بناءً على المعرف (id) وسجل deletedIds
+    // الدمج الجزئي العميق للمصفوفات (Deep Granular Array Merging by UUID):
+    // لا يتم استبدال مصفوفة sales أو pendingSales أو expenses بالكامل أبداً؛ بل تُدمج حركة بحركة بناءً على المعرف (id) وسجل deletedIds المصفّى
     const mergedSales = sortSalesListByScaleNo(
-      mergeArraysById(lDay.sales, cDay.sales, deletedIds.sales, 'id', preferCloud, areSalesRowsDuplicate)
+      mergeArraysById(safeLSales, safeCSales, deletedIds.sales, 'id', preferCloud, areSalesRowsDuplicate)
     );
     const mergedPending = sortSalesListByScaleNo(
-      mergeArraysById(lDay.pendingSales, cDay.pendingSales, deletedIds.pendingSales, 'id', preferCloud, arePendingSalesDuplicate)
+      mergeArraysById(safeLPending, safeCPending, deletedIds.pendingSales, 'id', preferCloud, arePendingSalesDuplicate)
     );
     const mergedExpenses = mergeArraysById(
-      lDay.expenses, cDay.expenses, deletedIds.expenses, 'id', preferCloud, areExpensesDuplicate
+      safeLExpenses, safeCExpenses, deletedIds.expenses, 'id', preferCloud, areExpensesDuplicate
     );
     const hasAnyMovement = mergedSales.length > 0 || mergedPending.length > 0 || mergedExpenses.length > 0;
+    const lHasMov = safeLSales.length > 0 || safeLPending.length > 0 || safeLExpenses.length > 0;
+    const cHasMov = safeCSales.length > 0 || safeCPending.length > 0 || safeCExpenses.length > 0;
 
     // اختيار اسم/تاريخ اليوم بذكاء (تفضيل التسمية المخصصة عن التسمية الافتراضية "اليوم X")
     const lLbl = String(lDay.dateLabel || '').trim() || defaultLbl;
@@ -1239,12 +1277,143 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
   return mergedDays;
 }
 
+// تطهير سجل المحذوفات (Anti-Ghost Tombstone Sanitizer):
+// يمنع أي جهاز يحمل سجل محذوفات قديم (deletedIds) أو حالة تصفير سابقة من مسح البيانات الحديثة المستوردة من الإكسيل أو المحدثة على السحابة
+function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDeletedIds, mergedDeletedTimestamps) {
+  const localBulkTs = Number(localState && localState.lastBulkImportAt) || 0;
+  const cloudBulkTs = Number(cloudData && cloudData.lastBulkImportAt) || 0;
+  const localResetTs = Number(localState && localState.farmResetAt) || 0;
+  const cloudResetTs = Number(cloudData && cloudData.farmResetAt) || 0;
+  const localDel = ensureDeletedIdsStructure(localState && localState.deletedIds);
+  const cloudDel = ensureDeletedIdsStructure(cloudData && cloudData.deletedIds);
+  const localDelTsMap = ensureDeletedTimestampsStructure(localState && localState.deletedTimestamps);
+  const cloudDelTsMap = ensureDeletedTimestampsStructure(cloudData && cloudData.deletedTimestamps);
+
+  const localDelSets = {
+    sales: new Set(localDel.sales.map(String)),
+    pendingSales: new Set(localDel.pendingSales.map(String)),
+    expenses: new Set(localDel.expenses.map(String))
+  };
+  const cloudDelSets = {
+    sales: new Set(cloudDel.sales.map(String)),
+    pendingSales: new Set(cloudDel.pendingSales.map(String)),
+    expenses: new Set(cloudDel.expenses.map(String))
+  };
+
+  // جمع السجلات الحية وأحدث طابع زمني لكل معرف في كل من الجهاز المحلي والسحابة
+  const collectLiveRecordsMeta = (daysMap, archiveMap, sideBulkTs) => {
+    const meta = { sales: {}, pendingSales: {}, expenses: {} };
+    const scanDays = (dMap, fBulkTs) => {
+      if (!dMap || typeof dMap !== 'object') return;
+      for (let d = 1; d <= 10; d++) {
+        const dayObj = dMap[d];
+        if (!dayObj || typeof dayObj !== 'object') continue;
+        const dayAdded = Number(dayObj.addedAt) || 0;
+        ['sales', 'pendingSales', 'expenses'].forEach(cat => {
+          (dayObj[cat] || []).forEach(rec => {
+            if (!rec || rec.id === undefined || rec.id === null) return;
+            const idStr = String(rec.id);
+            const recTs = Math.max(
+              extractTimestampFromRecord(rec),
+              Number(rec.importedAt) || 0,
+              fBulkTs || 0,
+              dayAdded || 0
+            );
+            const isImported = Boolean(Number(rec.importedAt) > 0 || fBulkTs > 0);
+            if (!meta[cat][idStr] || recTs > meta[cat][idStr].ts) {
+              meta[cat][idStr] = { ts: recTs, isImported };
+            }
+          });
+        });
+      }
+    };
+    scanDays(daysMap, sideBulkTs);
+    if (archiveMap && typeof archiveMap === 'object') {
+      Object.values(archiveMap).forEach(arch => {
+        if (arch && arch.days) {
+          scanDays(arch.days, Math.max(sideBulkTs, Number(arch.lastBulkImportAt) || 0));
+        }
+      });
+    }
+    return meta;
+  };
+
+  const cloudLive = collectLiveRecordsMeta(cloudData.days, cloudData.farmsArchive, cloudBulkTs);
+  const localLive = collectLiveRecordsMeta(localState.days, localState.farmsArchive, localBulkTs);
+
+  ['sales', 'pendingSales', 'expenses'].forEach(cat => {
+    mergedDeletedIds[cat] = (mergedDeletedIds[cat] || []).filter(rawId => {
+      const idStr = String(rawId);
+      const inLocalDel = localDelSets[cat].has(idStr);
+      const inCloudDel = cloudDelSets[cat].has(idStr);
+      const lDelTs = Number(localDelTsMap[cat] && localDelTsMap[cat][idStr]) || 0;
+      const cDelTs = Number(cloudDelTsMap[cat] && cloudDelTsMap[cat][idStr]) || 0;
+
+      // الحالة أ: المعرف محذوف محلياً فقط (تاريخياً) لكنه موجود حيّاً في السحابة (ولم تحذفه السحابة)
+      if (inLocalDel && !inCloudDel && cloudLive[cat][idStr]) {
+        const cRec = cloudLive[cat][idStr];
+        const effectiveLocalDelTs = lDelTs || localResetTs || 0;
+        // 1) إذا تم استيراد بيانات السحابة من الإكسيل أو تحديث السجل في السحابة بعد وقت الحذف المحلي -> نبطل الحذف القديم فوراً!
+        if (cRec.ts > 0 && effectiveLocalDelTs > 0 && cRec.ts >= effectiveLocalDelTs) {
+          delete mergedDeletedTimestamps[cat][idStr];
+          return false;
+        }
+        // 2) إذا كان سجل الحذف المحلي قديماً بلا طابع زمني (effectiveLocalDelTs === 0) والسجل في السحابة مستورد من إكسيل أو له طابع زمني حديث -> نبطل الحذف الشبح!
+        if (effectiveLocalDelTs === 0 && (cRec.isImported || cRec.ts > 0 || cloudBulkTs > 0)) {
+          delete mergedDeletedTimestamps[cat][idStr];
+          return false;
+        }
+      }
+
+      // الحالة ب: المعرف محذوف في السحابة قديماً لكن تم إعادة استيراده أو تحديثه محلياً بوقت أحدث
+      if (inCloudDel && !inLocalDel && localLive[cat][idStr]) {
+        const lRec = localLive[cat][idStr];
+        const effectiveCloudDelTs = cDelTs || cloudResetTs || 0;
+        if (lRec.ts > 0 && effectiveCloudDelTs > 0 && lRec.ts >= effectiveCloudDelTs) {
+          delete mergedDeletedTimestamps[cat][idStr];
+          return false;
+        }
+        if (effectiveCloudDelTs === 0 && (lRec.isImported || localBulkTs > 0)) {
+          delete mergedDeletedTimestamps[cat][idStr];
+          return false;
+        }
+      }
+
+      return true;
+    });
+  });
+}
+
 function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   if (!cloudData || !cloudData.days || !cloudData.merchants) return false;
 
-  // 1. دمج سجل المحذوفات من الجهازين
+  // معايرة ساعة الجهاز المحلي مع طابع وقت السحابة لتعويض أي تأخر في ساعة الهاتف (Clock Skew Calibration)
+  if (cloudData.updatedAt) {
+    calibrateCloudClockOffset(cloudData.updatedAt);
+  }
+
+  // 1. دمج سجل المحذوفات وطوابعها الزمنية من الجهازين ثم تطهيرها ضد الحذف الشبح (Ghost Deletion)
   const localDel = ensureDeletedIdsStructure(appState.deletedIds);
   const cloudDel = ensureDeletedIdsStructure(cloudData.deletedIds);
+  const localDelTs = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
+  const cloudDelTs = ensureDeletedTimestampsStructure(cloudData.deletedTimestamps);
+
+  const mergedDeletedTimestamps = {
+    sales: { ...cloudDelTs.sales, ...localDelTs.sales },
+    pendingSales: { ...cloudDelTs.pendingSales, ...localDelTs.pendingSales },
+    expenses: { ...cloudDelTs.expenses, ...localDelTs.expenses },
+    merchants: { ...cloudDelTs.merchants, ...localDelTs.merchants },
+    users: { ...cloudDelTs.users, ...localDelTs.users },
+    farms: { ...cloudDelTs.farms, ...localDelTs.farms }
+  };
+  ['sales', 'pendingSales', 'expenses', 'merchants', 'users', 'farms'].forEach(cat => {
+    Object.keys(cloudDelTs[cat] || {}).forEach(k => {
+      const a = Number(localDelTs[cat] && localDelTs[cat][k]) || 0;
+      const b = Number(cloudDelTs[cat] && cloudDelTs[cat][k]) || 0;
+      mergedDeletedTimestamps[cat][k] = Math.max(a, b);
+    });
+  });
+
   const mergedDeletedIds = {
     sales: Array.from(new Set([...localDel.sales, ...cloudDel.sales].map(String))),
     pendingSales: Array.from(new Set([...localDel.pendingSales, ...cloudDel.pendingSales].map(String))),
@@ -1253,7 +1422,12 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     users: Array.from(new Set([...localDel.users, ...cloudDel.users].map(String))),
     farms: Array.from(new Set([...localDel.farms, ...cloudDel.farms].map(String)))
   };
+
+  // تشغيل فلتر الحماية ضد الارتداد العكسي للحذف (Anti-Ghost Tombstone Sanitizer) قبل أي دمج
+  sanitizeMergedTombstonesAgainstLiveData(appState, cloudData, mergedDeletedIds, mergedDeletedTimestamps);
+
   appState.deletedIds = mergedDeletedIds;
+  appState.deletedTimestamps = mergedDeletedTimestamps;
 
   // 2. دمج المستخدمين مع استبعاد حساب الزائر الملغى وأي حساب حذفه المدير فوراً
   if (Array.isArray(cloudData.users) && cloudData.users.length >= 1) {
@@ -1272,32 +1446,11 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   const localFarmName = appState.farmName || 'أبوذكري';
   const cloudFarmName = cloudData.farmName || localFarmName;
   const sameActiveFarm = (localFarmName === cloudFarmName);
-  const localResetAt = Number(appState.farmResetAt) || 0;
-  const cloudResetAt = Number(cloudData.farmResetAt) || 0;
-
-  // 4. دمج أرشيف المزارع المتعددة مع فصل قاعدة بيانات كل مزرعة على حدة ودمج أيامها جزئياً بالمعرفات
-  const mergedArchive = { ...(appState.farmsArchive || {}) };
-  if (cloudData.farmsArchive && typeof cloudData.farmsArchive === 'object') {
-    Object.keys(cloudData.farmsArchive).forEach(fKey => {
-      const cArch = cloudData.farmsArchive[fKey];
-      const lArch = mergedArchive[fKey];
-      if (lArch && lArch.days && cArch && cArch.days) {
-        const lArchReset = Number(lArch.farmResetAt) || 0;
-        const cArchReset = Number(cArch.farmResetAt) || 0;
-        mergedArchive[fKey] = {
-          ...lArch,
-          ...cArch,
-          farmResetAt: Math.max(lArchReset, cArchReset),
-          merchants: mergeArraysById(lArch.merchants || [], cArch.merchants || [], mergedDeletedIds.merchants, 'code', preferCloud),
-          days: mergeDaysObjects(lArch.days, cArch.days, mergedDeletedIds, preferCloud, lArchReset, cArchReset)
-        };
-      } else if (cArch) {
-        mergedArchive[fKey] = cArch;
-      }
-    });
-  }
-  mergedDeletedIds.farms.forEach(fn => { delete mergedArchive[fn]; });
-  appState.farmsArchive = mergedArchive;
+  const rawLocalResetAt = Number(appState.farmResetAt) || 0;
+  const rawCloudResetAt = Number(cloudData.farmResetAt) || 0;
+  const localBulkImportAt = Number(appState.lastBulkImportAt) || 0;
+  const cloudBulkImportAt = Number(cloudData.lastBulkImportAt) || 0;
+  appState.lastBulkImportAt = Math.max(localBulkImportAt, cloudBulkImportAt);
 
   const countMovements = (daysMap) => {
     if (!daysMap || typeof daysMap !== 'object') return 0;
@@ -1320,14 +1473,53 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     }
     return maxA;
   };
+
   const localMovementsCount = countMovements(appState.days);
   const cloudMovementsCount = countMovements(cloudData.days);
-  const cloudMaxAddedAt = getMaxAddedAcrossDays(cloudData.days, cloudResetAt);
-  const localMaxAddedAt = getMaxAddedAcrossDays(appState.days, localResetAt);
+  const cloudMaxAddedAt = Math.max(getMaxAddedAcrossDays(cloudData.days, rawCloudResetAt), cloudBulkImportAt);
+  const localMaxAddedAt = Math.max(getMaxAddedAcrossDays(appState.days, rawLocalResetAt), localBulkImportAt);
+
+  // إبطال أي تصفير قديم (Stale Reset Neutralization) إذا كانت هناك بيانات مستوردة أو مضافة أحدث منه على الطرف الآخر
+  const localResetAt = (rawLocalResetAt > 0 && cloudMovementsCount > 0 && (cloudBulkImportAt >= rawLocalResetAt || cloudMaxAddedAt >= rawLocalResetAt))
+    ? 0
+    : rawLocalResetAt;
+  const cloudResetAt = (rawCloudResetAt > 0 && localMovementsCount > 0 && (localBulkImportAt >= rawCloudResetAt || localMaxAddedAt >= rawCloudResetAt))
+    ? 0
+    : rawCloudResetAt;
+
+  // 4. دمج أرشيف المزارع المتعددة مع فصل قاعدة بيانات كل مزرعة على حدة ودمج أيامها جزئياً بالمعرفات
+  const mergedArchive = { ...(appState.farmsArchive || {}) };
+  if (cloudData.farmsArchive && typeof cloudData.farmsArchive === 'object') {
+    Object.keys(cloudData.farmsArchive).forEach(fKey => {
+      const cArch = cloudData.farmsArchive[fKey];
+      const lArch = mergedArchive[fKey];
+      if (lArch && lArch.days && cArch && cArch.days) {
+        const lArchBulk = Number(lArch.lastBulkImportAt) || 0;
+        const cArchBulk = Number(cArch.lastBulkImportAt) || 0;
+        const rawLArchReset = Number(lArch.farmResetAt) || 0;
+        const rawCArchReset = Number(cArch.farmResetAt) || 0;
+        const lArchReset = (rawLArchReset > 0 && cArchBulk >= rawLArchReset) ? 0 : rawLArchReset;
+        const cArchReset = (rawCArchReset > 0 && lArchBulk >= rawCArchReset) ? 0 : rawCArchReset;
+        mergedArchive[fKey] = {
+          ...lArch,
+          ...cArch,
+          farmResetAt: Math.max(lArchReset, cArchReset),
+          lastBulkImportAt: Math.max(lArchBulk, cArchBulk),
+          merchants: mergeArraysById(lArch.merchants || [], cArch.merchants || [], mergedDeletedIds.merchants, 'code', preferCloud),
+          days: mergeDaysObjects(lArch.days, cArch.days, mergedDeletedIds, preferCloud, lArchReset, cArchReset)
+        };
+      } else if (cArch) {
+        mergedArchive[fKey] = cArch;
+      }
+    });
+  }
+  mergedDeletedIds.farms.forEach(fn => { delete mergedArchive[fn]; });
+  appState.farmsArchive = mergedArchive;
 
   // المتصفح يُعتبر فارغاً فقط إذا كان عدد حركاته المحلية = 0 تماماً، ولم يقم بتصفير المزرعة بوقت أحدث بشكل قاطع (خارج هامش CLOCK_SKEW_BUFFER_MS) من إضافات السحابة
   const isLocalEffectivelyFresh = (localMovementsCount === 0) && (
     !appState.hasLocalEdits ||
+    localResetAt === 0 ||
     (cloudMovementsCount > 0 && !isTimestampSignificantlyNewer(localResetAt, Math.max(cloudResetAt, cloudMaxAddedAt), CLOCK_SKEW_BUFFER_MS))
   );
 
@@ -1359,14 +1551,16 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     appState.lastScaleNo = cloudData.lastScaleNo !== undefined ? Number(cloudData.lastScaleNo) : 0;
   } else if (sameActiveFarm) {
     // الجهازان يعملان على نفس المزرعة النشطة: دمج جزئي عميق للسجلات والأسعار مع احترام هامش اختلاف التوقيت
-    appState.farmResetAt = Math.max(localResetAt, cloudResetAt);
+    const mergedDaysResult = mergeDaysObjects(appState.days, cloudData.days, mergedDeletedIds, preferCloud, localResetAt, cloudResetAt);
+    const totalMovAfterMerge = countMovements(mergedDaysResult);
+    appState.farmResetAt = totalMovAfterMerge > 0 ? 0 : Math.max(localResetAt, cloudResetAt);
     appState.merchants = mergeArraysById(appState.merchants, cloudData.merchants, mergedDeletedIds.merchants, 'code', preferCloud)
       .sort((a, b) => Number(a.code) - Number(b.code));
-    appState.days = mergeDaysObjects(appState.days, cloudData.days, mergedDeletedIds, preferCloud, localResetAt, cloudResetAt);
+    appState.days = mergedDaysResult;
 
-    if (isTimestampSignificantlyNewer(localResetAt, Math.max(cloudResetAt, cloudMaxAddedAt), CLOCK_SKEW_BUFFER_MS) && localMovementsCount === 0) {
+    if (isTimestampSignificantlyNewer(localResetAt, Math.max(cloudResetAt, cloudMaxAddedAt), CLOCK_SKEW_BUFFER_MS) && totalMovAfterMerge === 0) {
       appState.visibleDays = getVisibleDays();
-    } else if (isTimestampSignificantlyNewer(cloudResetAt, Math.max(localResetAt, localMaxAddedAt), CLOCK_SKEW_BUFFER_MS) && cloudMovementsCount === 0) {
+    } else if (isTimestampSignificantlyNewer(cloudResetAt, Math.max(localResetAt, localMaxAddedAt), CLOCK_SKEW_BUFFER_MS) && totalMovAfterMerge === 0) {
       appState.visibleDays = Array.isArray(cloudData.visibleDays) && cloudData.visibleDays.length > 0 ? [...cloudData.visibleDays] : [1];
       appState.defaultPrice = Number(cloudData.defaultPrice) || 0;
       appState.defaultTip = Number(cloudData.defaultTip) || 0;
@@ -1400,11 +1594,13 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     appState.merchants = mergeArraysById(appState.merchants, cloudData.merchants, mergedDeletedIds.merchants, 'code', preferCloud)
       .sort((a, b) => Number(a.code) - Number(b.code));
     const existingCloudArch = (appState.farmsArchive && appState.farmsArchive[cloudFarmName]) || {};
-    const archResetAt = Number(existingCloudArch.farmResetAt) || 0;
+    const rawArchResetAt = Number(existingCloudArch.farmResetAt) || 0;
+    const archResetAt = (rawArchResetAt > 0 && cloudBulkImportAt >= rawArchResetAt) ? 0 : rawArchResetAt;
     appState.farmsArchive[cloudFarmName] = {
       farmName: cloudFarmName,
       updatedAt: new Date().toLocaleTimeString('ar-EG'),
       farmResetAt: Math.max(archResetAt, cloudResetAt),
+      lastBulkImportAt: Math.max(Number(existingCloudArch.lastBulkImportAt) || 0, cloudBulkImportAt),
       visibleDays: Array.isArray(cloudData.visibleDays) ? cloudData.visibleDays : [1],
       defaultPrice: cloudData.defaultPrice !== undefined ? Number(cloudData.defaultPrice) : 0,
       defaultTip: cloudData.defaultTip !== undefined ? Number(cloudData.defaultTip) : 0,
@@ -1458,12 +1654,16 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
   try {
     const baseEndpoint = isFirebase ? (url.replace(/\/$/, '') + '/abouzekry_cloud_db.json') : url;
 
-    // سحب ودمج آخر تحديثات الأجهزة الأخرى قبل الرفع (يتم تخطي دمج الأيام القديمة عند التصفير الصريح أو استيراد الإكسيل)
+    // سحب ودمج آخر تحديثات الأجهزة الأخرى قبل الرفع (قفل أمان ذري Atomic Read-Modify-Write):
+    // إذا فشل الجلب المسبق (Pre-fetch GET) بسبب تذبذب الشبكة، يتم إيقاف الرفع فوراً والاحتفاظ بالتعديلات في الطابور المحلي لمنع الكتابة الفوقية العمياء على بيانات مندوب آخر!
     if (!skipPreFetchMerge) {
       try {
         const sep = baseEndpoint.includes('?') ? '&' : '?';
         const preEndpoint = `${baseEndpoint}${sep}_t=${Date.now()}`;
         const preRes = await fetch(preEndpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
+        if (!preRes.ok) {
+          throw new Error(`HTTP ${preRes.status}`);
+        }
         const preText = await preRes.text();
         if (preText && preText.trim() !== '{}' && preText.trim() !== 'null') {
           const remoteData = JSON.parse(preText);
@@ -1472,16 +1672,17 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
             const currLocalMovCnt = countMovementsInDays(appState.days);
             const preferCloudOnEmptyLocal = (currLocalMovCnt === 0 && remoteMovCnt > 0 && Number(appState.farmResetAt) <= (Number(remoteData.farmResetAt) || 0));
             mergeCloudDataIntoLocal(remoteData, preferCloudOnEmptyLocal);
-            if (preferCloudOnEmptyLocal) {
-              renderAllPreservingActiveInputs();
-            }
+            renderAllPreservingActiveInputs();
           }
         }
-      } catch (preErr) {}
+      } catch (preErr) {
+        if (!silent) showToast('⏳ الشبكة غير مستقرة حالياً — تم تأجيل الرفع التلقائي لحين استقرار الاتصال لمنع الكتابة فوق حركات المندوبين الآخرين.', '🟠');
+        return false;
+      }
     }
 
     const method = isFirebase ? 'PUT' : 'POST';
-    const nowIso = new Date().toISOString();
+    const nowIso = new Date(getSyncedNow()).toISOString();
     appState.updatedAt = nowIso;
 
     // تقليل حجم البيانات المرسلة بعدم تكرار المزرعة الحالية داخل الأرشيف أثناء الإرسال
@@ -1499,6 +1700,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       hasLocalEdits: true,
       farmName: appState.farmName,
       farmResetAt: Number(appState.farmResetAt) || 0,
+      lastBulkImportAt: Number(appState.lastBulkImportAt) || 0,
       currentDay: appState.currentDay,
       visibleDays: appState.visibleDays,
       defaultPrice: appState.defaultPrice,
@@ -1506,6 +1708,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       lastScaleNo: appState.lastScaleNo,
       inactivityTimeoutMin: appState.inactivityTimeoutMin,
       deletedIds: ensureDeletedIdsStructure(appState.deletedIds),
+      deletedTimestamps: ensureDeletedTimestampsStructure(appState.deletedTimestamps),
       users: appState.users,
       merchants: appState.merchants,
       days: appState.days,
@@ -5750,7 +5953,10 @@ function restoreFullJsonBackupFromText(rawText, sourceFileName = '') {
       appState.lastActivityAt = Date.now();
     }
 
-    const nowTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const restoreTs = getSyncedNow();
+    const nowTime = new Date(restoreTs).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    appState.lastBulkImportAt = restoreTs;
+    appState.farmResetAt = 0;
     appState.lastJsonBackup = `تم الاسترجاع من (${sourceFileName || 'ملف .json'}) الساعة ${nowTime} ✓`;
     appState.lastExcelSync = `استرجاع نسخة شاملة (.json) الساعة ${nowTime}`;
     appState.hasLocalEdits = true;
@@ -6762,17 +6968,23 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
               notes: String(is25Col ? (r[21] || '') : (is21Col ? (r[17] || '') : (r[15] || ''))).trim()
             };
 
+            const rowImportTs = getSyncedNow();
             if (isPendingRow) {
-              // Match existing pending sale to reuse ID and avoid duplication
+              // Match existing pending sale to reuse ID or generate a fresh collision-proof UUID
               const matchedOldPend = oldPendingSales.find(op => arePendingSalesDuplicate(op, recObj));
-              if (matchedOldPend) {
+              if (matchedOldPend && isCollisionProofUUID(matchedOldPend.id)) {
                 recObj.id = matchedOldPend.id;
                 if (matchedOldPend.custodyCash && !recObj.custodyCash) recObj.custodyCash = matchedOldPend.custodyCash;
                 if (matchedOldPend.custodyTransfer && !recObj.custodyTransfer) recObj.custodyTransfer = matchedOldPend.custodyTransfer;
                 if (matchedOldPend.custodyTransferType && !recObj.custodyTransferType) recObj.custodyTransferType = matchedOldPend.custodyTransferType;
               } else {
-                recObj.id = `pend_d${dayNum}_s${scaleNoVal || seq}_c${carNoVal || 0}_w${w1}`;
+                recObj.id = generateRecordUUID(`imp_pend_d${dayNum}`);
               }
+              Object.assign(recObj, buildRecordAuditMeta(matchedOldPend || null, false), {
+                createdAt: rowImportTs,
+                updatedAt: rowImportTs,
+                importedAt: rowImportTs
+              });
               unrecordDeletedItem('pendingSales', recObj.id);
 
               const dupPendIdx = newPendingSales.findIndex(ep => arePendingSalesDuplicate(ep, recObj));
@@ -6784,16 +6996,21 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                 newPendingSales[dupPendIdx] = recObj;
               }
             } else {
-              // Match existing completed sale to reuse ID and avoid duplication
+              // Match existing completed sale to reuse ID or generate a fresh collision-proof UUID
               const matchedOldSale = oldSales.find(os => areSalesRowsDuplicate(os, recObj));
-              if (matchedOldSale) {
+              if (matchedOldSale && isCollisionProofUUID(matchedOldSale.id)) {
                 recObj.id = matchedOldSale.id;
                 if (matchedOldSale.custodyCash && !recObj.custodyCash) recObj.custodyCash = matchedOldSale.custodyCash;
                 if (matchedOldSale.custodyTransfer && !recObj.custodyTransfer) recObj.custodyTransfer = matchedOldSale.custodyTransfer;
                 if (matchedOldSale.custodyTransferType && !recObj.custodyTransferType) recObj.custodyTransferType = matchedOldSale.custodyTransferType;
               } else {
-                recObj.id = `d${dayNum}_s${scaleNoVal || seq}_c${carNoVal || 0}_w${w1}_${w2}`;
+                recObj.id = generateRecordUUID(`imp_sale_d${dayNum}`);
               }
+              Object.assign(recObj, buildRecordAuditMeta(matchedOldSale || null, false), {
+                createdAt: rowImportTs,
+                updatedAt: rowImportTs,
+                importedAt: rowImportTs
+              });
               unrecordDeletedItem('sales', recObj.id);
 
               const dupSaleIdx = newSales.findIndex(es => areSalesRowsDuplicate(es, recObj));
@@ -6816,6 +7033,7 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
           const recip = String(r[15] || r[12] || '').trim();
           const amt = Number(r[20]) || Number(r[16]) || 0;
           if (amt > 0) {
+            const expImportTs = getSyncedNow();
             const expObj = {
               id: '',
               category: cat,
@@ -6824,7 +7042,14 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
               amount: amt
             };
             const matchedOldExp = oldExpenses.find(oe => areExpensesDuplicate(oe, expObj));
-            expObj.id = matchedOldExp ? matchedOldExp.id : `exp_d${dayNum}_${expSeq}_${amt}`;
+            expObj.id = (matchedOldExp && isCollisionProofUUID(matchedOldExp.id))
+              ? matchedOldExp.id
+              : generateRecordUUID(`imp_exp_d${dayNum}`);
+            Object.assign(expObj, buildRecordAuditMeta(matchedOldExp || null, false), {
+              createdAt: expImportTs,
+              updatedAt: expImportTs,
+              importedAt: expImportTs
+            });
             unrecordDeletedItem('expenses', expObj.id);
 
             if (!newExpenses.some(ee => areExpensesDuplicate(ee, expObj))) {
@@ -6880,12 +7105,18 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
         const amt = Number(r[5]) || Number(r[11]) || 0;
         const cat = String(r[2] || r[3] || '').trim();
         if (dNum >= 1 && dNum <= 10 && amt > 0 && cat && !cat.includes('تصنيف')) {
+          const expSheetTs = getSyncedNow();
           const expObj = {
-            id: `exp_imp_${dNum}_${idx}_${amt}`,
+            id: generateRecordUUID(`imp_exp_d${dNum}`),
             category: cat,
             desc: String(r[3] || r[5] || '').trim(),
             recipient: String(r[4] || r[9] || '').trim(),
-            amount: amt
+            amount: amt,
+            createdAt: expSheetTs,
+            updatedAt: expSheetTs,
+            importedAt: expSheetTs,
+            createdBy: getActiveUserShortLabel(),
+            updatedBy: getActiveUserShortLabel()
           };
           unrecordDeletedItem('expenses', expObj.id);
           if (!appState.days[dNum].expenses.some(ee => areExpensesDuplicate(ee, expObj))) {
@@ -6915,7 +7146,7 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
       if (Number(s.tip) >= 0) lastImportedTip = Number(s.tip);
     });
   }
-  const finalImportTs = Date.now();
+  const finalImportTs = getSyncedNow();
   for (let d = 1; d <= 10; d++) {
     const dm = appState.days[d];
     if (dm && ((dm.sales && dm.sales.length > 0) || (dm.pendingSales && dm.pendingSales.length > 0) || (dm.expenses && dm.expenses.length > 0))) {
@@ -6925,6 +7156,7 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
     }
   }
   appState.farmResetAt = 0;
+  appState.lastBulkImportAt = finalImportTs + 10;
   appState.visibleDays = importedVisDays.sort((a, b) => a - b);
   appState.lastScaleNo = maxImportedScale;
   appState.defaultPrice = lastImportedPrice;
