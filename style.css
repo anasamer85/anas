@@ -1574,6 +1574,7 @@ body {
       background-color: #f1f5f9;
       color: #0f172a;
       overflow-x: hidden;
+      overflow-x: clip;
     }
     .navy-gradient {
       background: linear-gradient(135deg, #1b365d 0%, #2c5e8a 100%);
@@ -1816,5 +1817,65 @@ body {
   body.printing-merchant-modal #merchantPrintOnlyContainer .scale-receipt-single-copy {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+}
+
+
+/* =========================================================================
+   5. MOBILE WEIGHBRIDGE UX & STICKY FLOATING ACTION BAR (v32)
+   ========================================================================= */
+.overflow-visible {
+  overflow: visible !important;
+}
+.rounded-t-2xl {
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+}
+.bg-slate-900\/95 {
+  background-color: rgb(15 23 42 / 0.96);
+}
+.border-blue-400\/50 {
+  border-color: rgb(96 165 250 / 0.5);
+}
+.mobile-weighbridge-sticky-bar {
+  position: -webkit-sticky;
+  position: sticky;
+  bottom: 52px;
+  z-index: 35;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 -6px 24px rgba(15, 23, 42, 0.32);
+}
+@media screen and (min-width: 768px) {
+  .mobile-weighbridge-sticky-bar {
+    position: sticky;
+    bottom: 8px;
+    z-index: 30;
+  }
+  .md\:flex-initial {
+    flex: 0 1 auto;
+  }
+  .md\:w-auto {
+    width: auto;
+  }
+  .md\:p-3 {
+    padding: 0.75rem;
+  }
+  .md\:py-2\.5 {
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+  }
+  .md\:px-4 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .md\:px-6 {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+@media print {
+  #mobileWeighbridgeActionBar {
+    display: none !important;
   }
 }

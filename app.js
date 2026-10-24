@@ -6458,6 +6458,17 @@ function updateLiveFormCalculation() {
   document.getElementById('calcTotalWithTip').textContent = `${fmtDec(totalWithTip)} ج.م`;
   document.getElementById('calcInvoiceDiff').textContent = `${fmtDec(diff)} ج.م`;
 
+  // تحديث شريط الإجراءات السفلي العائم للموبايل (Mobile Weighbridge Sticky Action Bar)
+  const stickyNetEl = document.getElementById('stickyBarNetWeight');
+  if (stickyNetEl) stickyNetEl.textContent = `${fmtInt(netW)} كجم`;
+  const stickyTotEl = document.getElementById('stickyBarTotalInvoice');
+  if (stickyTotEl) stickyTotEl.textContent = `${fmtDec(totalWithTip)} ج.م`;
+  const stickyRemEl = document.getElementById('stickyBarRemCredit');
+  if (stickyRemEl) {
+    const remCreditPreview = Math.max(0, Math.round(totalWithTip - cashS - trS));
+    stickyRemEl.textContent = `${fmtInt(remCreditPreview)} ج.م`;
+  }
+
   // 1. Previous Debt Statement in Current Farm for Selected Merchant (e.g., محمود مدني -> 159,120 ج.م)
   const mName = (document.getElementById('inpMerchantName').value || '').trim();
   const editId = document.getElementById('editSaleId').value || '';
@@ -6672,7 +6683,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v31') {
+          if (k !== 'farm-sales-committee-v32') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -7808,6 +7819,8 @@ function initFarmSalesApp() {
       suggestBox.classList.add('hidden');
       updateMerchantSuggestions();
       updateLiveFormCalculation();
+      const carVal = (document.getElementById('inpCarNo').value || '').trim();
+      focusAndSelectField(carVal ? 'inpW1' : 'inpCarNo');
     }
   });
 
@@ -7832,12 +7845,12 @@ function initFarmSalesApp() {
     if (v >= 0) { appState.defaultTip = v; saveState(false); }
   });
 
-  document.getElementById('btnAutoFillCredit').addEventListener('click', () => {
+  function calculateAndFillRemainingCredit(focusCreditInput = false) {
     const w1 = Math.max(0, parseNum(document.getElementById('inpW1').value) || 0);
     const w2 = Math.max(0, parseNum(document.getElementById('inpW2').value) || 0);
     if ((w1 > 0 || w2 > 0) && w2 < w1) {
       showToast('خطأ: الوزنة الثانية يجب أن تكون أكبر من أو تساوي الوزنة الأولى!', '⚠️');
-      return;
+      return false;
     }
     const netW = (w2 >= w1 && w2 > 0) ? (w2 - w1) : 0;
     const price = parseNum(document.getElementById('inpPrice').value) || 0;
@@ -7846,8 +7859,144 @@ function initFarmSalesApp() {
     const cashS = parseNum(document.getElementById('inpCashSales').value) || 0;
     const trS = parseNum(document.getElementById('inpTransferSales').value) || 0;
     const rem = Math.max(0, Math.round(totalWithTip - cashS - trS));
-    document.getElementById('inpCreditSales').value = rem;
+    const creditEl = document.getElementById('inpCreditSales');
+    if (creditEl) {
+      creditEl.value = rem > 0 ? fmtMoney(rem) : '0';
+      if (focusCreditInput) {
+        creditEl.focus();
+        creditEl.select();
+      }
+    }
     updateLiveFormCalculation();
+    return true;
+  }
+
+  document.getElementById('btnAutoFillCredit').addEventListener('click', () => {
+    calculateAndFillRemainingCredit(true);
+  });
+
+  const btnStickyAutoCreditEl = document.getElementById('btnStickyAutoCredit');
+  if (btnStickyAutoCreditEl) {
+    btnStickyAutoCreditEl.addEventListener('click', () => {
+      if (calculateAndFillRemainingCredit(true)) {
+        showToast('⚡ تم حساب باقي الفاتورة آجل تلقائياً', '⚡');
+      }
+    });
+  }
+
+  // تفعيل التنقل السريع بزر Enter بين حقول الميزان والبيع (وزنة 1 ⬅️ وزنة 2 ⬅️ نقدي مبيعات ⬅️ باقي الفاتورة آجل)
+  function focusAndSelectField(fieldId) {
+    const el = document.getElementById(fieldId);
+    if (!el) return;
+    el.focus();
+    if (typeof el.select === 'function') {
+      setTimeout(() => {
+        try { el.select(); } catch (err) {}
+      }, 10);
+    }
+  }
+
+  const fastEnterSaleFields = [
+    'inpMerchantName',
+    'inpScaleNo',
+    'inpCarNo',
+    'inpW1',
+    'inpW2',
+    'inpPrice',
+    'inpTip',
+    'inpCashSales',
+    'inpCreditSales'
+  ];
+
+  fastEnterSaleFields.forEach((fieldId) => {
+    const inpEl = document.getElementById(fieldId);
+    if (!inpEl) return;
+    inpEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+
+      if (fieldId === 'inpMerchantName') {
+        if (suggestBox && !suggestBox.classList.contains('hidden')) {
+          const firstPick = suggestBox.querySelector('[data-pick-merchant]');
+          const curVal = inpMerch.value.trim();
+          if (firstPick && curVal && !appState.merchants.some(m => m.name === curVal)) {
+            inpMerch.value = firstPick.getAttribute('data-pick-merchant');
+          }
+          suggestBox.classList.add('hidden');
+        }
+        updateMerchantSuggestions();
+        updateLiveFormCalculation();
+        const carVal = (document.getElementById('inpCarNo').value || '').trim();
+        focusAndSelectField(carVal ? 'inpW1' : 'inpCarNo');
+        return;
+      }
+
+      if (fieldId === 'inpScaleNo') {
+        focusAndSelectField('inpCarNo');
+        return;
+      }
+
+      if (fieldId === 'inpCarNo') {
+        focusAndSelectField('inpW1');
+        return;
+      }
+
+      // 1) وزنة 1 ⬅️ وزنة 2
+      if (fieldId === 'inpW1') {
+        updateLiveFormCalculation();
+        focusAndSelectField('inpW2');
+        return;
+      }
+
+      // 2) وزنة 2 ⬅️ نقدي مبيعات
+      if (fieldId === 'inpW2') {
+        const w1 = Math.max(0, parseNum(document.getElementById('inpW1').value) || 0);
+        const w2 = Math.max(0, parseNum(document.getElementById('inpW2').value) || 0);
+        if (w2 > 0 && w2 < w1) {
+          updateLiveFormCalculation();
+          showToast('⚠️ الوزنة الثانية (القائم) يجب أن تكون أكبر من أو تساوي الوزنة الأولى!', '⚠️');
+          return;
+        }
+        updateLiveFormCalculation();
+        focusAndSelectField('inpCashSales');
+        return;
+      }
+
+      if (fieldId === 'inpPrice') {
+        updateLiveFormCalculation();
+        focusAndSelectField('inpTip');
+        return;
+      }
+
+      if (fieldId === 'inpTip') {
+        updateLiveFormCalculation();
+        focusAndSelectField('inpCashSales');
+        return;
+      }
+
+      // 3) نقدي مبيعات ⬅️ باقي الفاتورة آجل (حساب تلقائي + تركيز على حقل الآجل)
+      if (fieldId === 'inpCashSales') {
+        if (calculateAndFillRemainingCredit(true)) {
+          showToast('⚡ تم حساب باقي الفاتورة آجل تلقائياً — اضغط Enter للحفظ النهائي', '⚡');
+        }
+        return;
+      }
+
+      // 4) باقي الفاتورة آجل ⬅️ حفظ الحركة النهائية (أو حفظ مؤقت إذا كانت وزنة 1 فقط)
+      if (fieldId === 'inpCreditSales') {
+        updateLiveFormCalculation();
+        const w1 = Math.max(0, parseNum(document.getElementById('inpW1').value) || 0);
+        const w2 = Math.max(0, parseNum(document.getElementById('inpW2').value) || 0);
+        if (w2 >= w1 && w2 > 0) {
+          const btnSave = document.getElementById('btnSaveSale');
+          if (btnSave) btnSave.click();
+        } else if (w1 > 0 && w2 <= 0) {
+          const btnPend = document.getElementById('btnSavePendingW1');
+          if (btnPend) btnPend.focus();
+          showToast('💡 أدخل الوزنة الثانية للحفظ النهائي أو اضغط (⏳ حفظ مؤقت وزنة 1)', '⏳');
+        }
+      }
+    });
   });
 
   // حفظ مؤقت للوزنة الأولى والبيانات لحين استكمال الوزنة الثانية
@@ -7882,7 +8031,7 @@ function initFarmSalesApp() {
     document.getElementById('selPrevTransferType').value = item.prevTransferType || '';
     document.getElementById('inpNotes').value = item.notes || '';
     document.getElementById('btnCancelEditSale').classList.remove('hidden');
-    document.getElementById('btnSaveSaleText').textContent = `استكمال الوزنة الثانية وحفظ الحركة المحجوزة (ميزان رقم ${item.scaleNo || ''})`;
+    document.getElementById('btnSaveSaleText').textContent = `حفظ نهائي (ميزان ${item.scaleNo || ''})`;
     updateMerchantSuggestions();
     updateLiveFormCalculation();
     document.getElementById('saleFormCard').scrollIntoView({ behavior: 'smooth' });
@@ -7899,7 +8048,7 @@ function initFarmSalesApp() {
       activeRecalledPendingId = '';
       document.getElementById('saleEntryForm').reset();
       document.getElementById('btnCancelEditSale').classList.add('hidden');
-      document.getElementById('btnSaveSaleText').textContent = 'حفظ حركة البيع في محضر اليوم (تخزين فوري)';
+      document.getElementById('btnSaveSaleText').textContent = 'حفظ نهائي';
     }
     saveState(true);
     renderAll();
@@ -7995,7 +8144,7 @@ function initFarmSalesApp() {
     document.getElementById('saleEntryForm').reset();
     document.getElementById('editSaleId').value = '';
     document.getElementById('btnCancelEditSale').classList.add('hidden');
-    document.getElementById('btnSaveSaleText').textContent = 'حفظ حركة البيع في محضر اليوم (تخزين فوري)';
+    document.getElementById('btnSaveSaleText').textContent = 'حفظ نهائي';
     document.getElementById('dispMerchantCode').textContent = 'يُحدد تلقائياً';
     saveState(true);
     renderAll();
@@ -8150,7 +8299,7 @@ function initFarmSalesApp() {
     document.getElementById('saleEntryForm').reset();
     document.getElementById('editSaleId').value = '';
     document.getElementById('btnCancelEditSale').classList.add('hidden');
-    document.getElementById('btnSaveSaleText').textContent = 'حفظ حركة البيع في محضر اليوم (تخزين فوري)';
+    document.getElementById('btnSaveSaleText').textContent = 'حفظ نهائي';
     document.getElementById('dispMerchantCode').textContent = 'يُحدد تلقائياً';
     updateLiveFormCalculation();
     saveState(true);
@@ -8162,7 +8311,7 @@ function initFarmSalesApp() {
     document.getElementById('saleEntryForm').reset();
     document.getElementById('editSaleId').value = '';
     document.getElementById('btnCancelEditSale').classList.add('hidden');
-    document.getElementById('btnSaveSaleText').textContent = 'حفظ حركة البيع في محضر اليوم (تخزين فوري)';
+    document.getElementById('btnSaveSaleText').textContent = 'حفظ نهائي';
     applyStickySaleDefaults();
     updateLiveFormCalculation();
   });
@@ -8220,7 +8369,7 @@ function initFarmSalesApp() {
       document.getElementById('inpNotes').value = row.notes || '';
 
       document.getElementById('btnCancelEditSale').classList.remove('hidden');
-      document.getElementById('btnSaveSaleText').textContent = 'تحديث حركة البيع المحددة';
+      document.getElementById('btnSaveSaleText').textContent = 'حفظ التعديل';
       updateLiveFormCalculation();
       document.getElementById('saleFormCard').scrollIntoView({ behavior: 'smooth' });
       return;
