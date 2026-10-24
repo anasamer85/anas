@@ -1812,7 +1812,8 @@ body {
     word-break: break-word !important;
     overflow-wrap: anywhere !important;
   }
-  body.printing-merchant-modal #merchantPrintOnlyContainer .scale-receipt-print-sheet {
+  body.printing-merchant-modal #merchantPrintOnlyContainer .scale-receipt-print-sheet,
+  body.printing-merchant-modal #merchantPrintOnlyContainer .scale-receipt-single-copy {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }

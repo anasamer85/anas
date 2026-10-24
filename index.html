@@ -21,7 +21,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=30" />
+  <link rel="stylesheet" href="./style.css?v=31" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -612,6 +612,9 @@
                 <button type="button" id="btnClearPendingSalesFilters" class="px-2 py-0.5 rounded-lg bg-slate-900 text-amber-300 text-[10px] font-extrabold hover:bg-slate-800">
                   🔄 مسح الفلتر
                 </button>
+                <button type="button" data-toggle-receipt-btns="1" class="px-2 py-0.5 rounded-lg bg-teal-900 hover:bg-teal-800 text-white text-[10px] font-extrabold shadow-sm transition inline-flex items-center gap-1 border border-teal-400" title="إظهار أو إخفاء زر طباعة بون الميزان أمام كل حركة بالجدول">
+                  <span>🖨️</span><span>إظهار بون الميزان</span>
+                </button>
                 <button type="button" data-print-table="pendingWeighIns" class="px-2 py-0.5 rounded-lg bg-indigo-900 hover:bg-indigo-800 text-white text-[10px] font-extrabold shadow-sm transition inline-flex items-center gap-1" title="طباعة جدول السيارات المحفوظة مؤقتاً بعرض الصفحة بالكامل">
                   <span>🖨️</span><span>طباعة</span>
                 </button>
@@ -642,6 +645,9 @@
             </button>
             <button type="button" id="btnClearDailySalesFilters" class="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs transition">
               🔄 مسح الفلتر
+            </button>
+            <button type="button" data-toggle-receipt-btns="1" class="px-2.5 py-1 rounded-xl bg-teal-800 hover:bg-teal-700 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-teal-400" title="إظهار أو إخفاء أيقونة طباعة بون الميزان أمام كل حركة في الجدول لتوفير المساحة">
+              <span>🖨️</span><span>إظهار بون الميزان</span>
             </button>
             <button type="button" data-print-table="dailySales" class="px-2.5 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-indigo-400" title="طباعة جدول حركات البيع المسجلة بعرض الصفحة بالكامل">
               <span>🖨️</span><span>طباعة الجدول</span>
@@ -1798,6 +1804,9 @@
               <span id="mdlMerchMovementsCountBadge" class="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] font-extrabold">
                 0 حركة مسجلة
               </span>
+              <button type="button" data-toggle-receipt-btns="1" class="px-2.5 py-1 rounded-xl bg-teal-800 hover:bg-teal-700 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-teal-400" title="إظهار أو إخفاء أيقونة طباعة بون الميزان أمام كل حركة في الجدول">
+                <span>🖨️</span><span>إظهار بون الميزان</span>
+              </button>
             </div>
             <div class="text-[11px] font-bold text-slate-600">
               💡 اضغط على زر <strong>(📂 فتح اليوم)</strong> أمام أي حركة للانتقال مباشرة لمحضر ذلك اليوم.
@@ -1871,6 +1880,6 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./app.js?v=30"></script>
+  <script src="./app.js?v=31"></script>
 </body>
 </html>
