@@ -128,7 +128,7 @@ let localMutationEpoch = 0;
 const CLOCK_SKEW_BUFFER_MS = 60 * 60 * 1000;
 let cloudClockOffsetMs = 0;
 
-// معايرة فرق التوقيت مع السحابة تلقائياً لتعويض تأخر ساعة هاتف المندوب
+// معايرة فرق التوقيت مع السحابة تلقائياً بالاتجاهين لتعويض تأخر أو تقديم ساعة هاتف المندوب (Bidirectional Clock Skew Calibration)
 function calibrateCloudClockOffset(cloudUpdatedAtIso) {
   if (!cloudUpdatedAtIso) return;
   try {
@@ -136,9 +136,9 @@ function calibrateCloudClockOffset(cloudUpdatedAtIso) {
     if (!isNaN(cloudMs) && cloudMs > 0) {
       const localMs = Date.now();
       const diff = cloudMs - localMs;
-      // إذا كانت ساعة الجهاز متأخرة عن السحابة (diff > 0)، نعوض التأخر تلقائياً في الطوابع الزمنية الجديدة
-      if (diff > 5000 && diff < 24 * 60 * 60 * 1000) {
-        cloudClockOffsetMs = Math.max(cloudClockOffsetMs, diff);
+      // تعويض الانحراف الزمني بالاتجاهين (تأخر الساعة diff > 5s أو تقديم الساعة diff < -5s حتى 24 ساعة) لضمان دقة وعدالة المقارنات الزمنية
+      if (Math.abs(diff) > 5000 && Math.abs(diff) < 24 * 60 * 60 * 1000) {
+        cloudClockOffsetMs = diff;
       }
     }
   } catch (e) {}
@@ -474,6 +474,7 @@ function unifyGlobalMerchantsRegistry() {
   }
   appState.merchants = appState.merchants
     .filter(m => m && m.code && m.name && !delSet.has(Number(m.code)))
+    .map(m => ({ code: Number(m.code), name: String(m.name).trim(), ...(m.updatedAt ? { updatedAt: Number(m.updatedAt) } : {}) }))
     .sort((a, b) => Number(a.code) - Number(b.code));
   if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
     Object.values(appState.farmsArchive).forEach(fObj => {
@@ -657,7 +658,7 @@ function addSpecificDayToCycle(targetDayNum, customLabel = '') {
     showToast('يرجى اختيار رقم يوم صحيح من (يوم 1) إلى (يوم 10)!', '⚠️');
     return false;
   }
-  const nowTs = Date.now();
+  const nowTs = getSyncedNow();
   if (!appState.days[dNum]) {
     appState.days[dNum] = {
       dayNumber: dNum,
@@ -710,7 +711,8 @@ function editSpecificDayInCycle(targetDayNum, newLabel) {
     appState.days[dNum].dateLabel = trimmedLbl;
   }
   appState.days[dNum].isHidden = false;
-  appState.days[dNum].addedAt = Date.now();
+  appState.days[dNum].addedAt = getSyncedNow();
+  appState.days[dNum].labelUpdatedAt = getSyncedNow();
   if (!Array.isArray(appState.visibleDays)) appState.visibleDays = [1];
   if (!appState.visibleDays.includes(dNum)) {
     appState.visibleDays.push(dNum);
@@ -749,7 +751,7 @@ function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '�
     return;
   }
   const currentFarm = appState.farmName || 'أبوذكري';
-  const nowTs = Date.now();
+  const nowTs = getSyncedNow();
   for (let d = 1; d <= 10; d++) {
     if (appState.days && appState.days[d]) {
       recordDayItemsAsDeleted(appState.days[d]);
@@ -792,7 +794,7 @@ function deleteSpecificDayFromCycle(targetDayNum) {
   }
   const cur = Number(targetDayNum) || appState.currentDay || 1;
   const vis = getVisibleDays();
-  const nowTs = Date.now();
+  const nowTs = getSyncedNow();
   const currentFarm = appState.farmName || 'أبوذكري';
 
   if (appState.days && appState.days[cur]) {
@@ -1121,10 +1123,15 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
       } else if (isTimestampSignificantlyNewer(cUpdated, lUpdated, CLOCK_SKEW_BUFFER_MS)) {
         mergedObj = { ...localItem, ...cloudItem, updatedAt: cUpdated };
       } else {
-        mergedObj = (cUpdated > lUpdated || (cUpdated === lUpdated && preferCloudItem))
-          ? { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) }
-          : { ...cloudItem, ...localItem, updatedAt: Math.max(lUpdated, cUpdated) };
+        const localWins = (lUpdated > cUpdated) || (lUpdated === cUpdated && !preferCloudItem);
+        mergedObj = localWins
+          ? { ...cloudItem, ...localItem, updatedAt: Math.max(lUpdated, cUpdated) }
+          : { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) };
       }
+    } else if (lUpdated > 0 && cUpdated === 0) {
+      mergedObj = { ...cloudItem, ...localItem, updatedAt: lUpdated };
+    } else if (cUpdated > 0 && lUpdated === 0) {
+      mergedObj = { ...localItem, ...cloudItem, updatedAt: cUpdated };
     } else {
       mergedObj = preferCloudItem
         ? { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) || undefined }
@@ -1234,19 +1241,27 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
     const lHasMov = safeLSales.length > 0 || safeLPending.length > 0 || safeLExpenses.length > 0;
     const cHasMov = safeCSales.length > 0 || safeCPending.length > 0 || safeCExpenses.length > 0;
 
-    // اختيار اسم/تاريخ اليوم بذكاء (تفضيل التسمية المخصصة عن التسمية الافتراضية "اليوم X")
+    // اختيار اسم/تاريخ اليوم بذكاء بناءً على الطابع الزمني للتسمية (labelUpdatedAt) مع تفضيل التسمية المخصصة عن الافتراضية
     const lLbl = String(lDay.dateLabel || '').trim() || defaultLbl;
     const cLbl = String(cDay.dateLabel || '').trim() || defaultLbl;
-    let chosenLabel = preferCloud ? cLbl : lLbl;
+    const lLblTs = Number(lDay.labelUpdatedAt) || 0;
+    const cLblTs = Number(cDay.labelUpdatedAt) || 0;
+    let chosenLabel = (lLblTs > 0 || cLblTs > 0)
+      ? (lLblTs > cLblTs ? lLbl : (cLblTs > lLblTs ? cLbl : (preferCloud ? cLbl : lLbl)))
+      : (preferCloud ? cLbl : lLbl);
     if (chosenLabel === defaultLbl && (lLbl !== defaultLbl || cLbl !== defaultLbl)) {
       chosenLabel = cLbl !== defaultLbl ? cLbl : lLbl;
     }
 
-    // اختيار النقدية المسلمة للخزينة بذكاء دون مسح قيم الأيام الأخرى أثناء الرفع
+    // اختيار النقدية المسلمة للخزينة بذكاء بناءً على الطابع الزمني (deliveredCashUpdatedAt) دون مسح قيم الأيام الأخرى أثناء الرفع أو السحب
     const lDeliv = Number(lDay.deliveredCash) || 0;
     const cDeliv = Number(cDay.deliveredCash) || 0;
+    const lDelivTs = Number(lDay.deliveredCashUpdatedAt) || 0;
+    const cDelivTs = Number(cDay.deliveredCashUpdatedAt) || 0;
     let chosenDeliveredCash = preferCloud ? cDeliv : lDeliv;
-    if (!preferCloud && lDeliv === 0 && cDeliv > 0 && d !== Number(appState.currentDay)) {
+    if (lDelivTs > 0 || cDelivTs > 0) {
+      chosenDeliveredCash = lDelivTs > cDelivTs ? lDeliv : (cDelivTs > lDelivTs ? cDeliv : (preferCloud ? cDeliv : lDeliv));
+    } else if (!preferCloud && lDeliv === 0 && cDeliv > 0 && d !== Number(appState.currentDay)) {
       chosenDeliveredCash = cDeliv;
     } else if (preferCloud && cDeliv === 0 && lDeliv > 0) {
       chosenDeliveredCash = lDeliv;
@@ -1263,10 +1278,12 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
     const mergedDayObj = {
       dayNumber: d,
       dateLabel: chosenLabel,
+      labelUpdatedAt: Math.max(lLblTs, cLblTs),
       sales: mergedSales,
       pendingSales: mergedPending,
       expenses: mergedExpenses,
       deliveredCash: chosenDeliveredCash,
+      deliveredCashUpdatedAt: Math.max(lDelivTs, cDelivTs),
       clearedAt: hasAnyMovement ? 0 : maxClear,
       addedAt: hasAnyMovement ? Math.max(maxAdded, maxClear + 1) : maxAdded,
       isHidden: mergedIsHidden
@@ -1354,7 +1371,7 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
         const cRec = cloudLive[cat][idStr];
         const effectiveLocalDelTs = lDelTs || localResetTs || 0;
         // 1) إذا تم استيراد بيانات السحابة من الإكسيل أو تحديث السجل في السحابة بعد وقت الحذف المحلي -> نبطل الحذف القديم فوراً!
-        if (cRec.ts > 0 && effectiveLocalDelTs > 0 && cRec.ts >= effectiveLocalDelTs) {
+        if (cRec.ts > 0 && effectiveLocalDelTs > 0 && cRec.ts > effectiveLocalDelTs) {
           delete mergedDeletedTimestamps[cat][idStr];
           return false;
         }
@@ -1369,7 +1386,7 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
       if (inCloudDel && !inLocalDel && localLive[cat][idStr]) {
         const lRec = localLive[cat][idStr];
         const effectiveCloudDelTs = cDelTs || cloudResetTs || 0;
-        if (lRec.ts > 0 && effectiveCloudDelTs > 0 && lRec.ts >= effectiveCloudDelTs) {
+        if (lRec.ts > 0 && effectiveCloudDelTs > 0 && lRec.ts > effectiveCloudDelTs) {
           delete mergedDeletedTimestamps[cat][idStr];
           return false;
         }
@@ -1381,6 +1398,35 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
 
       return true;
     });
+  });
+
+  // تطهير شواهد قبور التجار والمستخدمين والمزارع ضد الحذف الشبح إذا أُعيدت إضافتها أو استيرادها بوقت أحدث (updatedAt > deletedAt)
+  const localMerchDelSet = new Set(localDel.merchants.map(Number));
+  const cloudMerchDelSet = new Set(cloudDel.merchants.map(Number));
+  mergedDeletedIds.merchants = (mergedDeletedIds.merchants || []).filter(rawCode => {
+    const codeNum = Number(rawCode);
+    const idStr = String(codeNum);
+    const inL = localMerchDelSet.has(codeNum);
+    const inC = cloudMerchDelSet.has(codeNum);
+    const lDelTs = Number(localDelTsMap.merchants && localDelTsMap.merchants[idStr]) || 0;
+    const cDelTs = Number(cloudDelTsMap.merchants && cloudDelTsMap.merchants[idStr]) || 0;
+    if (inL && !inC) {
+      const cM = (cloudData.merchants || []).find(m => m && Number(m.code) === codeNum);
+      const cMTs = Math.max(Number(cM && cM.updatedAt) || 0, cloudBulkTs);
+      if (cM && ((lDelTs > 0 && cMTs > lDelTs) || (lDelTs === 0 && cloudBulkTs > 0))) {
+        delete mergedDeletedTimestamps.merchants[idStr];
+        return false;
+      }
+    }
+    if (inC && !inL) {
+      const lM = (localState.merchants || []).find(m => m && Number(m.code) === codeNum);
+      const lMTs = Math.max(Number(lM && lM.updatedAt) || 0, localBulkTs);
+      if (lM && ((cDelTs > 0 && lMTs > cDelTs) || (cDelTs === 0 && localBulkTs > 0))) {
+        delete mergedDeletedTimestamps.merchants[idStr];
+        return false;
+      }
+    }
+    return true;
   });
 }
 
@@ -1516,15 +1562,23 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   mergedDeletedIds.farms.forEach(fn => { delete mergedArchive[fn]; });
   appState.farmsArchive = mergedArchive;
 
-  // المتصفح يُعتبر فارغاً فقط إذا كان عدد حركاته المحلية = 0 تماماً، ولم يقم بتصفير المزرعة بوقت أحدث بشكل قاطع (خارج هامش CLOCK_SKEW_BUFFER_MS) من إضافات السحابة
-  const isLocalEffectivelyFresh = (localMovementsCount === 0) && (
+  // المتصفح يُعتبر جديداً/فارغاً فقط إذا لم يكن لديه تعديلات أو حذف محلي معلّق، وكان عدد حركاته المحلية = 0 تماماً
+  const hasRecentLocalDeletions = Boolean(
+    appState.hasLocalEdits && (
+      localDel.sales.length > 0 ||
+      localDel.pendingSales.length > 0 ||
+      localDel.expenses.length > 0 ||
+      Number(appState.pendingChanges) > 0
+    )
+  );
+  const isLocalEffectivelyFresh = (localMovementsCount === 0) && !hasRecentLocalDeletions && (
     !appState.hasLocalEdits ||
     localResetAt === 0 ||
     (cloudMovementsCount > 0 && !isTimestampSignificantlyNewer(localResetAt, Math.max(cloudResetAt, cloudMaxAddedAt), CLOCK_SKEW_BUFFER_MS))
   );
 
-  if (isLocalEffectivelyFresh && cloudMovementsCount > 0) {
-    // تنظيف سجل المحذوفات المحلي من أي معرفات موجودة فعلياً في بيانات السحابة الحالية
+  if (isLocalEffectivelyFresh && !appState.hasLocalEdits && cloudMovementsCount > 0) {
+    // تنظيف سجل المحذوفات المحلي للمتصفح الجديد الذي لم يجرِ أي تعديلات محلية من أي معرفات موجودة فعلياً في السحابة
     for (let d = 1; d <= 10; d++) {
       const cd = cloudData.days && cloudData.days[d];
       if (!cd) continue;
@@ -1640,10 +1694,20 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
     return false;
   }
 
-  // حماية صارمة ضد مسح السحابة بالبيانات الافتراضية أو بصفوف فارغة من متصفح آخر!
+  // حماية صارمة ضد مسح السحابة بالبيانات الافتراضية من متصفح جديد لم يجرِ تعديلات، مع السماح برفع الحذف الفردي إذا حذف المستخدم آخر حركة!
   const localMovCntNow = countMovementsInDays(appState.days);
+  const hasRecordedDeletions = Boolean(
+    appState.deletedIds && (
+      (appState.deletedIds.sales && appState.deletedIds.sales.length > 0) ||
+      (appState.deletedIds.pendingSales && appState.deletedIds.pendingSales.length > 0) ||
+      (appState.deletedIds.expenses && appState.deletedIds.expenses.length > 0) ||
+      (appState.deletedIds.merchants && appState.deletedIds.merchants.length > 0) ||
+      (appState.deletedIds.users && appState.deletedIds.users.length > 0) ||
+      (appState.deletedIds.farms && appState.deletedIds.farms.length > 0)
+    )
+  );
   const isExplicitFarmReset = Boolean(skipPreFetchMerge && Number(appState.farmResetAt) > 0 && localMovCntNow === 0);
-  if (!isExplicitFarmReset && (!appState.hasLocalEdits || (localMovCntNow === 0 && Number(appState.farmResetAt) === 0))) {
+  if (!isExplicitFarmReset && (!appState.hasLocalEdits || (localMovCntNow === 0 && Number(appState.farmResetAt) === 0 && !hasRecordedDeletions && Number(appState.pendingChanges) === 0))) {
     const pulled = await pullDatabaseFromCloud(silent, true);
     if (pulled && countMovementsInDays(appState.days) > 0) {
       return true;
@@ -1670,7 +1734,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
           if (remoteData && remoteData.days && remoteData.merchants) {
             const remoteMovCnt = countMovementsInDays(remoteData.days);
             const currLocalMovCnt = countMovementsInDays(appState.days);
-            const preferCloudOnEmptyLocal = (currLocalMovCnt === 0 && remoteMovCnt > 0 && Number(appState.farmResetAt) <= (Number(remoteData.farmResetAt) || 0));
+            const preferCloudOnEmptyLocal = (currLocalMovCnt === 0 && remoteMovCnt > 0 && !hasRecordedDeletions && Number(appState.farmResetAt) <= (Number(remoteData.farmResetAt) || 0));
             mergeCloudDataIntoLocal(remoteData, preferCloudOnEmptyLocal);
             renderAllPreservingActiveInputs();
           }
@@ -1788,10 +1852,16 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
     if (data && data.days && data.merchants) {
       // في وضع النبض اللحظي الخلفي، إذا لم تتغير بصمة السحابة وكان الحساب سارياً، لا نعيد الرسم بدون داعٍ
       const prevUpdatedAt = appState.updatedAt;
-      mergeCloudDataIntoLocal(data, true);
-      appState.pendingChanges = 0;
-      appState.lastExcelSync = `متزامن لحظياً ✓ (${new Date().toLocaleTimeString('ar-EG')})`;
-      saveState(false);
+      const hadUnsyncedLocalChanges = (Number(appState.pendingChanges) > 0);
+      mergeCloudDataIntoLocal(data, !hadUnsyncedLocalChanges);
+      if (hadUnsyncedLocalChanges && navigator.onLine) {
+        saveState(false);
+        pushDatabaseToCloud(true, true, true);
+      } else {
+        appState.pendingChanges = 0;
+        appState.lastExcelSync = `متزامن لحظياً ✓ (${new Date().toLocaleTimeString('ar-EG')})`;
+        saveState(false);
+      }
 
       // تحقق فوري مما إذا كان المدير قد حذف حساب المستخدم الحالي المتصل!
       if (!verifyActiveUserSession()) {
@@ -2079,11 +2149,9 @@ function ensureMerchantExists(rawName, explicitCode = null) {
     ? Number(explicitCode)
     : (appState.merchants.length > 0 ? Math.max(...appState.merchants.map(m => m.code)) + 1 : 101);
   if (!appState.merchants.some(m => m.code === nextCode)) {
-    appState.merchants.push({ code: nextCode, name: base });
+    appState.merchants.push({ code: nextCode, name: base, updatedAt: getSyncedNow() });
   }
-  if (appState.deletedIds && Array.isArray(appState.deletedIds.merchants)) {
-    appState.deletedIds.merchants = appState.deletedIds.merchants.filter(c => Number(c) !== Number(nextCode));
-  }
+  unrecordDeletedItem('merchants', nextCode);
   return nextCode;
 }
 
@@ -7081,7 +7149,7 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
       }
     });
 
-    const importNowTs = Date.now();
+    const importNowTs = getSyncedNow();
     appState.days[dayNum].sales = sortSalesListByScaleNo(newSales);
     appState.days[dayNum].pendingSales = sortSalesListByScaleNo(newPendingSales);
     appState.days[dayNum].expenses = newExpenses;
@@ -7932,6 +8000,7 @@ function initFarmSalesApp() {
     activeUser.username = usrName;
     activeUser.phone = phone;
     activeUser.jobTitle = jobTitle;
+    activeUser.updatedAt = getSyncedNow();
     if (newPass) {
       activeUser.password = newPass;
     }
@@ -7996,6 +8065,7 @@ function initFarmSalesApp() {
         uObj.password = pwd;
         uObj.phone = phone;
         uObj.jobTitle = jobTitle;
+        uObj.updatedAt = getSyncedNow();
         // Ensure primary admin keeps admin perm
         if (uObj.id === 'admin') perms.admin = true;
         uObj.perms = perms;
@@ -8007,7 +8077,7 @@ function initFarmSalesApp() {
     } else {
       appState.users.push({
         id: generateRecordUUID('usr'),
-        updatedAt: Date.now(),
+        updatedAt: getSyncedNow(),
         username: username,
         password: pwd || '1234',
         name: fullName,
@@ -8177,6 +8247,7 @@ function initFarmSalesApp() {
   document.getElementById('currentDayDateInput').addEventListener('change', (e) => {
     if (!hasPermission('sales')) return;
     appState.days[appState.currentDay].dateLabel = e.target.value.trim() || `اليوم ${appState.currentDay}`;
+    appState.days[appState.currentDay].labelUpdatedAt = getSyncedNow();
     saveState(true);
     renderAll();
   });
@@ -8513,6 +8584,7 @@ function initFarmSalesApp() {
   // Delivered Cash Input in Trial Balance
   document.getElementById('inpDeliveredCash').addEventListener('input', (e) => {
     appState.days[appState.currentDay].deliveredCash = parseNum(e.target.value) || 0;
+    appState.days[appState.currentDay].deliveredCashUpdatedAt = getSyncedNow();
     saveState(true);
     renderDailyView();
   });
@@ -8906,7 +8978,7 @@ function initFarmSalesApp() {
     }
 
     unrecordDeletedItem('pendingSales', pendingObj.id);
-    dayObj.addedAt = Date.now();
+    dayObj.addedAt = getSyncedNow();
     dayObj.clearedAt = 0;
     dayObj.isHidden = false;
     const existingIdx = dayObj.pendingSales.findIndex(x => x.id === pendingObj.id);
@@ -9044,7 +9116,7 @@ function initFarmSalesApp() {
     }
 
     unrecordDeletedItem('sales', rowObj.id);
-    dayObj.addedAt = Date.now();
+    dayObj.addedAt = getSyncedNow();
     dayObj.clearedAt = 0;
     dayObj.isHidden = false;
     if (editId) {
@@ -9223,7 +9295,7 @@ function initFarmSalesApp() {
         };
       }
       if (expDayObj) {
-        expDayObj.addedAt = Date.now();
+        expDayObj.addedAt = getSyncedNow();
         expDayObj.clearedAt = 0;
         expDayObj.isHidden = false;
       }
@@ -9246,7 +9318,7 @@ function initFarmSalesApp() {
       amount
     });
     if (expDayObj) {
-      expDayObj.addedAt = Date.now();
+      expDayObj.addedAt = getSyncedNow();
       expDayObj.clearedAt = 0;
       expDayObj.isHidden = false;
     }
@@ -9324,6 +9396,7 @@ function initFarmSalesApp() {
       if (mObj) {
         const oldName = mObj.name;
         mObj.name = name;
+        mObj.updatedAt = getSyncedNow();
         // Update sales rows that used oldName in active farm and across all archived farms
         for (let d = 1; d <= 10; d++) {
           (appState.days[d].sales || []).forEach(r => {
