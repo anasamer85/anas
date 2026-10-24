@@ -927,7 +927,7 @@ function isUserActivelyTypingInForm() {
   const ae = document.activeElement;
   if (!ae || !ae.tagName) return false;
   if (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA') {
-    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm'];
+    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm'];
     if (!ignoreIds.includes(ae.id)) return true;
   }
   return false;
@@ -3110,7 +3110,12 @@ function renderMerchantsAndStatements() {
     tr.innerHTML = `
       <td class="p-2 border text-center">${idx + 1}</td>
       <td class="p-2 border text-center font-extrabold text-blue-900">${m.code}</td>
-      <td class="p-2 border font-extrabold text-slate-900">${m.name}</td>
+      <td class="p-2 border font-extrabold text-slate-900">
+        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition group" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${m.name})">
+          <span>${m.name}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">📋 كشف تفصيلي</span>
+        </button>
+      </td>
       <td class="p-2 border text-center font-bold">${fmtInt(m.cars)}</td>
       <td class="p-2 border text-left">${fmtInt(m.netW)}</td>
       <td class="p-2 border text-left font-bold">${fmtDec(m.totalSales)}</td>
@@ -3196,7 +3201,12 @@ function renderMerchantsAndStatements() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="p-2 border text-center font-bold text-blue-900">${m.code}</td>
-      <td class="p-2 border font-extrabold">${m.name}</td>
+      <td class="p-2 border font-extrabold">
+        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${m.name})">
+          <span>${m.name}</span>
+          <span class="text-[10px] text-blue-700">📋</span>
+        </button>
+      </td>
       <td class="p-2 border text-left">${fmtInt(m.transferSales)}</td>
       <td class="p-2 border text-left">${fmtInt(m.debtTransfer)}</td>
       <td class="p-2 border text-left font-extrabold bg-emerald-50">${fmtInt(currTr)}</td>
@@ -3261,7 +3271,12 @@ function renderMerchantsAndStatements() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="p-2 border text-center font-bold text-blue-900">${m.code}</td>
-      <td class="p-2 border font-extrabold">${m.name}</td>
+      <td class="p-2 border font-extrabold">
+        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${m.name})">
+          <span>${m.name}</span>
+          <span class="text-[10px] text-blue-700">📋</span>
+        </button>
+      </td>
       <td class="p-2 border text-left font-bold text-emerald-900">${fmtInt(m.prevCash)}</td>
       <td class="p-2 border text-left font-bold text-amber-900">${fmtInt(m.prevTransfer)}</td>
       <td class="p-2 border text-left font-extrabold bg-purple-50 text-purple-950">${fmtInt(totPf)}</td>
@@ -3283,6 +3298,397 @@ function renderMerchantsAndStatements() {
     applyDomTableExcelEngine('transfers');
     applyDomTableExcelEngine('prevFarms');
   }
+  if (activeDrillDownMerchantCode > 0) {
+    const mdl = document.getElementById('merchantDrillDownModal');
+    if (mdl && !mdl.classList.contains('hidden')) {
+      renderMerchantDrillDownModal();
+    }
+  }
+}
+
+// =========================================================================
+// MERCHANT DRILL-DOWN MODAL ENGINE (كشف حساب التاجر التفصيلي بالحركات - 10 أيام)
+// =========================================================================
+let activeDrillDownMerchantCode = 0;
+
+function computeMerchantDetailedLedger(merchantCode) {
+  const code = Number(merchantCode) || 0;
+  const merchObj = (appState.merchants || []).find(m => Number(m.code) === code) || { code, name: `تاجر #${code}` };
+
+  const movements = [];
+  let runningBalance = 0;
+  let totalCompletedCars = 0;
+  let totalPendingCars = 0;
+  let sumW1 = 0, sumW2 = 0, sumNetWeight = 0, sumBaseAmount = 0, sumTip = 0, sumTotalSales = 0;
+  let sumCashSales = 0, sumTransferSales = 0, sumCreditSales = 0;
+  let sumDebtCash = 0, sumDebtTransfer = 0;
+  let sumTotalSettledCurrent = 0;
+  let sumPrevCash = 0, sumPrevTransfer = 0;
+  let sumCustodyCash = 0, sumCustodyTransfer = 0, sumTotalCustody = 0, sumNetCustodyRem = 0;
+  const subCarNamesSet = new Set();
+
+  for (let d = 1; d <= 10; d++) {
+    const dayObj = (appState.days && appState.days[d]) || { dayNumber: d, dateLabel: `اليوم ${d}`, sales: [], pendingSales: [] };
+    const completedRows = sortSalesListByScaleNo(dayObj.sales || []).map(r => ({ ...computeSaleRow(r), isPending: false }));
+    const pendingRows = sortSalesListByScaleNo(dayObj.pendingSales || []).map(r => ({ ...computeSaleRow({ ...r, w2: 0 }), isPending: true }));
+    const dayRows = sortSalesListByScaleNo([...completedRows, ...pendingRows]).filter(r => Number(r.code) === code);
+
+    dayRows.forEach(r => {
+      if (r.merchant) subCarNamesSet.add(r.merchant);
+      const settledInRow = r.isPending ? 0 : (r.cashSales + r.transferSales + r.debtCash + r.debtTransfer);
+      const netDebtImpact = r.isPending ? 0 : (r.creditSales - r.debtCash - r.debtTransfer);
+      runningBalance += netDebtImpact;
+
+      if (r.isPending) {
+        totalPendingCars++;
+      } else {
+        totalCompletedCars++;
+        sumW1 += r.w1;
+        sumW2 += r.w2;
+        sumNetWeight += r.netWeight;
+        sumBaseAmount += r.baseAmount;
+        sumTip += r.tip;
+        sumTotalSales += r.totalWithTip;
+        sumCashSales += r.cashSales;
+        sumTransferSales += r.transferSales;
+        sumCreditSales += r.creditSales;
+        sumDebtCash += r.debtCash;
+        sumDebtTransfer += r.debtTransfer;
+        sumTotalSettledCurrent += settledInRow;
+        sumPrevCash += r.prevCash;
+        sumPrevTransfer += r.prevTransfer;
+        sumCustodyCash += r.custodyCash;
+        sumCustodyTransfer += r.custodyTransfer;
+        sumTotalCustody += r.totalCustody;
+        sumNetCustodyRem += r.netCustodyRemaining;
+      }
+
+      movements.push({
+        ...r,
+        dayNum: d,
+        dateLabel: dayObj.dateLabel || `اليوم ${d}`,
+        settledInRow,
+        netDebtImpact,
+        runningBalanceAfter: runningBalance
+      });
+    });
+  }
+
+  const avgPrice = sumNetWeight > 0 ? (sumBaseAmount / sumNetWeight) : 0;
+
+  return {
+    code,
+    name: merchObj.name,
+    subCarNames: Array.from(subCarNamesSet),
+    movements,
+    totalCompletedCars,
+    totalPendingCars,
+    sumW1,
+    sumW2,
+    sumNetWeight,
+    avgPrice,
+    sumBaseAmount,
+    sumTip,
+    sumTotalSales,
+    sumCashSales,
+    sumTransferSales,
+    sumCreditSales,
+    sumDebtCash,
+    sumDebtTransfer,
+    sumTotalSettledCurrent,
+    finalRunningBalance: runningBalance,
+    sumPrevCash,
+    sumPrevTransfer,
+    sumCustodyCash,
+    sumCustodyTransfer,
+    sumTotalCustody,
+    sumNetCustodyRem
+  };
+}
+
+function openMerchantDrillDownModal(merchantCode) {
+  const code = Number(merchantCode) || 0;
+  if (!code) return;
+  activeDrillDownMerchantCode = code;
+  const searchInp = document.getElementById('inpFilterMerchantModal');
+  if (searchInp) searchInp.value = '';
+  renderMerchantDrillDownModal();
+  const modal = document.getElementById('merchantDrillDownModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeMerchantDrillDownModal() {
+  activeDrillDownMerchantCode = 0;
+  const modal = document.getElementById('merchantDrillDownModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderMerchantDrillDownModal() {
+  if (!activeDrillDownMerchantCode) return;
+  const ledger = computeMerchantDetailedLedger(activeDrillDownMerchantCode);
+  const fName = appState.farmName || 'أبوذكري';
+
+  const elCode = document.getElementById('mdlMerchCode');
+  if (elCode) elCode.textContent = ledger.code;
+  const elName = document.getElementById('mdlMerchName');
+  if (elName) elName.textContent = ledger.name;
+  const elFarm = document.getElementById('mdlMerchFarmName');
+  if (elFarm) elFarm.textContent = fName;
+
+  const subTitle = document.getElementById('mdlMerchSubTitle');
+  if (subTitle) {
+    const subCarsTxt = ledger.subCarNames.length > 1
+      ? `السيارات المسجلة تحت هذا الكود: (${ledger.subCarNames.join(' ، ')})`
+      : 'سجل الحركات التفصيلي للأوزان والفواتير والمسدد والرصيد التراكمي على مدار الـ 10 أيام';
+    subTitle.textContent = subCarsTxt;
+  }
+
+  // Populate Merchant Switcher Dropdown inside Modal
+  const selSwitcher = document.getElementById('selModalMerchantSwitcher');
+  if (selSwitcher && document.activeElement !== selSwitcher) {
+    const allMerchants = computeMerchantAggregates();
+    selSwitcher.innerHTML = allMerchants.map(m =>
+      `<option value="${m.code}" ${Number(m.code) === Number(ledger.code) ? 'selected' : ''}>${m.code} - ${m.name} (${m.cars} حركة)</option>`
+    ).join('');
+  }
+
+  // Render 6 KPI Summary Cards
+  const kpiGrid = document.getElementById('mdlMerchKpiGrid');
+  if (kpiGrid) {
+    const pendTxt = ledger.totalPendingCars > 0 ? ` (+${ledger.totalPendingCars} مؤقت)` : '';
+    const balColor = ledger.finalRunningBalance > 0
+      ? 'bg-amber-100 border-amber-400 text-amber-950'
+      : (ledger.finalRunningBalance < 0 ? 'bg-sky-100 border-sky-400 text-sky-950' : 'bg-emerald-100 border-emerald-400 text-emerald-950');
+    const balLabel = ledger.finalRunningBalance > 0
+      ? 'عليه للمزرعة'
+      : (ledger.finalRunningBalance < 0 ? 'له رصيد دائن' : 'خالص ✓');
+
+    kpiGrid.innerHTML = `
+      <div class="p-2.5 rounded-xl border bg-slate-50 border-slate-200">
+        <div class="text-[11px] font-bold text-slate-500">عدد السيارات / الصافي</div>
+        <div class="text-xs md:text-sm font-extrabold text-slate-900 mt-0.5">
+          ${fmtInt(ledger.totalCompletedCars)} سيارة${pendTxt} | <span class="text-blue-800">${fmtInt(ledger.sumNetWeight)} كجم</span>
+        </div>
+      </div>
+      <div class="p-2.5 rounded-xl border bg-blue-50/70 border-blue-200">
+        <div class="text-[11px] font-bold text-blue-900">إجمالي الفواتير بالإكرامية</div>
+        <div class="text-xs md:text-sm font-extrabold text-blue-950 mt-0.5">${fmtDec(ledger.sumTotalSales)} ج.م</div>
+      </div>
+      <div class="p-2.5 rounded-xl border bg-emerald-50/70 border-emerald-200">
+        <div class="text-[11px] font-bold text-emerald-900">مسدد نقدي (مبيعات + مديونيات)</div>
+        <div class="text-xs md:text-sm font-extrabold text-emerald-950 mt-0.5">${fmtInt(ledger.sumCashSales + ledger.sumDebtCash)} ج.م</div>
+      </div>
+      <div class="p-2.5 rounded-xl border bg-teal-50/70 border-teal-200">
+        <div class="text-[11px] font-bold text-teal-900">مسدد بتحويل (مبيعات + مديونيات)</div>
+        <div class="text-xs md:text-sm font-extrabold text-teal-950 mt-0.5">${fmtInt(ledger.sumTransferSales + ledger.sumDebtTransfer)} ج.م</div>
+      </div>
+      <div class="p-2.5 rounded-xl border bg-emerald-100/80 border-emerald-300">
+        <div class="text-[11px] font-bold text-emerald-950">إجمالي المسدد للمزرعة الحالية</div>
+        <div class="text-xs md:text-sm font-extrabold text-emerald-950 mt-0.5">${fmtInt(ledger.sumTotalSettledCurrent)} ج.م</div>
+      </div>
+      <div class="p-2.5 rounded-xl border-2 ${balColor}">
+        <div class="text-[11px] font-extrabold">صافي المديونية المتبقية (${balLabel})</div>
+        <div class="text-sm md:text-base font-extrabold mt-0.5">${fmtInt(ledger.finalRunningBalance)} ج.م</div>
+      </div>
+    `;
+  }
+
+  // Extra Badges Strip for Standalone Custody & Previous Farms Collections
+  const extraStrip = document.getElementById('mdlMerchExtraBadges');
+  if (extraStrip) {
+    const parts = [];
+    if (ledger.sumTotalCustody > 0) {
+      parts.push(`💼 <span>بيان العهدة المستقلة: إجمالي العهدة المدفوعة = <strong>${fmtInt(ledger.sumTotalCustody)} ج.م</strong> | المتبقي من العهدة بعد خصم سداد المديونيات = <strong class="text-emerald-900">${fmtInt(ledger.sumNetCustodyRem)} ج.م</strong></span>`);
+    }
+    if ((ledger.sumPrevCash + ledger.sumPrevTransfer) > 0) {
+      parts.push(`🏦 <span>تحصيلات مزارع سابقة (لا تُخصم من المزرعة الحالية): نقدي للخزنة = <strong>${fmtInt(ledger.sumPrevCash)} ج.م</strong> | تحويلات سابقة = <strong>${fmtInt(ledger.sumPrevTransfer)} ج.م</strong></span>`);
+    }
+    if (parts.length > 0) {
+      extraStrip.innerHTML = parts.map(p => `<div class="flex items-center gap-1.5">${p}</div>`).join('');
+      extraStrip.classList.remove('hidden');
+      extraStrip.classList.add('flex');
+    } else {
+      extraStrip.classList.add('hidden');
+      extraStrip.classList.remove('flex');
+    }
+  }
+
+  // Filter movements by search query
+  const q = (document.getElementById('inpFilterMerchantModal')?.value || '').trim().toLowerCase();
+  const filteredMovements = q
+    ? ledger.movements.filter(m =>
+        `يوم ${m.dayNum}`.includes(q) ||
+        String(m.dateLabel || '').toLowerCase().includes(q) ||
+        String(m.merchant || '').toLowerCase().includes(q) ||
+        String(m.scaleNo || '').toLowerCase().includes(q) ||
+        String(m.carNo || '').toLowerCase().includes(q) ||
+        String(m.transferSalesType || '').toLowerCase().includes(q) ||
+        String(m.debtTransferType || '').toLowerCase().includes(q) ||
+        String(m.prevTransferType || '').toLowerCase().includes(q) ||
+        String(m.notes || '').toLowerCase().includes(q)
+      )
+    : ledger.movements;
+
+  const countBadge = document.getElementById('mdlMerchMovementsCountBadge');
+  if (countBadge) {
+    countBadge.textContent = q
+      ? `معروض ${filteredMovements.length} من ${ledger.movements.length} حركة`
+      : `${ledger.movements.length} حركة مسجلة في الدورة`;
+  }
+
+  const tbody = document.getElementById('merchantDrillDownTbody');
+  const tfoot = document.getElementById('merchantDrillDownTfoot');
+  if (!tbody || !tfoot) return;
+  tbody.innerHTML = '';
+
+  if (filteredMovements.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="19" class="p-6 text-center text-slate-500 font-bold">
+          لا توجد حركات مسجلة لهذا التاجر في المزرعة الحالية حتى الآن.
+        </td>
+      </tr>
+    `;
+  } else {
+    filteredMovements.forEach((r, idx) => {
+      const tr = document.createElement('tr');
+      if (r.isPending) {
+        tr.className = 'bg-amber-50/90 hover:bg-amber-100/75 border-y border-amber-300';
+      } else {
+        tr.className = idx % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/70 hover:bg-blue-50/40';
+      }
+
+      const trSalesTxt = r.transferSales > 0
+        ? `${fmtInt(r.transferSales)} <span class="text-[10px] text-teal-800">(${r.transferSalesType || 'تحويل'})</span>`
+        : '-';
+      const debtPaidTotal = r.debtCash + r.debtTransfer;
+      const debtPaidTxt = debtPaidTotal > 0
+        ? `${fmtInt(debtPaidTotal)} <span class="text-[10px]">(${r.debtCash > 0 && r.debtTransfer > 0 ? `نقدي ${fmtInt(r.debtCash)} + ${r.debtTransferType || 'تحويل'} ${fmtInt(r.debtTransfer)}` : (r.debtTransfer > 0 ? (r.debtTransferType || 'تحويل') : 'نقدي')})</span>`
+        : '-';
+
+      const extraNotesArr = [];
+      if ((r.prevCash + r.prevTransfer) > 0) {
+        extraNotesArr.push(`سابقة: ${fmtInt(r.prevCash + r.prevTransfer)}${r.prevTransfer > 0 ? ` (${r.prevTransferType || 'تحويل'})` : ' (نقدي)'}`);
+      }
+      if (r.totalCustody > 0) {
+        extraNotesArr.push(`عهدة: ${fmtInt(r.totalCustody)} (متبقي: ${fmtInt(r.netCustodyRemaining)})`);
+      }
+      if (r.notes) extraNotesArr.push(r.notes);
+      const notesCellTxt = extraNotesArr.join(' | ') || (r.isPending ? '⏳ محجوز (بانتظار الوزنة 2)' : '-');
+
+      const runBalCls = r.runningBalanceAfter > 0
+        ? 'text-rose-900 bg-amber-50/80'
+        : (r.runningBalanceAfter < 0 ? 'text-sky-900 bg-sky-50' : 'text-emerald-900 bg-emerald-50');
+
+      tr.innerHTML = `
+        <td class="p-2 border text-center font-bold">${idx + 1}</td>
+        <td class="p-2 border font-extrabold text-blue-950 whitespace-nowrap">يوم ${r.dayNum} <span class="text-[10px] text-slate-500 font-bold">(${r.dateLabel})</span></td>
+        <td class="p-2 border font-extrabold text-slate-900">${r.merchant} ${r.isPending ? '<span class="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px]">⏳ مؤقت</span>' : ''}</td>
+        <td class="p-2 border text-center font-extrabold text-blue-900">${r.scaleNo || '-'}</td>
+        <td class="p-2 border text-center font-bold">${r.carNo || '-'}</td>
+        <td class="p-2 border text-left font-bold">${fmtInt(r.w1)}</td>
+        <td class="p-2 border text-left">${r.isPending ? '<span class="text-amber-800 font-extrabold text-[10px]">⏳ بانتظار وزنة 2</span>' : fmtInt(r.w2)}</td>
+        <td class="p-2 border text-left font-extrabold bg-blue-50/60 text-blue-950">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
+        <td class="p-2 border text-left">${fmtDec(r.price)}</td>
+        <td class="p-2 border text-left">${fmtInt(r.tip)}</td>
+        <td class="p-2 border text-left font-extrabold bg-blue-50/60">${r.isPending ? '0' : fmtDec(r.totalWithTip)}</td>
+        <td class="p-2 border text-left font-bold text-emerald-800">${r.cashSales > 0 ? fmtInt(r.cashSales) : '-'}</td>
+        <td class="p-2 border text-left font-bold text-teal-900">${trSalesTxt}</td>
+        <td class="p-2 border text-left font-bold text-amber-950">${r.creditSales > 0 ? fmtInt(r.creditSales) : '-'}</td>
+        <td class="p-2 border text-left font-bold text-teal-900">${debtPaidTxt}</td>
+        <td class="p-2 border text-left font-extrabold bg-emerald-50 text-emerald-950">${r.isPending ? '0' : fmtInt(r.settledInRow)}</td>
+        <td class="p-2 border text-left font-extrabold ${runBalCls}">${fmtInt(r.runningBalanceAfter)}</td>
+        <td class="p-2 border text-right text-[11px] font-bold text-purple-900">${notesCellTxt}</td>
+        <td class="p-1.5 border text-center">
+          <button type="button" data-modal-jump-day="${r.dayNum}" class="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 font-extrabold text-[11px] whitespace-nowrap">
+            📂 يوم ${r.dayNum}
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  tfoot.innerHTML = `
+    <tr>
+      <td colspan="5" class="p-2 border text-center">إجمالي كشف حساب التاجر (${ledger.name} — ${ledger.totalCompletedCars} حركة مكتملة)</td>
+      <td class="p-2 border text-left">${fmtInt(ledger.sumW1)}</td>
+      <td class="p-2 border text-left">${fmtInt(ledger.sumW2)}</td>
+      <td class="p-2 border text-left">${fmtInt(ledger.sumNetWeight)} كجم</td>
+      <td class="p-2 border text-left">${fmtDec(ledger.avgPrice)}</td>
+      <td class="p-2 border text-left">${fmtInt(ledger.sumTip)}</td>
+      <td class="p-2 border text-left">${fmtDec(ledger.sumTotalSales)}</td>
+      <td class="p-2 border text-left">${fmtInt(ledger.sumCashSales)}</td>
+      <td class="p-2 border text-left">${fmtInt(ledger.sumTransferSales)}</td>
+      <td class="p-2 border text-left">${fmtInt(ledger.sumCreditSales)}</td>
+      <td class="p-2 border text-left">${fmtInt(ledger.sumDebtCash + ledger.sumDebtTransfer)}</td>
+      <td class="p-2 border text-left bg-emerald-300/60">${fmtInt(ledger.sumTotalSettledCurrent)}</td>
+      <td class="p-2 border text-left bg-amber-300 text-slate-950">${fmtInt(ledger.finalRunningBalance)} ج.م</td>
+      <td colspan="2" class="p-2 border text-center">${ledger.sumPrevCash + ledger.sumPrevTransfer > 0 ? `مزارع سابقة: ${fmtInt(ledger.sumPrevCash + ledger.sumPrevTransfer)} ج.م` : 'رصيد المزرعة الحالية ✓'}</td>
+    </tr>
+  `;
+}
+
+function buildMerchantWhatsappStatementText(merchantCode) {
+  const ledger = computeMerchantDetailedLedger(merchantCode);
+  const fName = appState.farmName || 'أبوذكري';
+  const lines = [
+    `📋 *كشف حساب تفصيلي للتاجر: ${ledger.name} (كود ${ledger.code})*`,
+    `🏡 *المزرعة:* ${fName}`,
+    `━━━━━━━━━━━━━━━━━━━━`
+  ];
+
+  if (ledger.movements.length === 0) {
+    lines.push('لا توجد حركات مسجلة في هذه الدورة حتى الآن.');
+  } else {
+    ledger.movements.forEach((r, idx) => {
+      if (r.isPending) {
+        lines.push(
+          `⏳ *حركة ${idx + 1} [يوم ${r.dayNum} - ${r.dateLabel}] (محجوزة مؤقتاً):*`,
+          `   • السيارة: ${r.merchant} | ميزان: ${r.scaleNo || '-'} | سيارة رقم: ${r.carNo || '-'}`,
+          `   • وزنة أولى (فارغ): ${fmtInt(r.w1)} كجم (بانتظار الوزنة الثانية)`
+        );
+      } else {
+        const payParts = [];
+        if (r.cashSales > 0) payParts.push(`نقدي مبيعات: ${fmtInt(r.cashSales)}`);
+        if (r.transferSales > 0) payParts.push(`تحويل مبيعات (${r.transferSalesType || 'تحويل'}): ${fmtInt(r.transferSales)}`);
+        if (r.creditSales > 0) payParts.push(`آجل اليوم: ${fmtInt(r.creditSales)}`);
+        if (r.debtCash > 0) payParts.push(`سداد مديونية نقدي: ${fmtInt(r.debtCash)}`);
+        if (r.debtTransfer > 0) payParts.push(`سداد مديونية تحويل (${r.debtTransferType || 'تحويل'}): ${fmtInt(r.debtTransfer)}`);
+        if ((r.prevCash + r.prevTransfer) > 0) payParts.push(`تحصيل مزرعة سابقة: ${fmtInt(r.prevCash + r.prevTransfer)}${r.notes ? ` (${r.notes})` : ''}`);
+
+        lines.push(
+          `🔹 *حركة ${idx + 1} [يوم ${r.dayNum} - ${r.dateLabel}]:*`,
+          `   • البيان: ${r.merchant} | ميزان: ${r.scaleNo || '-'} | سيارة: ${r.carNo || '-'}`,
+          `   • الوزن: أولى (${fmtInt(r.w1)}) - ثانية (${fmtInt(r.w2)}) = *صافي ${fmtInt(r.netWeight)} كجم* × سعر ${fmtDec(r.price)}${r.tip > 0 ? ` + إكرامية ${fmtInt(r.tip)}` : ''}`,
+          `   • إجمالي الفاتورة: *${fmtDec(r.totalWithTip)} ج.م*`,
+          `   • السداد: ${payParts.join(' | ') || 'بدون دفعات'}`,
+          `   • إجمالي المسدد بالحركة: ${fmtInt(r.settledInRow)} ج.م | *الرصيد التراكمي بعد الحركة: ${fmtInt(r.runningBalanceAfter)} ج.م*`
+        );
+      }
+    });
+  }
+
+  lines.push(
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `📊 *ملخص حساب التاجر (${ledger.name}) في مزرعة ${fName}:*`,
+    `🚛 إجمالي السيارات المكتملة: ${fmtInt(ledger.totalCompletedCars)} سيارة`,
+    `⚖️ إجمالي الوزن الصافي: ${fmtInt(ledger.sumNetWeight)} كجم`,
+    `💰 إجمالي قيمة الفواتير بالإكرامية: ${fmtDec(ledger.sumTotalSales)} ج.م`,
+    `💵 إجمالي المسدد نقداً (مبيعات + مديونيات): ${fmtInt(ledger.sumCashSales + ledger.sumDebtCash)} ج.م`,
+    `💳 إجمالي المسدد بتحويل (مبيعات + مديونيات): ${fmtInt(ledger.sumTransferSales + ledger.sumDebtTransfer)} ج.م`,
+    `✅ *إجمالي المسدد للمزرعة الحالية: ${fmtInt(ledger.sumTotalSettledCurrent)} ج.م*`,
+    `📌 *صافي المديونية المتبقية للمزرعة الحالية: ${fmtInt(ledger.finalRunningBalance)} ج.م*`
+  );
+
+  if (ledger.sumTotalCustody > 0) {
+    lines.push(`💼 *بيان العهدة المستقلة:* إجمالي العهدة (${fmtInt(ledger.sumTotalCustody)} ج.م) | المتبقي بعد خصم سداد المديونيات (${fmtInt(ledger.sumNetCustodyRem)} ج.م)`);
+  }
+  if ((ledger.sumPrevCash + ledger.sumPrevTransfer) > 0) {
+    lines.push(`🏦 *تحصيلات مزارع سابقة:* ${fmtInt(ledger.sumPrevCash + ledger.sumPrevTransfer)} ج.م`);
+  }
+
+  return lines.join('\n');
 }
 
 function renderExpensesStatementView() {
@@ -7043,6 +7449,96 @@ function initFarmSalesApp() {
     document.getElementById('btnCancelMerchantEdit').classList.add('hidden');
   });
 
+  // Global delegation for opening Merchant Drill-Down Modal from any table ([data-drill-merchant])
+  document.addEventListener('click', (e) => {
+    const drillBtn = e.target.closest('[data-drill-merchant]');
+    if (drillBtn) {
+      e.preventDefault();
+      const code = Number(drillBtn.getAttribute('data-drill-merchant'));
+      if (code > 0) openMerchantDrillDownModal(code);
+      return;
+    }
+    const jumpDayBtn = e.target.closest('[data-modal-jump-day]');
+    if (jumpDayBtn) {
+      const dNum = Number(jumpDayBtn.getAttribute('data-modal-jump-day')) || 1;
+      closeMerchantDrillDownModal();
+      if (!appState.visibleDays.includes(dNum)) {
+        appState.visibleDays.push(dNum);
+        appState.visibleDays.sort((a, b) => a - b);
+      }
+      appState.currentDay = dNum;
+      const dailyTabBtn = document.querySelector('[data-nav="daily"]');
+      if (dailyTabBtn) dailyTabBtn.click();
+      showToast(`تم الانتقال إلى محضر (يوم ${dNum})`, '📂');
+      return;
+    }
+  });
+
+  const mdlOverlay = document.getElementById('merchantDrillDownModal');
+  if (mdlOverlay) {
+    mdlOverlay.addEventListener('click', (e) => {
+      if (e.target === mdlOverlay) closeMerchantDrillDownModal();
+    });
+  }
+  const btnCloseMdl = document.getElementById('btnCloseMerchantModal');
+  if (btnCloseMdl) {
+    btnCloseMdl.addEventListener('click', closeMerchantDrillDownModal);
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && activeDrillDownMerchantCode > 0) {
+      closeMerchantDrillDownModal();
+    }
+  });
+  const selMdlSwitch = document.getElementById('selModalMerchantSwitcher');
+  if (selMdlSwitch) {
+    selMdlSwitch.addEventListener('change', (e) => {
+      const newCode = Number(e.target.value);
+      if (newCode > 0) openMerchantDrillDownModal(newCode);
+    });
+  }
+  const inpFilterMdl = document.getElementById('inpFilterMerchantModal');
+  if (inpFilterMdl) {
+    inpFilterMdl.addEventListener('input', () => {
+      renderMerchantDrillDownModal();
+    });
+  }
+  const btnCopyMerchStmt = document.getElementById('btnCopyMerchantStatement');
+  if (btnCopyMerchStmt) {
+    btnCopyMerchStmt.addEventListener('click', () => {
+      if (!activeDrillDownMerchantCode) return;
+      const txt = buildMerchantWhatsappStatementText(activeDrillDownMerchantCode);
+      const ta = document.createElement('textarea');
+      ta.value = txt;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+      showToast('تم نسخ كشف حساب التاجر التفصيلي للحافظة بنجاح! 📋');
+    });
+  }
+  const btnShareMerchWa = document.getElementById('btnShareMerchantWhatsapp');
+  if (btnShareMerchWa) {
+    btnShareMerchWa.addEventListener('click', () => {
+      if (!activeDrillDownMerchantCode) return;
+      const txt = buildMerchantWhatsappStatementText(activeDrillDownMerchantCode);
+      const ta = document.createElement('textarea');
+      ta.value = txt;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+      const waUrl = `https://wa.me/?text=${encodeURIComponent(txt)}`;
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+      showToast('تم نسخ الكشف وفتح واتساب لمشاركة كشف حساب التاجر مباشرة! 📲');
+    });
+  }
+  const btnPrintMerchStmt = document.getElementById('btnPrintMerchantStatement');
+  if (btnPrintMerchStmt) {
+    btnPrintMerchStmt.addEventListener('click', () => {
+      window.print();
+    });
+  }
+
   document.getElementById('merchantsTbody').addEventListener('click', (e) => {
     const editBtn = e.target.closest('[data-edit-merchant]');
     if (editBtn) {
@@ -7232,7 +7728,10 @@ function initFarmSalesApp() {
       '#cloudFarmsTbody',
       '#expSummaryTbody',
       '#daySelectorContainer',
-      '#dashKpiGrid'
+      '#dashKpiGrid',
+      '#merchantDrillDownTbody',
+      '#merchantDrillDownTfoot',
+      '#mdlMerchKpiGrid'
     ].forEach(sel => {
       const el = cloneDoc.querySelector(sel);
       if (el) el.innerHTML = '';
@@ -7251,6 +7750,10 @@ function initFarmSalesApp() {
     const cloneToast = cloneDoc.querySelector('#toastContainer');
     if (cloneToast) {
       cloneToast.classList.add('hidden');
+    }
+    const cloneMerchModal = cloneDoc.querySelector('#merchantDrillDownModal');
+    if (cloneMerchModal) {
+      cloneMerchModal.classList.add('hidden');
     }
     ['daily', 'dashboard', 'merchants', 'transfers', 'expenses', 'sync'].forEach(v => {
       const sec = cloneDoc.querySelector(`#view-${v}`);

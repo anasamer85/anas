@@ -21,7 +21,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=25" />
+  <link rel="stylesheet" href="./style.css?v=26" />
 </head>
 <body class="min-h-screen pb-24 md:pb-10">
 
@@ -810,7 +810,7 @@
           <div>
             <h2 class="text-base md:text-lg font-extrabold text-slate-900">👥 شاشة تكويد التجار الموحد وكشف حساب مديونيات المزرعة الحالية</h2>
             <p class="text-xs text-slate-600">
-              <strong class="text-emerald-800">الكود الموحد واسم التاجر الأساسي ثابت وموحد تلقائياً في جميع المزارع والدورات</strong> (التاجر يُكوّد مرة واحدة فقط ويظهر بنفس الكود والاسم عند فتح أو إنشاء أي مزرعة، وأي سيارة فرعية مثل <strong class="text-blue-900">كرنك 1</strong> و<strong class="text-blue-900">كرنك 2</strong> تأخذ تلقائياً نفس كود التاجر الأساسي <strong class="text-blue-900">104 - كرنك</strong>).
+              <strong class="text-emerald-800">الكود الموحد واسم التاجر الأساسي ثابت وموحد تلقائياً في جميع المزارع والدورات</strong> (التاجر يُكوّد مرة واحدة فقط ويظهر بنفس الكود والاسم عند فتح أو إنشاء أي مزرعة، وأي سيارة فرعية مثل <strong class="text-blue-900">كرنك 1</strong> و<strong class="text-blue-900">كرنك 2</strong> تأخذ تلقائياً نفس كود التاجر الأساسي <strong class="text-blue-900">104 - كرنك</strong>) — <strong class="text-blue-800 underline">اضغط على اسم أي تاجر في الجدول لفتح نافذة كشف حسابه التفصيلي بالحركات ومشاركته عبر واتساب</strong>.
             </p>
           </div>
           <form id="addMerchantForm" class="flex flex-wrap items-center gap-2">
@@ -1654,6 +1654,114 @@
       </div>
     </div>
 
+
+    <!-- ===================================================================== -->
+    <!-- MERCHANT DRILL-DOWN MODAL (نافذة كشف حساب التاجر التفصيلي بالحركات)     -->
+    <!-- ===================================================================== -->
+    <div id="merchantDrillDownModal" class="hidden fixed inset-0 z-50 bg-slate-900/80 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div class="bg-white text-slate-900 rounded-3xl shadow-2xl border-4 border-amber-400 max-w-7xl w-full my-auto overflow-hidden flex flex-col max-h-[92vh]">
+        <!-- Modal Header -->
+        <div class="navy-gradient text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-white/15 shrink-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2.5 py-1 rounded-xl gold-badge font-extrabold text-xs md:text-sm shadow">
+              📋 كود التاجر: <span id="mdlMerchCode">101</span>
+            </span>
+            <div>
+              <h3 class="text-sm md:text-base font-extrabold flex items-center gap-1.5 flex-wrap">
+                <span>كشف حساب التاجر التفصيلي بالحركات:</span>
+                <span id="mdlMerchName" class="text-amber-300 underline">اسم التاجر</span>
+                <span class="text-xs bg-white/15 px-2 py-0.5 rounded-lg font-bold">مزرعة <span id="mdlMerchFarmName">أبوذكري</span></span>
+              </h3>
+              <p id="mdlMerchSubTitle" class="text-[11px] text-slate-200 font-semibold mt-0.5">
+                جميع حركات الميزان، الفواتير، الدفعات النقدية، التحويلات، والرصيد التراكمي على مدار الـ 10 أيام
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <!-- Quick Switcher to another Merchant inside the Modal -->
+            <div class="inline-flex items-center bg-slate-900/90 border border-amber-400/60 rounded-xl px-2 py-1 gap-1">
+              <span class="text-[11px] text-amber-300 font-bold">👤 تبديل التاجر:</span>
+              <select id="selModalMerchantSwitcher" class="bg-slate-900 text-white text-xs font-extrabold focus:outline-none max-w-[140px] sm:max-w-[180px] truncate">
+              </select>
+            </div>
+
+            <button type="button" id="btnShareMerchantWhatsapp" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition flex items-center gap-1" title="إرسال ومشاركة كشف حساب التاجر مباشرة عبر واتساب">
+              <span>📲</span>
+              <span>إرسال بواتساب</span>
+            </button>
+            <button type="button" id="btnCopyMerchantStatement" class="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-extrabold text-xs shadow transition flex items-center gap-1" title="نسخ نص كشف الحساب التفصيلي للحافظة">
+              <span>📋</span>
+              <span>نسخ الكشف</span>
+            </button>
+            <button type="button" id="btnPrintMerchantStatement" class="px-2.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition flex items-center gap-1" title="طباعة كشف حساب التاجر">
+              <span>🖨️</span>
+              <span class="hidden sm:inline">طباعة</span>
+            </button>
+            <button type="button" id="btnCloseMerchantModal" class="px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-extrabold text-xs shadow transition flex items-center gap-1" title="إغلاق النافذة (Esc)">
+              <span>✕</span>
+              <span>إغلاق</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Body (Scrollable) -->
+        <div class="p-3 sm:p-4 overflow-y-auto space-y-3.5 custom-scrollbar flex-1">
+          <!-- 6 Summary KPI Cards for Selected Merchant -->
+          <div id="mdlMerchKpiGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2"></div>
+
+          <!-- Custody & Previous Farms Alert Strip (Shown dynamically if merchant has custody or previous farm collections) -->
+          <div id="mdlMerchExtraBadges" class="hidden flex-wrap items-center justify-between gap-2 bg-amber-50 border-2 border-amber-300 rounded-xl px-3 py-2 text-xs font-extrabold text-amber-950"></div>
+
+          <!-- Filter & Search Bar inside Modal -->
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2 flex-wrap flex-1">
+              <span class="text-xs font-extrabold text-slate-700">🔍 تصفية حركات التاجر:</span>
+              <input id="inpFilterMerchantModal" type="text" placeholder="ابحث باليوم، رقم الميزان، رقم السيارة، نوع التحويل، أو الملاحظات..."
+                class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-64 max-w-full" />
+              <span id="mdlMerchMovementsCountBadge" class="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] font-extrabold">
+                0 حركة مسجلة
+              </span>
+            </div>
+            <div class="text-[11px] font-bold text-slate-600">
+              💡 اضغط على زر <strong>(📂 فتح اليوم)</strong> أمام أي حركة للانتقال مباشرة لمحضر ذلك اليوم.
+            </div>
+          </div>
+
+          <!-- Detailed Chronological Movements Table across the 10 Days -->
+          <div class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar border border-slate-200 rounded-2xl">
+            <table id="merchantDrillDownTable" class="w-full text-xs text-right border-collapse">
+              <thead>
+                <tr class="navy-gradient text-white font-extrabold text-center">
+                  <th class="p-2 border">#</th>
+                  <th class="p-2 border">اليوم / التاريخ</th>
+                  <th class="p-2 border">اسم التاجر / السيارة الفرعية</th>
+                  <th class="p-2 border">ميزان رقم</th>
+                  <th class="p-2 border">رقم السيارة</th>
+                  <th class="p-2 border">وزنة أولى (فارغ)</th>
+                  <th class="p-2 border">وزنة ثانية (قائم)</th>
+                  <th class="p-2 border bg-blue-950 text-amber-300">الوزن الصافي (كجم)</th>
+                  <th class="p-2 border">السعر</th>
+                  <th class="p-2 border">الإكرامية</th>
+                  <th class="p-2 border bg-blue-950 text-emerald-300">إجمالي الفاتورة بالإكرامية</th>
+                  <th class="p-2 border bg-emerald-800">نقدي يوم البيع</th>
+                  <th class="p-2 border bg-teal-800">تحويل مبيعات</th>
+                  <th class="p-2 border bg-amber-500 text-slate-950">آجل فاتورة اليوم</th>
+                  <th class="p-2 border bg-teal-900">سداد مديونية (نقدي/تحويل)</th>
+                  <th class="p-2 border bg-emerald-900 text-amber-300">إجمالي المسدد بالحركة</th>
+                  <th class="p-2 border bg-amber-400 text-slate-950">الرصيد التراكمي بعد الحركة</th>
+                  <th class="p-2 border bg-purple-900">مزارع سابقة / العهدة / ملاحظات</th>
+                  <th class="p-2 border bg-slate-800">انتقال</th>
+                </tr>
+              </thead>
+              <tbody id="merchantDrillDownTbody" class="divide-y divide-slate-200 bg-white"></tbody>
+              <tfoot id="merchantDrillDownTfoot" class="bg-amber-400 text-slate-950 font-extrabold border-t-2 border-slate-900"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <!-- Mobile Bottom Sticky Navigation Bar -->
@@ -1684,6 +1792,6 @@
     </button>
   </nav>
 
-  <script src="./app.js?v=25"></script>
+  <script src="./app.js?v=26"></script>
 </body>
 </html>

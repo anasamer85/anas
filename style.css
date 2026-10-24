@@ -1688,3 +1688,78 @@ body {
         font-size: 12px !important;
       }
     }
+
+
+/* =========================================================================
+   4. MERCHANT DRILL-DOWN MODAL & PRINT STYLES (v26)
+   ========================================================================= */
+#merchantDrillDownModal.hidden {
+  display: none !important;
+}
+.bg-slate-900\/80 {
+  background-color: rgb(15 23 42 / 0.82);
+}
+.max-h-\[92vh\] {
+  max-height: 92vh;
+}
+.my-auto {
+  margin-top: auto;
+  margin-bottom: auto;
+}
+.max-w-\[140px\] {
+  max-width: 140px;
+}
+.w-64 {
+  width: 16rem;
+}
+.max-w-full {
+  max-width: 100%;
+}
+.border-white\/15 {
+  border-color: rgb(255 255 255 / 0.15);
+}
+.bg-teal-800 {
+  background-color: rgb(17 94 89);
+}
+@media (min-width: 640px) {
+  .sm\:p-4 {
+    padding: 1rem;
+  }
+  .sm\:inline {
+    display: inline;
+  }
+  .sm\:max-w-\[180px\] {
+    max-width: 180px;
+  }
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #merchantDrillDownModal,
+  #merchantDrillDownModal * {
+    visibility: visible;
+  }
+  #merchantDrillDownModal {
+    position: absolute !important;
+    inset: 0 !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  #merchantDrillDownModal > div {
+    max-height: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  #btnShareMerchantWhatsapp,
+  #btnCopyMerchantStatement,
+  #btnPrintMerchantStatement,
+  #btnCloseMerchantModal,
+  #selModalMerchantSwitcher,
+  #inpFilterMerchantModal {
+    display: none !important;
+  }
+}
