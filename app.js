@@ -2113,12 +2113,13 @@ function renderDailyView() {
       const w2CellHtml = r.isPending
         ? '<span class="text-amber-800 font-extrabold text-[11px]">⏳ بانتظار وزنة 2</span>'
         : fmtInt(r.w2);
+      const receiptBtnHtml = `<button type="button" data-print-receipt="${r.id}" data-receipt-day="${d}" class="px-2 py-1 rounded bg-indigo-800 text-white font-extrabold hover:bg-indigo-700 ml-1 shadow-sm" title="طباعة بون ميزان وإيصال فاتورة واضحة للتاجر / السائق">🖨️ طباعة بون ميزان</button>`;
       const actionCellHtml = !hasPermission('sales')
-        ? '<span class="text-slate-400 text-[11px]">🔒 عرض فقط</span>'
+        ? `${receiptBtnHtml}<span class="text-slate-400 text-[11px]">🔒 عرض فقط</span>`
         : (r.isPending
-          ? `<button type="button" data-recall-pending="${r.id}" class="px-2 py-1 rounded bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 ml-1 shadow-sm" title="استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية">🔄 استكمال</button>
+          ? `${receiptBtnHtml}<button type="button" data-recall-pending="${r.id}" class="px-2 py-1 rounded bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 ml-1 shadow-sm" title="استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية">🔄 استكمال</button>
              <button type="button" data-del-pending="${r.id}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`
-          : `<button type="button" data-edit-sale="${r.id}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
+          : `${receiptBtnHtml}<button type="button" data-edit-sale="${r.id}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
              <button type="button" data-del-sale="${r.id}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`);
 
       tr.innerHTML = `
@@ -2264,7 +2265,10 @@ function renderDailyView() {
           <td class="p-1.5 border text-left font-extrabold text-amber-900">${fmtMoney(item.w1)} كجم</td>
           <td class="p-1.5 border text-left">${fmtMoney(item.price)} | إكرامية: ${fmtMoney(item.tip)}</td>
           <td class="p-1.5 border text-right text-[11px]">${(item.custodyCash || item.custodyTransfer) ? `عهدة: ${fmtMoney((Number(item.custodyCash)||0)+(Number(item.custodyTransfer)||0))}` : (item.notes || 'بانتظار الوزنة الثانية')}</td>
-          <td class="p-1 border text-center">
+          <td class="p-1 border text-center whitespace-nowrap">
+            <button type="button" data-print-receipt="${item.id}" data-receipt-day="${d}" class="px-2 py-0.5 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-[11px] ml-1 shadow-sm" title="طباعة بون ميزان (وزنة أولى) للسائق">
+              🖨️ طباعة بون ميزان
+            </button>
             <button type="button" data-recall-pending="${item.id}" class="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] ml-1 shadow-sm">
               🔄 استرجاع
             </button>
@@ -3461,7 +3465,26 @@ function ensureMerchantPrintDomElements() {
         }
         #merchantPrintTable thead { display: table-header-group !important; }
         #merchantPrintTable tfoot { display: table-row-group !important; }
-        #merchantPrintTable tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+        #merchantPrintTable tr,
+        body.printing-merchant-modal #merchantPrintOnlyContainer tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+        body.printing-merchant-modal #merchantPrintOnlyContainer table.print-clean-table {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          table-layout: fixed !important;
+          border-collapse: collapse !important;
+        }
+        body.printing-merchant-modal #merchantPrintOnlyContainer table.print-clean-table th,
+        body.printing-merchant-modal #merchantPrintOnlyContainer table.print-clean-table td {
+          box-sizing: border-box !important;
+          white-space: normal !important;
+          word-break: break-word !important;
+          overflow-wrap: anywhere !important;
+        }
+        body.printing-merchant-modal #merchantPrintOnlyContainer .scale-receipt-print-sheet {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
       }
     `;
     (document.head || document.documentElement).appendChild(st);
@@ -3741,6 +3764,546 @@ function renderDailyTrialBalancePrintView() {
           </tr>
         </tfoot>
       </table>
+
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-top:8px; text-align:center; font-size:9px;">
+        <tbody>
+          <tr>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:16px;">مشرف الميزان والوزن</div>
+              <div style="color:#475569; font-weight:700;">الاسم والتوقيع: ........................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:16px;">أعضاء لجنة البيع</div>
+              <div style="color:#475569; font-weight:700;">الاسم والتوقيع: ........................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:16px;">محاسب الموقع والمراجعة</div>
+              <div style="color:#475569; font-weight:700;">الاسم والتوقيع: ........................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#ecfdf5;">
+              <div style="font-weight:800; color:#064e3b; margin-bottom:16px;">أمين الخزينة المستلم</div>
+              <div style="color:#065f46; font-weight:700;">الاسم والتوقيع: ........................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#fffbeb;">
+              <div style="font-weight:800; color:#78350f; margin-bottom:16px;">يعتمد ،، مدير المزرعة</div>
+              <div style="color:#92400e; font-weight:700;">التوقيع والختم: ........................</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+  return true;
+}
+
+function renderScaleReceiptPrintView(saleId, dayNumInput) {
+  const printContainer = ensureMerchantPrintDomElements();
+  if (!printContainer || !saleId) return false;
+  const d = Number(dayNumInput) || appState.currentDay || 1;
+  const dayObj = (appState.days && appState.days[d]) || { dayNumber: d, dateLabel: `اليوم ${d}`, sales: [], pendingSales: [] };
+  const fName = appState.farmName || 'أبوذكري';
+
+  let rawRow = (dayObj.sales || []).find(x => String(x.id) === String(saleId));
+  let isPending = false;
+  if (!rawRow) {
+    rawRow = (dayObj.pendingSales || []).find(x => String(x.id) === String(saleId));
+    if (rawRow) isPending = true;
+  }
+  if (!rawRow) {
+    for (let searchD = 1; searchD <= 10; searchD++) {
+      const sDay = appState.days && appState.days[searchD];
+      if (!sDay) continue;
+      const foundSale = (sDay.sales || []).find(x => String(x.id) === String(saleId));
+      if (foundSale) {
+        rawRow = foundSale;
+        isPending = false;
+        break;
+      }
+      const foundPend = (sDay.pendingSales || []).find(x => String(x.id) === String(saleId));
+      if (foundPend) {
+        rawRow = foundPend;
+        isPending = true;
+        break;
+      }
+    }
+  }
+  if (!rawRow) return false;
+
+  const r = isPending
+    ? { ...computeSaleRow({ ...rawRow, w2: 0 }), isPending: true }
+    : { ...computeSaleRow(rawRow), isPending: false };
+
+  // حساب رصيد التاجر السابق قبل هذه الحركة والرصيد التراكمي بعدها من كشف الحساب التفصيلي
+  let prevBalanceBefore = 0;
+  let runningBalanceAfter = 0;
+  let baseMerchantName = r.merchant || '-';
+  if (r.code > 0) {
+    const ledger = computeMerchantDetailedLedger(r.code);
+    baseMerchantName = ledger.name || r.merchant;
+    const movMatch = (ledger.movements || []).find(m => String(m.id) === String(r.id));
+    if (movMatch) {
+      runningBalanceAfter = movMatch.runningBalanceAfter;
+      const rowDelta = movMatch.isPending ? 0 : (movMatch.creditSales - movMatch.debtCash - movMatch.debtTransfer);
+      prevBalanceBefore = runningBalanceAfter - rowDelta;
+    } else {
+      prevBalanceBefore = computeMerchantCurrentDebtExcluding(r.code, r.id);
+      const rowDelta = isPending ? 0 : (r.creditSales - r.debtCash - r.debtTransfer);
+      runningBalanceAfter = prevBalanceBefore + rowDelta;
+    }
+  }
+
+  const now = new Date();
+  const printDateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+  const printTimeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  const statusBadgeTxt = isPending
+    ? '⏳ بون وزنة أولى (تحت التحميل — بانتظار الوزنة 2)'
+    : '✅ بون ميزان وفاتورة بيع نهائية مكتملة';
+  const statusBadgeBg = isPending ? '#fef3c7' : '#d1fae5';
+  const statusBadgeColor = isPending ? '#92400e' : '#065f46';
+
+  const totalSettledTodayForFarm = r.cashSales + r.transferSales + r.debtCash + r.debtTransfer;
+  const balStateTxt = runningBalanceAfter > 0
+    ? 'عليه للمزرعة'
+    : (runningBalanceAfter < 0 ? 'له رصيد دائن' : 'خالص ✓');
+
+  const extraRowsHtml = [];
+  if (r.totalCustody > 0) {
+    extraRowsHtml.push(`
+      <tr style="background:#fffbeb;">
+        <td style="border:1px solid #334155; padding:4px 6px; font-weight:800; text-align:right;">💼 بيان العهدة المسلمة من التاجر (بيان مستقل):</td>
+        <td style="border:1px solid #334155; padding:4px 6px; font-weight:800; text-align:center;" colspan="3">
+          إجمالي العهدة: ${fmtInt(r.totalCustody)} ج.م (نقدي: ${fmtInt(r.custodyCash)}${r.custodyTransfer > 0 ? ` + ${r.custodyTransferType || 'تحويل'}: ${fmtInt(r.custodyTransfer)}` : ''}) &nbsp;|&nbsp; المتبقي من العهدة بعد سداد المديونيات: <strong>${fmtInt(r.netCustodyRemaining)} ج.م</strong>
+        </td>
+      </tr>
+    `);
+  }
+  if ((r.prevCash + r.prevTransfer) > 0) {
+    extraRowsHtml.push(`
+      <tr style="background:#faf5ff;">
+        <td style="border:1px solid #334155; padding:4px 6px; font-weight:800; text-align:right; color:#581c87;">🏦 تحصيلات مزارع سابقة (لا تخصم من الحالية):</td>
+        <td style="border:1px solid #334155; padding:4px 6px; font-weight:800; text-align:center; color:#581c87;" colspan="3">
+          إجمالي: ${fmtInt(r.prevCash + r.prevTransfer)} ج.م (نقدي: ${fmtInt(r.prevCash)} ج.م${r.prevTransfer > 0 ? ` | ${r.prevTransferType || 'تحويل'}: ${fmtInt(r.prevTransfer)} ج.م` : ''}) ${r.notes ? `— [${escXmlStr(r.notes)}]` : ''}
+        </td>
+      </tr>
+    `);
+  } else if (r.notes) {
+    extraRowsHtml.push(`
+      <tr>
+        <td style="border:1px solid #334155; padding:4px 6px; font-weight:800; text-align:right;">📝 ملاحظات / بيان إضافي:</td>
+        <td style="border:1px solid #334155; padding:4px 6px; font-weight:700; text-align:right;" colspan="3">${escXmlStr(r.notes)}</td>
+      </tr>
+    `);
+  }
+
+  printContainer.innerHTML = `
+    <div class="scale-receipt-print-sheet" style="max-width:190mm; margin:0 auto; border:2.5px solid #0f172a; border-radius:8px; padding:10px 12px; background:#ffffff; color:#0f172a; font-family:'Cairo',sans-serif; direction:rtl;">
+      <!-- ترويسة بون الميزان والفاتورة -->
+      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2.5px solid #1b365d; padding-bottom:6px; margin-bottom:8px; gap:8px; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:15px; font-weight:800; color:#1b365d;">
+            ⚖️ إيصال بون ميزان وفاتورة بيع — مزرعة <span style="color:#b45309;">${escXmlStr(fName)}</span>
+          </div>
+          <div style="font-size:10px; font-weight:700; color:#334155; margin-top:2px;">
+            اليوم والتاريخ: <strong>يوم ${d} (${escXmlStr(dayObj.dateLabel || ('اليوم ' + d))})</strong> &nbsp;|&nbsp; تحريراً في: ${printDateStr} - ${printTimeStr}
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <div style="padding:4px 10px; border-radius:6px; background:${statusBadgeBg}; color:${statusBadgeColor}; border:1.5px solid ${statusBadgeColor}; font-size:10px; font-weight:800;">
+            ${statusBadgeTxt}
+          </div>
+          <div style="padding:4px 12px; border-radius:6px; background:#1b365d; color:#ffffff; text-align:center;">
+            <div style="font-size:8px; color:#fde68a; font-weight:700;">رقم بون الميزان</div>
+            <div style="font-size:14px; font-weight:800; letter-spacing:0.5px;">#${escXmlStr(r.scaleNo || '-')}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- بيانات التاجر والسيارة -->
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:8px; font-size:10.5px;">
+        <tbody>
+          <tr style="background:#f8fafc;">
+            <td style="border:1.5px solid #334155; padding:5px 8px; width:18%; font-weight:800; color:#475569;">اسم التاجر / السيارة:</td>
+            <td style="border:1.5px solid #334155; padding:5px 8px; width:32%; font-weight:800; font-size:12px; color:#0f172a;">${escXmlStr(r.merchant)}</td>
+            <td style="border:1.5px solid #334155; padding:5px 8px; width:18%; font-weight:800; color:#475569;">الكود الموحد للتاجر:</td>
+            <td style="border:1.5px solid #334155; padding:5px 8px; width:32%; font-weight:800; color:#1e3a8a;">كود (${r.code || '-'}) — ${escXmlStr(baseMerchantName)}</td>
+          </tr>
+          <tr>
+            <td style="border:1.5px solid #334155; padding:5px 8px; font-weight:800; color:#475569;">رقم السيارة:</td>
+            <td style="border:1.5px solid #334155; padding:5px 8px; font-weight:800; font-size:12px; color:#0f172a;">${escXmlStr(r.carNo || '-')}</td>
+            <td style="border:1.5px solid #334155; padding:5px 8px; font-weight:800; color:#475569;">مسلسل بون الميزان:</td>
+            <td style="border:1.5px solid #334155; padding:5px 8px; font-weight:800; font-size:12px; color:#b45309;">${escXmlStr(r.scaleNo || '-')}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- أولاً: جدول الأوزان الرسمي (الوزنة الأولى، الوزنة الثانية، الصافي) -->
+      <div style="font-size:10.5px; font-weight:800; color:#1b365d; margin-bottom:3px;">أولاً: بيان الميزان والأوزان (بالكيلوجرام):</div>
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:8px; text-align:center;">
+        <thead>
+          <tr style="background:#0c4a6e; color:#ffffff; font-size:10px; font-weight:800;">
+            <th style="border:1.5px solid #0f172a; padding:5px;">الوزنة الأولى (فارغ - كجم)</th>
+            <th style="border:1.5px solid #0f172a; padding:5px;">الوزنة الثانية (قائم - كجم)</th>
+            <th style="border:1.5px solid #0f172a; padding:5px; background:#1e3a8a; color:#fde68a;">الوزن الصافي الفعلي (كجم)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border:1.5px solid #0f172a; padding:7px; font-size:13px; font-weight:800; background:#f8fafc;">${fmtInt(r.w1)} كجم</td>
+            <td style="border:1.5px solid #0f172a; padding:7px; font-size:13px; font-weight:800; background:#f8fafc;">${isPending ? '⏳ تحت التحميل' : `${fmtInt(r.w2)} كجم`}</td>
+            <td style="border:2px solid #1e3a8a; padding:7px; font-size:15px; font-weight:800; background:#eff6ff; color:#1e3a8a;">${isPending ? 'يُحسب بعد الوزنة الثانية' : `${fmtInt(r.netWeight)} كجم`}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ثانياً: حساب الفاتورة والسداد والتحصيلات -->
+      <div style="font-size:10.5px; font-weight:800; color:#1b365d; margin-bottom:3px;">ثانياً: بيان قيمة الفاتورة، السداد، والرصيد التراكمي للتاجر:</div>
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:8px; font-size:10px;">
+        <colgroup>
+          <col style="width:26%;" />
+          <col style="width:24%;" />
+          <col style="width:26%;" />
+          <col style="width:24%;" />
+        </colgroup>
+        <tbody>
+          <tr>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; background:#f8fafc;">سعر الكيلو (ج.م / كجم):</td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; text-align:center;">${fmtDec(r.price)} ج.م</td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; background:#f8fafc;">قيمة الوزن الأساسي + الإكرامية:</td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; text-align:center;">${isPending ? '—' : `${fmtDec(r.baseAmount)} + إكرامية ${fmtInt(r.tip)}`}</td>
+          </tr>
+          <tr style="background:#fffbeb;">
+            <td style="border:1.5px solid #334155; padding:6px; font-weight:800; color:#78350f; font-size:10.5px;">إجمالي فاتورة البيع بالإكرامية:</td>
+            <td style="border:1.5px solid #334155; padding:6px; font-weight:800; text-align:center; font-size:12px; color:#78350f;">${isPending ? 'تُحدد بعد الوزنة 2' : `${fmtDec(r.totalWithTip)} ج.م`}</td>
+            <td style="border:1.5px solid #334155; padding:6px; font-weight:800; color:#065f46; font-size:10.5px;">المسدد نقداً عن الفاتورة:</td>
+            <td style="border:1.5px solid #334155; padding:6px; font-weight:800; text-align:center; font-size:11.5px; color:#065f46;">${fmtInt(r.cashSales)} ج.م</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; background:#f8fafc;">المسدد بتحويل عن الفاتورة:</td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; text-align:center; color:#115e59;">${r.transferSales > 0 ? `${fmtInt(r.transferSales)} ج.م (${escXmlStr(r.transferSalesType || 'تحويل')})` : '0 ج.م'}</td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; background:#f8fafc;">المتبقي آجل من فاتورة اليوم:</td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; text-align:center; color:#9f1239;">${fmtInt(r.creditSales)} ج.م</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; background:#f0fdfa; color:#115e59;">سداد مديونية سابقة للمزرعة الحالية:</td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; text-align:center; background:#f0fdfa; color:#115e59;">
+              ${(r.debtCash + r.debtTransfer) > 0 ? `${fmtInt(r.debtCash + r.debtTransfer)} ج.م (${r.debtCash > 0 ? `نقدي ${fmtInt(r.debtCash)}` : ''}${r.debtTransfer > 0 ? ` ${escXmlStr(r.debtTransferType || 'تحويل')} ${fmtInt(r.debtTransfer)}` : ''})` : '0 ج.م'}
+            </td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; background:#ecfdf5; color:#064e3b;">إجمالي المسدد للمزرعة بهذه الحركة:</td>
+            <td style="border:1px solid #334155; padding:5px 6px; font-weight:800; text-align:center; background:#ecfdf5; color:#064e3b; font-size:11px;">${fmtInt(totalSettledTodayForFarm)} ج.م</td>
+          </tr>
+          <tr style="background:#f1f5f9;">
+            <td style="border:1.5px solid #0f172a; padding:6px; font-weight:800; color:#1e293b;">رصيد المديونية السابق قبل الحركة:</td>
+            <td style="border:1.5px solid #0f172a; padding:6px; font-weight:800; text-align:center; font-size:11px;">${fmtInt(prevBalanceBefore)} ج.م</td>
+            <td style="border:1.5px solid #0f172a; padding:6px; font-weight:800; background:#fef3c7; color:#0f172a;">صافي الرصيد التراكمي بعد الحركة (${balStateTxt}):</td>
+            <td style="border:1.5px solid #0f172a; padding:6px; font-weight:800; text-align:center; background:#fef3c7; color:#0f172a; font-size:12px;">${fmtInt(runningBalanceAfter)} ج.م</td>
+          </tr>
+          ${extraRowsHtml.join('')}
+        </tbody>
+      </table>
+
+      <!-- ثالثاً: توقيعات استلام بون الميزان والفاتورة -->
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-top:6px; text-align:center; font-size:9.5px;">
+        <tbody>
+          <tr>
+            <td style="border:1px solid #334155; padding:6px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:14px;">القائم بالوزن (مشرف الميزان)</div>
+              <div style="color:#475569; font-weight:700;">التوقيع: ..............................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:14px;">توقيع السائق / التاجر المستلم</div>
+              <div style="color:#475569; font-weight:700;">التوقيع: ..............................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:14px;">محاسب الموقع / لجنة البيع</div>
+              <div style="color:#475569; font-weight:700;">التوقيع: ..............................</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+  return true;
+}
+
+function renderOfficialDaySettlementReportPrintView(dayNumInput) {
+  const printContainer = ensureMerchantPrintDomElements();
+  if (!printContainer) return false;
+  const d = Number(dayNumInput) || appState.currentDay || 1;
+  const s = computeDaySummary(d);
+  const fName = appState.farmName || 'أبوذكري';
+  const now = new Date();
+  const printDateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+  const printTimeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+
+  const statusTxt = s.cashBoxDiff === 0
+    ? 'خزينة مطابقة تماماً ✓'
+    : (s.cashBoxDiff < 0 ? 'زيادة توريد بالخزينة' : 'عجز توريد بالخزينة');
+  const diffBg = s.cashBoxDiff === 0 ? '#d1fae5' : '#ffe4e6';
+  const diffColor = s.cashBoxDiff === 0 ? '#064e3b' : '#881337';
+
+  // بناء صفوف جدول حركات البيع المسجلة في اليوم
+  const allRows = s.allOrderedRows || s.rows || [];
+  let salesRowsHtml = '';
+  if (allRows.length === 0) {
+    salesRowsHtml = `<tr><td colspan="15" style="padding:8px; text-align:center; font-weight:700;">لا توجد حركات بيع مسجلة في هذا اليوم.</td></tr>`;
+  } else {
+    salesRowsHtml = allRows.map((r, idx) => {
+      const debtTxt = (r.debtCash + r.debtTransfer) > 0
+        ? `${fmtInt(r.debtCash + r.debtTransfer)} ${r.debtTransfer > 0 ? `(${r.debtTransferType || 'تحويل'})` : '(نقدي)'}`
+        : '-';
+      const custodyBadge = r.totalCustody > 0 ? ` [عهدة:${fmtInt(r.totalCustody)}]` : '';
+      const prevTxt = (r.prevCash + r.prevTransfer) > 0
+        ? `${fmtInt(r.prevCash + r.prevTransfer)} ${r.notes ? `[${r.notes}]` : ''}${custodyBadge}`
+        : ((r.notes || '') + custodyBadge || (r.isPending ? '⏳ مؤقت' : '-'));
+      const rowBg = r.isPending ? '#fef3c7' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
+      return `<tr style="background:${rowBg};">
+        <td style="text-align:center; font-weight:800;">${idx + 1}</td>
+        <td style="text-align:center; font-weight:800; color:#1e3a8a;">${r.code || '-'}</td>
+        <td style="text-align:right; font-weight:800;">${escXmlStr(r.merchant)}${r.isPending ? ' (وزنة 1)' : ''}</td>
+        <td style="text-align:center; font-weight:700;">${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}</td>
+        <td style="text-align:center; font-weight:700;">${fmtInt(r.w1)}</td>
+        <td style="text-align:center; font-weight:700;">${r.isPending ? 'مؤقت' : fmtInt(r.w2)}</td>
+        <td style="text-align:center; font-weight:800; background:#eff6ff;">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
+        <td style="text-align:center;">${fmtDec(r.price)}</td>
+        <td style="text-align:center;">${fmtInt(r.tip)}</td>
+        <td style="text-align:center; font-weight:800; background:#eff6ff;">${r.isPending ? '0' : fmtDec(r.totalWithTip)}</td>
+        <td style="text-align:center; font-weight:700; color:#065f46;">${r.cashSales ? fmtInt(r.cashSales) : '-'}</td>
+        <td style="text-align:center; font-weight:700; color:#78350f;">${r.transferSales ? `${fmtInt(r.transferSales)} (${escXmlStr(r.transferSalesType || 'تحويل')})` : '-'}</td>
+        <td style="text-align:center; font-weight:700;">${r.creditSales ? fmtInt(r.creditSales) : '-'}</td>
+        <td style="text-align:center; font-weight:700; color:#115e59;">${escXmlStr(debtTxt)}</td>
+        <td style="text-align:right; font-size:7.5px; font-weight:700;">${escXmlStr(prevTxt)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // بناء صفوف جدول المصروفات اليومية إن وجدت
+  let expensesBlockHtml = '';
+  if (s.expenses && s.expenses.length > 0) {
+    const expRows = s.expenses.map((ex, i) => `
+      <tr style="background:${i % 2 === 0 ? '#ffffff' : '#fff1f2'};">
+        <td style="border:1px solid #334155; padding:3px; text-align:center; font-weight:800;">${i + 1}</td>
+        <td style="border:1px solid #334155; padding:3px 5px; text-align:right; font-weight:800; color:#881337;">${escXmlStr(ex.category)}</td>
+        <td style="border:1px solid #334155; padding:3px 5px; text-align:right; font-weight:700;">${escXmlStr(ex.desc || '-')}</td>
+        <td style="border:1px solid #334155; padding:3px 5px; text-align:right; font-weight:700;">${escXmlStr(ex.recipient || '-')}</td>
+        <td style="border:1px solid #334155; padding:3px 5px; text-align:center; font-weight:800; color:#881337;">${fmtInt(ex.amount)} ج.م</td>
+      </tr>
+    `).join('');
+    expensesBlockHtml = `
+      <div style="margin-top:5px;">
+        <div style="font-size:9.5px; font-weight:800; color:#881337; margin-bottom:2px;">
+          ثالثاً: بيان المصروفات والمكافآت المنصرفة من نقدية اليوم (${s.expenses.length} بند — إجمالي: ${fmtInt(s.sumExpenses)} ج.م):
+        </div>
+        <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:8px;">
+          <colgroup>
+            <col style="width:5%;" />
+            <col style="width:22%;" />
+            <col style="width:41%;" />
+            <col style="width:18%;" />
+            <col style="width:14%;" />
+          </colgroup>
+          <thead>
+            <tr style="background:#881337; color:#ffffff; font-weight:800; text-align:center;">
+              <th style="border:1px solid #334155; padding:3px;">م</th>
+              <th style="border:1px solid #334155; padding:3px;">بند / تصنيف المنصرف</th>
+              <th style="border:1px solid #334155; padding:3px;">بيان الصرف التفصيلي</th>
+              <th style="border:1px solid #334155; padding:3px;">اسم المستلم</th>
+              <th style="border:1px solid #334155; padding:3px;">المبلغ المنصرف</th>
+            </tr>
+          </thead>
+          <tbody>${expRows}</tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    expensesBlockHtml = `
+      <div style="margin-top:4px; padding:3px 6px; border:1px solid #cbd5e1; border-radius:4px; background:#f8fafc; font-size:8.5px; font-weight:800; color:#334155;">
+        ثالثاً: بيان المصروفات والمكافآت اليومية: لا توجد مصروفات أو مكافآت منصرفة من نقدية هذا اليوم (إجمالي المصروفات = 0 ج.م).
+      </div>
+    `;
+  }
+
+  printContainer.innerHTML = `
+    <div style="border:2px solid #0f172a; border-radius:6px; padding:6px 8px; background:#ffffff; color:#0f172a; font-family:'Cairo',sans-serif; direction:rtl;">
+      <!-- الترويسة الرسمية وديباجة المحضر -->
+      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:4px; margin-bottom:4px;">
+        <div>
+          <div style="font-size:13.5px; font-weight:800; color:#1b365d;">
+            📜 محضر تصفية وميزان مراجعة أعمال لجنة البيع اليومي — مزرعة <span style="color:#b45309;">${escXmlStr(fName)}</span>
+          </div>
+          <div style="font-size:9px; font-weight:700; color:#334155; margin-top:1px;">
+            إنه في <strong>يوم ${d} (${escXmlStr(s.dateLabel)})</strong>، اجتمعت لجنة البيع والوزن والتحصيل لتصفية ومطابقة أوزان ومبيعات ونقدية خزينة اليوم، وأسفرت المراجعة عما يلي:
+          </div>
+        </div>
+        <div style="text-align:left; font-size:8.5px; font-weight:800; color:#1e293b; background:#f1f5f9; padding:3px 8px; border-radius:4px; border:1px solid #cbd5e1;">
+          <div>محضر رسمي معتمد — يوم ${d}</div>
+          <div>تاريخ الطباعة: ${printDateStr} (${printTimeStr})</div>
+        </div>
+      </div>
+
+      <!-- أولاً: جدول المطابقة الوزنية والمحاسبية والنقدية (الركائز الثلاث) -->
+      <div style="font-size:9.5px; font-weight:800; color:#1b365d; margin-bottom:2px;">أولاً: ميزان المراجعة والتصفية الشامل (الأوزان + المبيعات والتحويلات + الخزينة النقدية):</div>
+      <table class="print-clean-table" dir="rtl" style="width:100%; max-width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:5px; font-size:8.5px;">
+        <colgroup>
+          <col style="width:23.0%;" />
+          <col style="width:10.3%;" />
+          <col style="width:23.0%;" />
+          <col style="width:10.3%;" />
+          <col style="width:23.0%;" />
+          <col style="width:10.4%;" />
+        </colgroup>
+        <thead>
+          <tr style="background:#1b365d; color:#ffffff; font-weight:800; text-align:center;">
+            <th colspan="2" style="background:#0c4a6e; padding:3px; border:1px solid #334155;">1. ميزان مراجعة الأوزان (كجم)</th>
+            <th colspan="2" style="background:#312e81; padding:3px; border:1px solid #334155;">2. ميزان المبيعات والآجل والتحويلات</th>
+            <th colspan="2" style="background:#064e3b; padding:3px; border:1px solid #334155;">3. ميزان الخزينة النقدية للتوريد</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:700;">عدد السيارات (الحركات المكتملة):</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800;">${fmtInt(s.countCars)} سيارة</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; background:#fffbeb;">إجمالي المبيعات شامل الإكرامية:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; background:#fffbeb;">${fmtDec(s.sumTotalWithTip)} ج.م</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:700;">(+) نقدي المبيعات + نقدي مديونيات الحالية:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800;">${fmtInt(s.sumCashSales + s.sumDebtCash)} ج.م</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:700;">إجمالي الوزنة الثانية (القائم) - الأولى (الفارغ):</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800;">${fmtInt(s.sumW2)} - ${fmtInt(s.sumW1)}</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:700;">آجل الفواتير + تحويلات المزرعة الحالية:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800;">آجل: ${fmtInt(s.sumCreditSales)} | تحويل: ${fmtInt(s.currentFarmTransfers)}</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:700;">(+) نقدي مزارع سابقة (للخزنة فقط):</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800;">${fmtInt(s.sumPrevCash)} ج.م</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; background:#eff6ff;">إجمالي الوزن الصافي المحسوب:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; background:#eff6ff;">${fmtInt(s.sumNetW)} كجم</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:700; color:#581c87;">تحويلات مزارع سابقة (لا تخصم من الحالية):</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; color:#581c87;">${fmtInt(s.sumPrevTransfer)} ج.م</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; background:#fef3c7;">إجمالي النقدية بالخزنة (قبل المصاريف):</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; background:#fef3c7;">${fmtInt(s.totalCashBeforeExpenses)} ج.م</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; background:#d1fae5; color:#064e3b;">مطابقة ميزان الأوزان:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; background:#d1fae5; color:#064e3b;">${s.weightAuditDiff === 0 ? 'وزن مطابق ✓ (0)' : fmtInt(s.weightAuditDiff)}</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; background:#d1fae5; color:#064e3b;">إجمالي جميع التحويلات اليوم:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; background:#d1fae5; color:#064e3b;">${fmtInt(s.totalAllTransfers)} ج.م</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; color:#9f1239;">(-) يخصم: إجمالي المصروفات والمكافآت:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; color:#9f1239;">${fmtInt(s.sumExpenses)} ج.م</td>
+          </tr>
+          <tr style="background:${diffBg}; color:${diffColor}; font-weight:800;">
+            <td colspan="2" style="border:1.5px solid #0f172a; padding:4px; text-align:center;">
+              صافي النقدية المطلوب توريده للخزينة: <strong>${fmtInt(s.netCashInBox)} ج.م</strong>
+            </td>
+            <td colspan="2" style="border:1.5px solid #0f172a; padding:4px; text-align:center;">
+              النقدية المسلمة فعلياً لأمين الخزينة: <strong>${fmtInt(s.deliveredCash)} ج.م</strong>
+            </td>
+            <td colspan="2" style="border:1.5px solid #0f172a; padding:4px; text-align:center;">
+              فرق الخزينة: <strong>${fmtInt(s.cashBoxDiff)} ج.م (${statusTxt})</strong>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ثانياً: جدول حركات البيع والوزنات والتحصيلات المسجلة باليوم -->
+      <div style="font-size:9.5px; font-weight:800; color:#1b365d; margin-bottom:2px;">ثانياً: بيان حركات البيع والوزنات والتحصيلات المسجلة بالمحضر (${s.countCars} حركة مكتملة):</div>
+      <table id="merchantPrintTable" dir="rtl" style="width:100%; max-width:100%; table-layout:fixed; border-collapse:collapse;">
+        <colgroup>
+          <col style="width:2.5%;" />
+          <col style="width:3.8%;" />
+          <col style="width:11.5%;" />
+          <col style="width:6.2%;" />
+          <col style="width:5.5%;" />
+          <col style="width:5.5%;" />
+          <col style="width:6.0%;" />
+          <col style="width:4.6%;" />
+          <col style="width:4.2%;" />
+          <col style="width:7.8%;" />
+          <col style="width:7.0%;" />
+          <col style="width:8.0%;" />
+          <col style="width:7.0%;" />
+          <col style="width:8.0%;" />
+          <col style="width:12.4%;" />
+        </colgroup>
+        <thead>
+          <tr style="background:#1b365d; color:#ffffff; font-weight:800; text-align:center;">
+            <th>م</th>
+            <th>كود</th>
+            <th>اسم التاجر / السيارة</th>
+            <th>ميزان/سيارة</th>
+            <th>وزنة 1</th>
+            <th>وزنة 2</th>
+            <th>الصافي</th>
+            <th>السعر</th>
+            <th>إكرامية</th>
+            <th>الإجمالي بالإكرامية</th>
+            <th>نقدي مبيعات</th>
+            <th>تحويل مبيعات</th>
+            <th>آجل اليوم</th>
+            <th>سداد مديونيات</th>
+            <th>سابقة / ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${salesRowsHtml}
+        </tbody>
+        <tfoot>
+          <tr style="background:#fbbf24; color:#0f172a; font-weight:800; text-align:center;">
+            <td colspan="4" style="text-align:center;">إجمالي حركات اليوم (${s.countCars} سيارة)</td>
+            <td>${fmtInt(s.sumW1)}</td>
+            <td>${fmtInt(s.sumW2)}</td>
+            <td>${fmtInt(s.sumNetW)}</td>
+            <td>${fmtDec(s.avgPrice)}</td>
+            <td>${fmtInt(s.sumTip)}</td>
+            <td>${fmtDec(s.sumTotalWithTip)}</td>
+            <td>${fmtInt(s.sumCashSales)}</td>
+            <td>${fmtInt(s.sumTransferSales)}</td>
+            <td>${fmtInt(s.sumCreditSales)}</td>
+            <td>${fmtInt(s.sumDebtCash + s.sumDebtTransfer)}</td>
+            <td>سابقة: ${fmtInt(s.sumPrevCash + s.sumPrevTransfer)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- ثالثاً: بيان المصروفات والمكافآت اليومية -->
+      ${expensesBlockHtml}
+
+      <!-- رابعاً: إقرار تصفية الخزينة والتوقيعات الرسمية للجنة البيع وأمين الخزينة -->
+      <div style="margin-top:6px; padding:4px 8px; border:1.5px solid #1b365d; border-radius:5px; background:#f8fafc; font-size:8.5px; font-weight:800; color:#0f172a;">
+        ✍️ <strong>إقرار لجنة البيع وأمين الخزينة:</strong> تقر لجنة البيع والميزان بصحة الأوزان والفواتير والتحصيلات الموضحة أعلاه عن <strong>(يوم ${d} — ${escXmlStr(s.dateLabel)})</strong>، وأن صافي النقدية واجب التوريد للخزينة بعد خصم مصروفات اليوم هو <strong>(${fmtInt(s.netCashInBox)} ج.م)</strong>، وقد تم تسليم مبلغ <strong>(${fmtInt(s.deliveredCash)} ج.م)</strong> نقداً إلى السيد أمين الخزينة، وهذا محضر رسمي بذلك للتوقيع والاعتماد.
+      </div>
+
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-top:5px; text-align:center; font-size:8.5px;">
+        <tbody>
+          <tr>
+            <td style="border:1.5px solid #334155; padding:5px 4px; background:#ffffff;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:15px;">1. مشرف الميزان والوزن</div>
+              <div style="color:#334155; font-weight:700;">الاسم: .................................</div>
+              <div style="color:#334155; font-weight:700; margin-top:3px;">التوقيع: ...............................</div>
+            </td>
+            <td style="border:1.5px solid #334155; padding:5px 4px; background:#ffffff;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:15px;">2. عضو لجنة البيع (أول)</div>
+              <div style="color:#334155; font-weight:700;">الاسم: .................................</div>
+              <div style="color:#334155; font-weight:700; margin-top:3px;">التوقيع: ...............................</div>
+            </td>
+            <td style="border:1.5px solid #334155; padding:5px 4px; background:#ffffff;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:15px;">3. عضو لجنة البيع / المحاسب</div>
+              <div style="color:#334155; font-weight:700;">الاسم: .................................</div>
+              <div style="color:#334155; font-weight:700; margin-top:3px;">التوقيع: ...............................</div>
+            </td>
+            <td style="border:1.5px solid #065f46; padding:5px 4px; background:#ecfdf5;">
+              <div style="font-weight:800; color:#064e3b; margin-bottom:15px;">4. أمين الخزينة المستلم</div>
+              <div style="color:#065f46; font-weight:700;">الاسم: .................................</div>
+              <div style="color:#065f46; font-weight:700; margin-top:3px;">التوقيع بالاستلام: ....................</div>
+            </td>
+            <td style="border:1.5px solid #b45309; padding:5px 4px; background:#fffbeb;">
+              <div style="font-weight:800; color:#78350f; margin-bottom:15px;">5. يعتمد ،، مدير المزرعة</div>
+              <div style="color:#92400e; font-weight:700;">الاسم: .................................</div>
+              <div style="color:#92400e; font-weight:700; margin-top:3px;">التوقيع والختم: ........................</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   `;
   return true;
@@ -3754,6 +4317,15 @@ function renderGenericTablePrintView(tableKey) {
   }
   if (tableKey === 'dailyTrialBalance') {
     return renderDailyTrialBalancePrintView();
+  }
+  if (tableKey === 'officialDaySettlement') {
+    return renderOfficialDaySettlementReportPrintView(appState.currentDay);
+  }
+  if (typeof tableKey === 'string' && tableKey.startsWith('scaleReceipt:')) {
+    const parts = tableKey.split(':');
+    const rDay = Number(parts[1]) || appState.currentDay || 1;
+    const rId = parts.slice(2).join(':');
+    return renderScaleReceiptPrintView(rId, rDay);
   }
   const cfg = UNIVERSAL_PRINT_TABLE_CONFIGS[tableKey];
   if (!cfg) return false;
@@ -4336,7 +4908,10 @@ function renderMerchantDrillDownModal() {
         <td class="p-2 border text-left font-extrabold bg-emerald-50 text-emerald-950">${r.isPending ? '0' : fmtInt(r.settledInRow)}</td>
         <td class="p-2 border text-left font-extrabold ${runBalCls}">${fmtInt(r.runningBalanceAfter)}</td>
         <td class="p-2 border text-right text-[11px] font-bold text-purple-900">${notesCellTxt}</td>
-        <td class="p-1.5 border text-center print-hide-col">
+        <td class="p-1.5 border text-center print-hide-col whitespace-nowrap">
+          <button type="button" data-print-receipt="${r.id}" data-receipt-day="${r.dayNum}" class="px-2 py-1 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-[11px] whitespace-nowrap ml-1 shadow-sm" title="طباعة بون ميزان وإيصال فاتورة لهذه الحركة">
+            🖨️ طباعة بون ميزان
+          </button>
           <button type="button" data-modal-jump-day="${r.dayNum}" class="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 font-extrabold text-[11px] whitespace-nowrap">
             📂 يوم ${r.dayNum}
           </button>
@@ -7584,6 +8159,14 @@ function initFarmSalesApp() {
 
   // Edit / Delete / Recall Sale Row Delegation (Protected by Sales Permission)
   document.getElementById('dailySalesTbody').addEventListener('click', (e) => {
+    const printRecBtn = e.target.closest('[data-print-receipt]');
+    if (printRecBtn) {
+      e.preventDefault();
+      const sId = printRecBtn.getAttribute('data-print-receipt');
+      const sDay = Number(printRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
+      if (sId) triggerTablePrint(`scaleReceipt:${sDay}:${sId}`);
+      return;
+    }
     if (!hasPermission('sales')) {
       showToast('عفواً، التعديل والحذف غير متاح للزائر (عرض فقط).', '🔒');
       return;
@@ -8290,6 +8873,14 @@ function initFarmSalesApp() {
     });
   }
   document.addEventListener('click', (e) => {
+    const printRecBtn = e.target.closest('[data-print-receipt]');
+    if (printRecBtn) {
+      e.preventDefault();
+      const sId = printRecBtn.getAttribute('data-print-receipt');
+      const sDay = Number(printRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
+      if (sId) triggerTablePrint(`scaleReceipt:${sDay}:${sId}`);
+      return;
+    }
     const printTblBtn = e.target.closest('[data-print-table]');
     if (printTblBtn) {
       e.preventDefault();

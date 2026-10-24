@@ -1608,7 +1608,7 @@ body {
       border-radius: 4px;
     }
     /* على الموبايل (أقل من 768px): عرض الجداول بالطريقة الطبيعية الواضحة مع شريط تمرير أفقي واضح أسفل كل جدول */
-    @media (max-width: 767px) {
+    @media screen and (max-width: 767px) {
       .table-scroll-wrapper {
         display: block !important;
         width: 100% !important;
@@ -1648,7 +1648,7 @@ body {
       }
     }
     /* على الكمبيوتر (768px فأعلى): منع انقسام الأرقام والبيانات نهائياً في الخلايا (سطر واحد لكل رقم) مع التفاف عناوين الأعمدة بين الكلمات فقط */
-    @media (min-width: 768px) {
+    @media screen and (min-width: 768px) {
       .table-scroll-wrapper {
         display: block !important;
         width: 100% !important;
@@ -1677,7 +1677,7 @@ body {
         overflow-wrap: normal !important;
       }
     }
-    @media (min-width: 1280px) {
+    @media screen and (min-width: 1280px) {
       table th {
         padding: 6px 5px !important;
         font-size: 11.5px !important;
@@ -1793,7 +1793,26 @@ body {
   #merchantPrintTable tfoot {
     display: table-row-group !important;
   }
-  #merchantPrintTable tr {
+  #merchantPrintTable tr,
+  body.printing-merchant-modal #merchantPrintOnlyContainer tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  body.printing-merchant-modal #merchantPrintOnlyContainer table.print-clean-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+  body.printing-merchant-modal #merchantPrintOnlyContainer table.print-clean-table th,
+  body.printing-merchant-modal #merchantPrintOnlyContainer table.print-clean-table td {
+    box-sizing: border-box !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+  body.printing-merchant-modal #merchantPrintOnlyContainer .scale-receipt-print-sheet {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
