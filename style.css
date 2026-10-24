@@ -1821,7 +1821,7 @@ body {
 
 
 /* =========================================================================
-   5. MOBILE & DESKTOP WEIGHBRIDGE UX & FLOATING ACTION BAR (v34)
+   5. MOBILE & DESKTOP WEIGHBRIDGE UX & FLOATING ACTION BAR (v35)
    ========================================================================= */
 .bg-slate-900\/95 {
   background-color: rgba(15, 23, 42, 0.97) !important;
@@ -1880,26 +1880,13 @@ body {
   box-shadow: 0 -8px 28px rgba(2, 6, 23, 0.55) !important;
 }
 
-.enter-step-pill {
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.35);
-  color: #fde68a;
-  font-weight: 800;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-.enter-step-pill:hover {
-  background: rgba(251, 191, 36, 0.25);
-  color: #ffffff;
-}
-.enter-step-pill.enter-step-active {
-  background: #fbbf24 !important;
-  color: #0f172a !important;
-  border-color: #ffffff !important;
-  box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
+body.floating-bar-hidden #mobileWeighbridgeActionBar,
+#mobileWeighbridgeActionBar.hidden,
+.mobile-weighbridge-sticky-bar.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Mobile Phones (< 768px): Fixed floating bar directly above the mobile bottom navigation bar */
@@ -1916,10 +1903,16 @@ body {
     box-shadow: 0 -8px 28px rgba(2, 6, 23, 0.65) !important;
   }
   body {
-    padding-bottom: 185px !important;
+    padding-bottom: 160px !important;
+  }
+  body.floating-bar-hidden {
+    padding-bottom: 96px !important;
   }
   #toastContainer {
-    bottom: 148px !important;
+    bottom: 132px !important;
+  }
+  body.floating-bar-hidden #toastContainer {
+    bottom: 80px !important;
   }
   #saleEntryForm {
     padding-bottom: 14px !important;
@@ -1950,14 +1943,20 @@ body {
     margin-right: auto !important;
     width: auto !important;
     border-radius: 16px !important;
-    padding: 10px 16px !important;
+    padding: 9px 16px !important;
     box-shadow: 0 -10px 30px rgba(2, 6, 23, 0.5) !important;
   }
   body {
-    padding-bottom: 130px !important;
+    padding-bottom: 105px !important;
+  }
+  body.floating-bar-hidden {
+    padding-bottom: 40px !important;
   }
   #toastContainer {
-    bottom: 108px !important;
+    bottom: 88px !important;
+  }
+  body.floating-bar-hidden #toastContainer {
+    bottom: 24px !important;
   }
   .md\:flex-initial {
     flex: 0 1 auto;
@@ -1985,6 +1984,12 @@ body {
 @media screen and (min-width: 640px) {
   .sm\:flex {
     display: flex !important;
+  }
+  .sm\:flex-initial {
+    flex: 0 1 auto;
+  }
+  .sm\:w-auto {
+    width: auto;
   }
 }
 

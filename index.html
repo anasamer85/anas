@@ -21,7 +21,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=34" />
+  <link rel="stylesheet" href="./style.css?v=35" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -69,6 +69,13 @@
       visibility: visible !important;
       opacity: 1 !important;
     }
+    body.floating-bar-hidden #mobileWeighbridgeActionBar,
+    #mobileWeighbridgeActionBar.hidden {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
     @media screen and (max-width: 767px) {
       #mobileWeighbridgeActionBar {
         bottom: 56px !important;
@@ -81,10 +88,16 @@
         box-shadow: 0 -8px 28px rgba(2, 6, 23, 0.65) !important;
       }
       body {
-        padding-bottom: 185px !important;
+        padding-bottom: 160px !important;
+      }
+      body.floating-bar-hidden {
+        padding-bottom: 96px !important;
       }
       #toastContainer {
-        bottom: 148px !important;
+        bottom: 132px !important;
+      }
+      body.floating-bar-hidden #toastContainer {
+        bottom: 80px !important;
       }
       nav.md\:hidden {
         height: 54px !important;
@@ -100,14 +113,20 @@
         margin-right: auto !important;
         width: auto !important;
         border-radius: 16px !important;
-        padding: 10px 16px !important;
+        padding: 9px 16px !important;
         box-shadow: 0 -10px 30px rgba(2, 6, 23, 0.5) !important;
       }
       body {
-        padding-bottom: 130px !important;
+        padding-bottom: 105px !important;
+      }
+      body.floating-bar-hidden {
+        padding-bottom: 40px !important;
       }
       #toastContainer {
-        bottom: 108px !important;
+        bottom: 88px !important;
+      }
+      body.floating-bar-hidden #toastContainer {
+        bottom: 24px !important;
       }
     }
     @media print {
@@ -638,11 +657,8 @@
 
           </div>
 
-          <!-- Inline Form Action Buttons at end of form for both Phone & Desktop (بالإضافة للشريط العائم المثبت أسفل الشاشة) -->
-          <div id="inlineSaleFormActionsMobile" class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200 flex-wrap">
-            <div class="text-[11px] font-bold text-slate-600">
-              💡 أزرار الحفظ متاحة هنا في نهاية النموذج ومثبتة أيضاً في <strong>الشريط العائم أسفل الشاشة</strong> للهاتف والكمبيوتر أثناء التمرير.
-            </div>
+          <!-- Inline Form Action Buttons at end of form for both Phone & Desktop -->
+          <div id="inlineSaleFormActionsMobile" class="flex items-center justify-end gap-2 pt-2.5 border-t border-slate-200 flex-wrap">
             <div class="flex items-center gap-1.5 w-full sm:w-auto justify-end">
               <button type="button" id="btnInlineSavePendingW1" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
                 <span>⏳</span>
@@ -656,49 +672,34 @@
           </div>
 
           <!-- Weighbridge Floating Action Bar for Phone & Computer (شريط إجراءات سفلي عائم للهاتف والكمبيوتر داخل نموذج البيع) -->
-          <div id="mobileWeighbridgeActionBar" class="mobile-weighbridge-sticky-bar rounded-2xl border-2 border-amber-400 bg-slate-900/95 text-white p-2 md:p-3 shadow-2xl space-y-1.5">
-            <!-- Top Row inside Floating Bar: Live Net Weight, Total Invoice & Interactive Fast Enter Sequence -->
-            <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-white/15 pb-1.5">
+          <div id="mobileWeighbridgeActionBar" class="mobile-weighbridge-sticky-bar rounded-2xl border-2 border-amber-400 bg-slate-900/95 text-white p-2 md:px-4 md:py-2.5 shadow-2xl">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <!-- Live Net Weight, Total Invoice & Auto Remaining Credit -->
               <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/10 border border-white/15 text-[10px] md:text-xs font-bold">
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 border border-white/15 text-[10px] md:text-xs font-bold">
                   <span>⚖️ الصافي:</span>
                   <strong id="stickyBarNetWeight" class="text-amber-300 font-extrabold text-xs md:text-sm">0 كجم</strong>
                 </span>
-                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-[10px] md:text-xs font-bold">
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-[10px] md:text-xs font-bold">
                   <span>💰 صافي الفاتورة:</span>
                   <strong id="stickyBarTotalInvoice" class="text-emerald-300 font-extrabold text-xs md:text-sm">0 ج.م</strong>
                 </span>
-                <button type="button" id="btnStickyAutoCredit" class="px-2 py-0.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-[10px] md:text-xs font-extrabold border border-blue-400/50 transition flex items-center gap-1" title="حساب باقي الفاتورة آجل تلقائياً والانتقال لحقل الآجل">
+                <button type="button" id="btnStickyAutoCredit" class="px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-[10px] md:text-xs font-extrabold border border-blue-400/50 transition flex items-center gap-1" title="حساب باقي الفاتورة آجل تلقائياً والانتقال لحقل الآجل">
                   <span>⚡ باقي الفاتورة آجل:</span>
                   <strong id="stickyBarRemCredit" class="text-amber-200">0 ج.م</strong>
                 </button>
               </div>
-              <div class="flex items-center gap-1 text-[9.5px] sm:text-[11px] text-amber-200 font-bold flex-wrap">
-                <span>⌨️ تنقل سريع بـ Enter:</span>
-                <button type="button" data-jump-sale-field="inpW1" class="enter-step-pill">وزنة 1</button>
-                <span>⬅️</span>
-                <button type="button" data-jump-sale-field="inpW2" class="enter-step-pill">وزنة 2</button>
-                <span>⬅️</span>
-                <button type="button" data-jump-sale-field="inpCashSales" class="enter-step-pill">نقدي مبيعات</button>
-                <span>⬅️</span>
-                <button type="button" data-jump-sale-field="inpCreditSales" class="enter-step-pill">باقي الفاتورة آجل</button>
-              </div>
-            </div>
 
-            <!-- Bottom Row inside Floating Bar: Pinned Action Buttons (⏳ حفظ مؤقت وزنة 1 + 💾 حفظ نهائي + إلغاء) -->
-            <div class="flex items-center justify-between gap-2 flex-wrap">
-              <div class="hidden md:block text-[11px] font-bold text-slate-300">
-                💡 الشريط العائم مثبت أثناء التمرير على الهاتف والكمبيوتر — اضغط <strong>Enter</strong> للتنقل السريع أو اضغط أزرار الحفظ مباشرة.
-              </div>
-              <div class="flex items-center gap-1.5 md:gap-2 flex-1 md:flex-initial justify-end mr-auto w-full md:w-auto">
+              <!-- Pinned Action Buttons (⏳ حفظ مؤقت وزنة 1 + 💾 حفظ نهائي + إلغاء التعديل) -->
+              <div class="flex items-center gap-1.5 md:gap-2 flex-1 sm:flex-initial justify-end w-full sm:w-auto">
                 <button type="button" id="btnCancelEditSale" class="hidden px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl bg-slate-200 text-slate-900 font-extrabold text-xs hover:bg-slate-300 shrink-0">
                   إلغاء التعديل
                 </button>
-                <button type="button" id="btnSavePendingW1" class="flex-1 md:flex-initial px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1">
+                <button type="button" id="btnSavePendingW1" class="flex-1 sm:flex-initial px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1">
                   <span>⏳</span>
                   <span>حفظ مؤقت وزنة 1</span>
                 </button>
-                <button type="submit" id="btnSaveSale" class="flex-1 md:flex-initial px-3 md:px-6 py-1.5 md:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs md:text-sm shadow-lg border border-emerald-300/50 transition flex items-center justify-center gap-1.5">
+                <button type="submit" id="btnSaveSale" class="flex-1 sm:flex-initial px-3 md:px-6 py-1.5 md:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs md:text-sm shadow-lg border border-emerald-300/50 transition flex items-center justify-center gap-1.5">
                   <span>💾</span>
                   <span id="btnSaveSaleText">حفظ نهائي</span>
                 </button>
@@ -913,7 +914,7 @@
     <!-- ===================================================================== -->
     <section id="view-dashboard" class="hidden space-y-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+        <div id="syncQuickExcelHeaderRow" class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
           <div>
             <h2 class="text-base md:text-lg font-extrabold text-slate-900">📊 الملخص التنفيذي — <span id="dashFarmNameTitle" class="text-blue-800">أبوذكري</span></h2>
             <p class="text-xs text-slate-500">يتم عرض الأيام المفتوحة والتي عليها سجل حركات فقط (الأيام غير النشطة تظل مخفية) — اضغط على أي يوم لفتح محضره فوراً</p>
@@ -1189,8 +1190,36 @@
           </div>
         </div>
 
+        <!-- Floating Action Bar Show/Hide Control for Phone & Computer (إظهار وإخفاء شريط الإجراءات السفلي العائم للهاتف والكمبيوتر) -->
+        <div id="floatingBarControlBox" class="bg-amber-50/90 p-3.5 rounded-xl border-2 border-amber-400 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-lg">📌</span>
+            <div>
+              <div class="text-xs md:text-sm font-extrabold text-slate-900">
+                إظهار وإخفاء شريط الإجراءات السفلي العائم للهاتف والكمبيوتر
+              </div>
+              <p class="text-[11px] font-bold text-slate-600">
+                يتحكم في إظهار أو إخفاء شريط الإجراءات السفلي العائم داخل نموذج البيع (⚖️ الصافي، 💰 صافي الفاتورة، ⏳ حفظ مؤقت وزنة 1، 💾 حفظ نهائي) على شاشة الهاتف أو الكمبيوتر.
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <span id="floatingBarStatusBadge" class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold">
+              ✅ ظاهر ومثبت (للهاتف والكمبيوتر)
+            </span>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-extrabold text-slate-900 bg-white px-3 py-1.5 rounded-xl border-2 border-amber-400 shadow-sm">
+              <input type="checkbox" id="chkShowFloatingActionBar" class="rounded text-emerald-700 w-4 h-4" checked />
+              <span>إظهار الشريط العائم</span>
+            </label>
+            <button type="button" id="btnToggleFloatingActionBar" class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-xs shadow transition flex items-center gap-1.5">
+              <span id="btnToggleFloatingBarIcon">🙈</span>
+              <span id="btnToggleFloatingBarText">إخفاء الشريط العائم</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Day Management Controls (Add / Edit / Delete Day with Day Selection & Edit Box) -->
-        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
+        <div id="syncDayMgmtSection" class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="text-xs font-extrabold text-slate-800">
               📅 التحكم في أيام الدورة الحالية (إضافة يوم مع تحديده / تعديل يوم مع فتح خانة التعديل / حذف يوم مع تحديده):
@@ -1987,6 +2016,6 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./app.js?v=34"></script>
+  <script src="./app.js?v=35"></script>
 </body>
 </html>

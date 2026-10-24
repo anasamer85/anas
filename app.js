@@ -106,6 +106,7 @@ function getDefaultState(customFarmName = 'أبوذكري') {
     defaultTip: 0,
     lastScaleNo: 0,
     inactivityTimeoutMin: 20,
+    showFloatingActionBar: true,
     activeUserId: 'admin',
     users: [
       { id: 'admin', username: 'admin', password: 'admin', name: 'مدير الموقع (كامل الصلاحيات)', phone: '', jobTitle: 'مدير عام المزرعة', isSystem: true, perms: { sales: true, expenses: true, merchants: true, farms: true, admin: true, showSyncExcel: true, showSyncCloud: true, showSyncWebhook: true } }
@@ -357,6 +358,16 @@ function applyParsedStateObject(parsed) {
     appState.inactivityTimeoutMin = 20;
   } else {
     appState.inactivityTimeoutMin = Math.max(0, Number(appState.inactivityTimeoutMin));
+  }
+  if (appState.showFloatingActionBar === undefined || appState.showFloatingActionBar === null) {
+    try {
+      const savedFloatPref = localStorage.getItem(STORAGE_KEY + '_show_floating_bar');
+      appState.showFloatingActionBar = savedFloatPref !== null ? (savedFloatPref === '1' || savedFloatPref === 'true') : true;
+    } catch (e) {
+      appState.showFloatingActionBar = true;
+    }
+  } else {
+    appState.showFloatingActionBar = Boolean(appState.showFloatingActionBar);
   }
   if (!Array.isArray(appState.users) || appState.users.length === 0) {
     appState.users = getDefaultState().users;
@@ -5211,7 +5222,11 @@ function renderUsersAndPermissionsUI() {
   const showTwoWay = isAdm || (!isVis && Boolean(uPerms.showSyncWebhook));
 
   const cardQuick = document.getElementById('syncQuickControlCard');
-  if (cardQuick) cardQuick.classList.toggle('hidden', !showQuickCtrl);
+  if (cardQuick) cardQuick.classList.toggle('hidden', isVis);
+  const excelHdrRow = document.getElementById('syncQuickExcelHeaderRow');
+  if (excelHdrRow) excelHdrRow.classList.toggle('hidden', !showQuickCtrl);
+  const dayMgmtSec = document.getElementById('syncDayMgmtSection');
+  if (dayMgmtSec) dayMgmtSec.classList.toggle('hidden', !showQuickCtrl);
   const cardCloud = document.getElementById('syncCloudDbHubCard');
   if (cardCloud) cardCloud.classList.toggle('hidden', !showCloudHub);
   const cardTwoWay = document.getElementById('syncTwoWayExcelCard');
@@ -5311,9 +5326,62 @@ function renderUsersAndPermissionsUI() {
   }
 }
 
+function updateFloatingActionBarVisibilityUI() {
+  const isVisible = appState.showFloatingActionBar !== false;
+  const barEl = document.getElementById('mobileWeighbridgeActionBar');
+  if (barEl) {
+    barEl.classList.toggle('hidden', !isVisible);
+  }
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.classList.toggle('floating-bar-hidden', !isVisible);
+  }
+  const chkEl = document.getElementById('chkShowFloatingActionBar');
+  if (chkEl) {
+    chkEl.checked = isVisible;
+  }
+  const badgeEl = document.getElementById('floatingBarStatusBadge');
+  if (badgeEl) {
+    if (isVisible) {
+      badgeEl.textContent = '✅ ظاهر ومثبت (للهاتف والكمبيوتر)';
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold';
+    } else {
+      badgeEl.textContent = '🙈 مخفي حالياً (على الهاتف والكمبيوتر)';
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-slate-200 text-slate-800 border border-slate-300 text-xs font-extrabold';
+    }
+  }
+  const btnEl = document.getElementById('btnToggleFloatingActionBar');
+  const btnIcon = document.getElementById('btnToggleFloatingBarIcon');
+  const btnTxt = document.getElementById('btnToggleFloatingBarText');
+  if (btnEl) {
+    btnEl.className = isVisible
+      ? 'px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-xs shadow transition flex items-center gap-1.5'
+      : 'px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition flex items-center gap-1.5';
+  }
+  if (btnIcon) btnIcon.textContent = isVisible ? '🙈' : '👁️';
+  if (btnTxt) btnTxt.textContent = isVisible ? 'إخفاء الشريط العائم' : 'إظهار الشريط العائم';
+}
+
+function setFloatingActionBarVisibility(showFlag, notify = true) {
+  appState.showFloatingActionBar = Boolean(showFlag);
+  try {
+    localStorage.setItem(STORAGE_KEY + '_show_floating_bar', appState.showFloatingActionBar ? '1' : '0');
+  } catch (e) {}
+  updateFloatingActionBarVisibilityUI();
+  saveState(true);
+  if (notify) {
+    showToast(
+      appState.showFloatingActionBar
+        ? 'تم إظهار وتثبيت شريط الإجراءات السفلي العائم للهاتف والكمبيوتر 📌'
+        : 'تم إخفاء شريط الإجراءات السفلي العائم للهاتف والكمبيوتر 🙈',
+      appState.showFloatingActionBar ? '📌' : '🙈'
+    );
+  }
+}
+
 function renderAll() {
   updateConnectionAndSyncUI();
   renderUsersAndPermissionsUI();
+  updateFloatingActionBarVisibilityUI();
   renderDaySelector();
   renderDailyView();
   renderDashboardView();
@@ -7892,6 +7960,20 @@ function initFarmSalesApp() {
     });
   }
 
+  const chkFloatingBarEl = document.getElementById('chkShowFloatingActionBar');
+  if (chkFloatingBarEl) {
+    chkFloatingBarEl.addEventListener('change', (e) => {
+      setFloatingActionBarVisibility(Boolean(e.target.checked), true);
+    });
+  }
+
+  const btnToggleFloatingBarEl = document.getElementById('btnToggleFloatingActionBar');
+  if (btnToggleFloatingBarEl) {
+    btnToggleFloatingBarEl.addEventListener('click', () => {
+      setFloatingActionBarVisibility(appState.showFloatingActionBar === false, true);
+    });
+  }
+
   // تفعيل التنقل السريع بزر Enter بين حقول الميزان والبيع (وزنة 1 ⬅️ وزنة 2 ⬅️ نقدي مبيعات ⬅️ باقي الفاتورة آجل)
   function focusAndSelectField(fieldId) {
     const el = document.getElementById(fieldId);
@@ -9314,7 +9396,11 @@ function initFarmSalesApp() {
     }
     const cloneBody = cloneDoc.querySelector('body');
     if (cloneBody) {
-      cloneBody.classList.remove('printing-merchant-modal');
+      cloneBody.classList.remove('printing-merchant-modal', 'floating-bar-hidden');
+    }
+    const cloneFloatBar = cloneDoc.querySelector('#mobileWeighbridgeActionBar');
+    if (cloneFloatBar) {
+      cloneFloatBar.classList.remove('hidden');
     }
     ['daily', 'dashboard', 'merchants', 'transfers', 'expenses', 'sync'].forEach(v => {
       const sec = cloneDoc.querySelector(`#view-${v}`);
