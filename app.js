@@ -5884,8 +5884,8 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V37',
-      version: 36,
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V38',
+      version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
       exportedBy: actor,
@@ -7431,7 +7431,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v37') {
+          if (k !== 'farm-sales-committee-v38-bulletproof-sync-engine') {
             caches.delete(k).catch(() => {});
           }
         });

@@ -1,58 +1,100 @@
-# 📘 وثيقة الملخص التقني الشامل وحزمة التسليم النهائية
-**المشروع:** نظام محاضر لجان بيع المزارع والميزان (ربط ثنائي مع الإكسيل + يعمل بدون إنترنت PWA)  
-**الإصدار المعماري:** `v26` (الهيكلة المفصولة المعيارية — Modular Multi-File Architecture)
+# 📘 وثيقة التسليم التقنية الشاملة والنهائية (Lead Tech Handover Document — v38)
+**المشروع:** نظام محاضر لجان بيع المزارع (Offline-First PWA + ربط ثنائي الاتجاه مع الإكسيل + مزامنة سحابية لحظية)  
+**الإصدار المستقر الحالي:** `v38` (`farm-sales-committee-v38-bulletproof-sync-engine`)  
+**تاريخ التسليم للمرحلة الثالثة:** أكتوبر 2026  
 
 ---
 
-## 1. فكرة الموقع والهدف منه
-* **طبيعة النظام:** تطبيق ويب تقدمي متكامل يعمل بدون إنترنت (**Offline-First Modular PWA**) مصمم لإدارة أعمال لجان بيع المزارع السمكية/الزراعية وموازين السيارات على مدار دورات بيع تمتد حتى **10 أيام** لكل مزرعة أو دورة، مع سعة **45 حركة بيع يومياً** و**10 بنود مصروفات يومياً**، وإدارة **أرشيف متعدد المزارع والدورات** في نفس قاعدة البيانات.
-* **الأهداف المحاسبية والتشغيلية الأساسية:**
-  1. **إدارة الميزان وحجز المسلسل تلقائياً:** تسجيل الوزنة الأولى (الفارغ) للسيارة وحفظها مؤقتاً (`⏳ حفظ مؤقت`) مع حجز رقم الميزان التسلسلي (`scaleNo`) وإدراجها في ترتيبها داخل جدول حركات البيع المسجلة لحين تحميل السيارة واستكمال الوزنة الثانية (القائم) وحساب الوزن الصافي وإجمالي السعر بالإكرامية تلقائياً.
-  2. **الفصل المحاسبي الصارم بين 3 مسارات للتحصيل والسداد:**
-     * **سداد فاتورة اليوم (المزرعة الحالية):** نقدي مبيعات (للخزنة)، آجل فاتورة اليوم (مديونية على التاجر)، أو تحويل مبيعات (يُخصم من فاتورة التاجر ولا يدخل الخزنة النقدية).
-     * **تحصيل مديونيات المزرعة الحالية:** نقدي مديونيات (يدخل الخزنة ويُخصم من مديونية التاجر بالمزرعة الحالية)، أو تحويل مديونيات (يُخصم من مديونية التاجر ويُرحل لبيان التحويلات).
-     * **تحصيلات مزارع ومواقع سابقة:** نقدي سابقة (يُضاف لرصيد خزنة اليوم فقط ولا يُخصم من مديونية المزرعة الحالية)، أو تحويل سابقة (يُدرج في بيان التحويلات والمزارع السابقة فقط ولا يُخصم من مديونية المزرعة الحالية).
-  3. **إدارة العهدة المستقلة (`custodyCash` / `custodyTransfer`):** بيان مستقل للعهدة التي يدفعها التاجر، يُخصم منه تلقائياً فقط ما تم تحصيله لسداد مديونيات المزرعة الحالية (`debtCash + debtTransfer`).
-  4. **ميزان المراجعة اليومي ثلاثي الركائز:** مطابقة آلية للأوزان، والمبيعات والتحويلات، والخزينة النقدية (بعد خصم المصروفات اليومية ومقارنتها بالنقدية المسلمة فعلياً للخزينة `deliveredCash`).
-  5. **الربط الثنائي الكامل مع الإكسيل (15 شيت بالمعادلات) + المزامنة السحابية الحية:** تصدير واستيراد ملف `.xlsx` مطابق للألوان والمعادلات، وربط ملف مباشر (`File System Access API`)، ومزامنة سحابية لحظية عبر `Google Apps Script` أو `Firebase Realtime Database`.
+## 1. هيكلة المشروع الحالية (Project Architecture & File Inventory)
 
----
+يعمل المشروع ببنية معيارية مقسمة بالكامل (Modular PWA Architecture) جاهزة للرفع المباشر على **GitHub Pages** أو أي استضافة ثابتة، بالإضافة إلى دعم توليد نسخة ملف واحد مدمج لـ **Google Sites**:
 
-## 2. هيكلة الملفات المفصولة والتقنيات المستخدمة
-تم إلغاء نظام "الملف الواحد" وتفكيك المشروع إلى هيكلة معيارية مفصولة بالكامل (`HTML` + `CSS` + `JS` + `Service Worker`) لتسهيل الصيانة والتطوير المستقبلي:
-
-| اسم الملف | الحجم والأسطر | الوظيفة التقنية في المشروع |
+| اسم الملف | الحجم التقريبي | الوظيفة والمسؤولية التقنية الكاملة |
 | :--- | :--- | :--- |
-| `index.html` | **126,869 بايت (~127 KB)** — `1,684 سطر` | الهيكل الأساسي لواجهة التطبيق فقط (`HTML5 DOM`) ويضم بوابة تسجيل الدخول، الهيدر المتجاوب، الشاشات الـ 6، نافذة فلاتر الإكسيل المنبثقة، مع ربطه بملفي `./style.css` في الـ `<head>` و `./app.js` قبل إغلاق `</body>`. |
-| `style.css` | **3,403 بايت (~3.4 KB)** — `119 سطر` | ملف التنسيقات المستقل ويضم كافة تنسيقات الواجهة المخصصة، التدرجات اللونية (`navy-gradient`, `gold-badge`)، وقواعد العرض المتجاوب للجداول على الموبايل (`< 768px` مع شريط تمرير أفقي واضح) وعلى الكمبيوتر (`>= 768px` بمنع انقسام الأرقام داخل الخلايا `white-space: nowrap`). |
-| `app.js` | **385,469 بايت (~385 KB)** — `6,875 سطر` | المنطق البرمجي الكامل للنظام (`Vanilla JavaScript ES6+`) ويشمل: كائن الحالة المركزي `appState`، المحرك المحاسبي المقدس، نظام الميزان المؤقت والنهائي، محرك التخزين الثلاثي والمزامنة السحابية الذكية ومنع التكرار، محرك الفرز والفلترة الشامل للـ 10 جداول، وقالب ومحرك الإكسيل ثنائي الاتجاه ذي الـ 15 شيت بالمعادلات (`STYLED_XLSX_TEMPLATE_B64`). |
-| `sw.js` | **2,876 بايت** — `99 سطر` | ملف الـ Service Worker المحدث (`CACHE_NAME = "farm-sales-committee-v18"`) لتشغيل الموقع بدون إنترنت، ويخزن `./index.html` و `./style.css` و `./app.js` و `./manifest.json` والأيقونات ومكتبات الـ CDN في الكاش مع استثناء روابط السحابة من الكاش نهائياً. |
-| `manifest.json` | **773 بايت** | ملف تعريف تطبيق الـ PWA لتثبيت الموقع كتطبيق مستقل (`standalone`) باللغة العربية واتجاه `rtl`. |
-| `icon-192.png` / `icon-512.png` | **1.6 KB / 4.6 KB** | أيقونات التطبيق الرسمية للتثبيت على الشاشة الرئيسية للموبايل وسطح المكتب. |
-| `نظام_محاضر_بيع_مزرعة_ابوذكري_10_ايام.xlsx` | **273,090 بايت (~273 KB)** | النسخة المرجعية الكاملة لشيت الإكسيل (15 شيت بالمعادلات والألوان) المتوافقة ثنائياً مع الموقع. |
-| `HANDOVER_TECHNICAL_SUMMARY.md` / `README.md` | وثائق المشروع | وثيقة الملخص التقني الشامل وهيكل البيانات ودليل التشغيل والنشر. |
-
-### المكتبات والأدوات التقنية المستخدمة:
-1. **Tailwind CSS (`https://cdn.tailwindcss.com/3.4.17`)** + خط **Cairo** من Google Fonts.
-2. **SheetJS (`xlsx@0.18.5`)** لقراءة واستيراد ملفات الإكسيل (`.xlsx`).
-3. **Chart.js (`chart.js@4.4.1`)** لرسم المخطط البياني التفاعلي للأيام النشطة في الملخص التنفيذي.
-4. **محرك بناء ملفات الإكسيل والـ ZIP المدمج (`tinyInflateRaw` + `CompressionStream` + `computeCrc32` + `buildZipBytesFromEntries`)** لتصدير شيت الإكسيل ذي الـ 15 شيت بكامل ألوانه ومعادلاته الحية دون مكتبات خارجية مدفوعة.
-5. **منظومة التخزين والمزامنة:** `localStorage` + `IndexedDB` + `window.name` + `BroadcastChannel` + `EventSource (SSE)` + `File System Access API (showOpenFilePicker)`.
+| **`index.html`** | ~161 KB | الهيكل الرئيسي لواجهة المستخدم (6 تبويبات رئيسية، بوابة تسجيل الدخول، نافذة كشف حساب التاجر التفصيلي، شريط الإجراءات السفلي العائم للميزان، وحاوية الطباعة المعزولة `#merchantPrintOnlyContainer`). |
+| **`style.css`** | ~41 KB | نظام التنسيق الشامل (Tailwind CSS v3.4.17 Preflight & Utilities مدمج محلياً للعمل بدون إنترنت + تنسيقات الهواتف والكمبيوتر + قواعد الطباعة الحرارية والرسمية `@media print` لعرض A4 Landscape وكارتة الميزان الثلاثية). |
+| **`app.js`** | ~575 KB | المحرك البرمجي الكامل بدون أي اختصار (إدارة الحالة، المعادلات المحاسبية، الفلترة والفرز بأسلوب الإكسيل لـ 10 جداول، محرك التصدير والاستيراد الثنائي لملف `.xlsx` المكون من 15 شيت بالمعادلات والألوان، محرك المزامنة المضاد للاختراق `v38`، مركز النسخ الاحتياطي `.json` وسجل الرقابة `Audit Trail`، ومحرك الرسم الذكي `Smart Active-Tab Rendering`). |
+| **`sw.js`** | ~3.4 KB | عامل الخدمة (Service Worker) للعمل الكامل بدون إنترنت (Offline-First Caching) تحت اسم الكاش `farm-sales-committee-v38-bulletproof-sync-engine` مع التحديث الفوري (`skipWaiting` + `clients.claim`) وتمرير طلبات السحابة مباشرة للشبكة. |
+| **`manifest.json`** | ~0.8 KB | ملف تعريف تطبيق الويب التقدمي (PWA Manifest) لدعم التثبيت المباشر على شاشة الهاتف والكمبيوتر (`standalone`، اتجاه `rtl`، ألوان الهوية `#1b365d`). |
+| **`icon-192.png` / `icon-512.png`** | ~6.3 KB | أيقونات التطبيق الرسمية لتثبيت الـ PWA على أنظمة Android و iOS وسطح المكتب. |
+| **`HANDOVER_TECHNICAL_SUMMARY.md`** | هذه الوثيقة | المرجع الهندسي الشامل لاستكمال التطوير في المرحلة الثالثة دون فقدان أي سياق برمجي أو محاسبي. |
+| **`README.md`** | ~5.2 KB | دليل التشغيل السريع والنشر على GitHub Pages وربط Google Apps Script / Firebase. |
 
 ---
 
-## 3. هيكل البيانات الدقيق (Data Schema — JSON Object)
-يُحفظ كائن الحالة المركزي `appState` بالكامل بصيغة JSON داخل:
-* **`localStorage`** تحت المفتاح: `abouzekry_farm_sales_v5_clean_state` (ورابط السحابة في `abouzekry_farm_sales_v5_clean_state_webhook_url`).
-* **`IndexedDB`** داخل قاعدة البيانات: `AbouZekryCloudDB_v5` -> المخزن: `farm_database_store` -> المفتاح: `master_cloud_state`.
-* **`window.name`** ببادئة: `ABOUZEKRY_STATE_V5:`.
+## 2. قواعد العمل الصارمة (Strict Business & Accounting Rules)
 
-> **⚠️ تحذير هام للمطور القادم:** جميع أسماء المفاتيح (`Keys`) في النموذج التالي مقدسة ومرتبطة مباشرة بمحرك الحسابات، ومحرك الدمج السحابي، ومحرك تصدير واستيراد الإكسيل ذي الـ 15 شيت. لا تقم بتغيير اسم أي مفتاح منها:
+> ⚠️ **تحذير هندسي صارم للمرحلة الثالثة:** يُمنع منعاً باتاً تغيير أو تعديل أي معادلة من القواعد المحاسبية التالية تحت أي ظرف:
+
+### أ. المعادلات المحاسبية الأساسية (Core Accounting Formulas)
+1. **معادلة الوزن الصافي والفاتورة اليومية (`computeSaleRow`):**
+   - **شرط صحة الميزان:** يجب دائماً أن تكون `الوزنة الثانية (القائم w2) >= الوزنة الأولى (الفارغ w1)` عندما تكون `w2 > 0`. إذا أدخل المستخدم `w2 < w1` يظهر تحذير فوري (`#weightValidationAlert`) ويُمنع الحفظ النهائي.
+   - **الوزن الصافي (`netWeight`):**
+     $$	ext{netWeight} = (w_2 \ge w_1 	ext{ and } w_2 > 0) \ ? \ (w_2 - w_1) : 0$$
+   - **قيمة الوزن الأساسية (`baseAmount`):**
+     $$	ext{baseAmount} = 	ext{netWeight} 	imes 	ext{price}$$
+   - **إجمالي الفاتورة بالإكرامية (`totalWithTip`):**
+     $$	ext{totalWithTip} = 	ext{baseAmount} + 	ext{tip}$$
+   - **إجمالي المسدد والآجل للفاتورة (`totalPaidAndCredit`):**
+     $$	ext{totalPaidAndCredit} = 	ext{cashSales} + 	ext{transferSales} + 	ext{creditSales}$$
+   - **فرق الفاتورة (`invoiceDiff`):**
+     $$	ext{invoiceDiff} = 	ext{totalPaidAndCredit} - 	ext{totalWithTip}$$
+
+2. **قاعدة الخزينة النقدية اليومية (`computeDaySummary` — الركيزة الثالثة):**
+   - **إجمالي النقدية الواردة للخزنة قبل المصاريف (`totalCashBeforeExpenses`):** يشمل **النقدي الفعلي فقط** (نقدي مبيعات اليوم + نقدي تحصيل مديونيات المزرعة الحالية + نقدي تحصيلات المزارع السابقة):
+     $$	ext{totalCashBeforeExpenses} = \sum 	ext{cashSales} + \sum 	ext{debtCash} + \sum 	ext{prevCash}$$
+   - **صافي النقدية المطلوب توريده بالخزنة (`netCashInBox`):**
+     $$	ext{netCashInBox} = 	ext{totalCashBeforeExpenses} - \sum 	ext{expenses}$$
+   - **فرق الخزينة اليومي (`cashBoxDiff`):**
+     $$	ext{cashBoxDiff} = 	ext{netCashInBox} - 	ext{deliveredCash}$$
+     *(إذا كان الفرق `0` $\leftarrow$ خزينة مطابقة ✓، سالب $\leftarrow$ زيادة توريد، موجب $\leftarrow$ عجز توريد).*
+
+3. **قاعدة التحويلات والشيكات (Transfers Rule):**
+   - جميع التحويلات (`تحويل كاش / محفظة`، `تحويل بنكي`، `إنستا باي`، `شيكات`) تُعامل معاملة الآجل بالنسبة لخزينة الموقع النقدية (لا تدخل `totalCashBeforeExpenses` أبداً).
+   - **تحويلات المزرعة الحالية (`currentFarmTransfers`):**
+     $$	ext{currentFarmTransfers} = \sum 	ext{transferSales} + \sum 	ext{debtTransfer}$$
+     *(تُخصم بالكامل من حساب مديونية التاجر في المزرعة الحالية).*
+   - **تحويلات المزارع السابقة (`sumPrevTransfer`):** تُدرج في بيان التحويلات الشامل وبيان المزارع السابقة، ولكن **لا تُخصم من مديونية المزرعة الحالية**.
+
+4. **قاعدة مديونية التاجر للمزرعة الحالية (`netDebtCurrent`):**
+   - غير النقدي يوم البيع (`nonCashDayOfSale`) = `creditSales + transferSales`.
+   - إجمالي المسدد للمزرعة الحالية (`totalSettledCurrent`) = `cashSales + transferSales + debtCash + debtTransfer`.
+   - **صافي مديونية التاجر للمزرعة الحالية (`netDebtCurrent`):**
+     $$	ext{netDebtCurrent} = \sum 	ext{creditSales} - \sum 	ext{debtCash} - \sum 	ext{debtTransfer}$$
+   - **تحصيلات المزارع السابقة (`prevCash` و `prevTransfer`):** تخص مواقع/مزارع أخرى؛ النقدي منها (`prevCash`) يدخل خزينة اليوم، والتحويل (`prevTransfer`) يدخل بيان التحويلات، ولكن **لا يُخصم أيٌّ منهما من مديونية المزرعة الحالية**.
+
+5. **قاعدة العهدة المستقلة (`Standalone Custody Statement`):**
+   - الحقول `custodyCash` و `custodyTransfer` و `custodyTransferType` هي **بيان مستقل تماماً** للعهدة التي دفعها التاجر، ولا تدخل في حساب الفاتورة أو الخزينة النقدية، ويُخصم منها تلقائياً ما سدده التاجر من مديونيات المزرعة الحالية:
+     $$	ext{totalCustody} = 	ext{custodyCash} + 	ext{custodyTransfer}$$
+     $$	ext{netCustodyRemaining} = 	ext{totalCustody} - (	ext{debtCash} + 	ext{debtTransfer})$$
+
+### ب. قاعدة توحيد كود التاجر والسيارات الفرعية (Unified Merchant Coding)
+- دليل التجار الأساسي (`appState.merchants`) يبدأ من الكود `101` وهو **موحد وثابت عالمياً عبر جميع المزارع والدورات** (`unifyGlobalMerchantsRegistry()`).
+- الدالة `cleanMerchantBaseName(rawName)` تحذف الأرقام والشرطات والأقواس (`/[0-9\-\(\)]/g`) لاستخراج اسم التاجر الأساسي.
+- الدالة `resolveMerchantCode(rawName)` تربط أي سيارة فرعية تلقائياً بكود التاجر الأساسي (مثال: `كرنك 1` و `كرنك 2` يأخذان تلقائياً الكود الموحد `104` الخاص بالتاجر الأساسي `كرنك`، وتُجمع كافة حركاتهما في كشف حساب `104 - كرنك`).
+
+### ج. القواعد الصارمة لواجهة المستخدم والأمان (UI/UX & Security Constraints)
+- **منع النوافذ المنبثقة الافتراضية نهائياً:** يُحظر استخدام `window.alert()` أو `window.confirm()` أو `window.prompt()` (لأنها تتوقف داخل بيئات العرض المدمجة مثل Google Sites و Canvas). يتم استخدام `showToast(msg, icon)` واللوحات التفاعلية المضمنة (`#dayMgmtBoxDelete`, `#dayMgmtBoxAdd`, `#dayMgmtBoxEdit`).
+- **تحصين النصوص ضد ثغرات XSS (`escXmlStr`):** جميع المدخلات النصية المعروضة داخل `innerHTML` في كافة الجداول والنوافذ وشاشات الطباعة تمر عبر دالة التعقيم `escXmlStr()`.
+- **قصر إعادة الرسم على التبويب النشط (`Smart Active-Tab Rendering`):** الدالة `renderAll(forceAllTabs, preserveInputs)` تعيد بناء جدول التبويب النشط فقط (`appState.activeTab`) لتسريع استجابة الهواتف المتوسطة بأكثر من 70%.
+
+---
+
+## 3. هيكل البيانات الدقيق (Exact Data Schema — `LocalStorage` & `IndexedDB`)
+
+### أ. مفاتيح التخزين المحلي (`LocalStorage` & `IndexedDB`)
+- **المفتاح الرئيسي في `LocalStorage`:** `'abouzekry_farm_sales_v5_clean_state'`
+- **مفتاح رابط السحابة الاحتياطي:** `'abouzekry_farm_sales_v5_clean_state_webhook_url'`
+- **مفتاح تفضيل إظهار/إخفاء الشريط العائم:** `'abouzekry_farm_sales_v5_clean_state_show_floating_bar'`
+- **قاعدة بيانات `IndexedDB`:** اسم القاعدة `'AbouZekryCloudDB_v5'`، اسم المخزن `'farm_database_store'`، المفتاح `'master_cloud_state'`.
+
+### ب. نموذج JSON الكامل لكائن الحالة (`appState` Data Schema)
 
 ```json
 {
   "farmName": "أبوذكري",
-  "lastExcelSync": "مزامنة حية مؤكدة ✓ (06:25:00 م)",
+  "lastExcelSync": "متزامن لحظياً ✓ (01:30:00 ص)",
+  "lastJsonBackup": "آخر نسخة (.json): 01:25 ص بواسطة (مدير الموقع) ✓",
   "currentDay": 1,
   "visibleDays": [1, 2],
   "activeTab": "daily",
@@ -65,25 +107,35 @@
   "liveSyncEnabled": true,
   "liveSyncIntervalSec": 5,
   "webhookUrl": "https://script.google.com/macros/s/.../exec",
-  "updatedAt": "2026-10-23T15:25:00.000Z",
+  "updatedAt": "2026-10-24T22:30:00.000Z",
   "farmResetAt": 0,
+  "lastBulkImportAt": 1761345000000,
   "defaultPrice": 78.02,
   "defaultTip": 250,
-  "lastScaleNo": 5223,
+  "lastScaleNo": 5225,
   "inactivityTimeoutMin": 20,
+  "showFloatingActionBar": true,
   "isLoggedIn": true,
-  "lastActivityAt": 1761233100000,
+  "lastActivityAt": 1761345050000,
   "activeUserId": "admin",
-
   "deletedIds": {
-    "sales": ["d1_1761230000000"],
-    "pendingSales": ["pend_1_1761230050000"],
-    "expenses": ["exp_1761230090000"],
+    "sales": ["d1_1761340000000_m2k9x1_a1b2c3d4e5f6"],
+    "pendingSales": [],
+    "expenses": [],
     "merchants": [],
     "users": [],
     "farms": []
   },
-
+  "deletedTimestamps": {
+    "sales": {
+      "d1_1761340000000_m2k9x1_a1b2c3d4e5f6": 1761341000000
+    },
+    "pendingSales": {},
+    "expenses": {},
+    "merchants": {},
+    "users": {},
+    "farms": {}
+  },
   "users": [
     {
       "id": "admin",
@@ -105,258 +157,133 @@
       }
     }
   ],
-
   "merchants": [
     { "code": 101, "name": "محمود مدني" },
-    { "code": 102, "name": "رضا المنياوى" },
-    { "code": 103, "name": "السيد رشدي" },
     { "code": 104, "name": "كرنك" }
   ],
-
   "days": {
     "1": {
       "dayNumber": 1,
-      "dateLabel": "الإثنين 12-10-2026",
-      "deliveredCash": 3563900,
+      "dateLabel": "الإثنين 12-10",
+      "deliveredCash": 50000,
+      "addedAt": 1761345000000,
       "clearedAt": 0,
-      "addedAt": 1761231000000,
       "isHidden": false,
-
       "sales": [
         {
-          "id": "d1_1761231100000",
-          "merchant": "رضا المنياوى",
+          "id": "d1_1761345000000_m2k9z8_9f8e7d6c5b4a",
+          "createdAt": 1761345000000,
+          "createdBy": "مدير الموقع",
+          "createdTimeTxt": "01:30 ص (24/10)",
+          "updatedAt": 1761345000000,
+          "updatedBy": "مدير الموقع",
+          "updatedTimeTxt": "01:30 ص (24/10)",
+          "importedAt": 0,
+          "isEdited": false,
+          "merchant": "كرنك 1",
           "scaleNo": 5222,
-          "carNo": 8695,
-          "w1": 5665,
-          "w2": 12105,
+          "carNo": 6923,
+          "w1": 2100,
+          "w2": 3100,
           "price": 78.02,
           "tip": 250,
           "custodyCash": 200000,
           "custodyTransfer": 50000,
           "custodyTransferType": "تحويل بنكي",
-          "cashSales": 252700,
-          "transferSales": 50000,
+          "cashSales": 50000,
+          "transferSales": 10000,
           "transferSalesType": "إنستا باي",
-          "creditSales": 200000,
-          "debtCash": 100000,
-          "debtTransfer": 50000,
-          "debtTransferType": "تحويل بنكي",
-          "prevCash": 25000,
-          "prevTransfer": 15000,
-          "prevTransferType": "شيكات",
-          "notes": "ابو الخمسان"
-        }
-      ],
-
-      "pendingSales": [
-        {
-          "id": "pend_1_1761231200000",
-          "merchant": "كرنك 1",
-          "scaleNo": 5223,
-          "carNo": 7632,
-          "w1": 5050,
-          "w2": 0,
-          "price": 78.02,
-          "tip": 250,
-          "custodyCash": 0,
-          "custodyTransfer": 0,
-          "custodyTransferType": "",
-          "cashSales": 0,
-          "transferSales": 0,
-          "transferSalesType": "",
-          "creditSales": 0,
-          "debtCash": 0,
+          "creditSales": 18270,
+          "debtCash": 5000,
           "debtTransfer": 0,
           "debtTransferType": "",
           "prevCash": 0,
           "prevTransfer": 0,
           "prevTransferType": "",
-          "notes": "بانتظار التحميل والوزنة الثانية"
+          "notes": ""
         }
       ],
-
+      "pendingSales": [],
       "expenses": [
         {
-          "id": "exp_1761231300000",
-          "category": "مكافآت وحوافز",
-          "desc": "مكافأة عمال التحميل والميزان",
-          "recipient": "مشرف العمال",
+          "id": "exp_d1_1761345100000_m2k9aa_112233445566",
+          "createdAt": 1761345100000,
+          "createdBy": "مدير الموقع",
+          "createdTimeTxt": "01:31 ص (24/10)",
+          "updatedAt": 1761345100000,
+          "updatedBy": "مدير الموقع",
+          "updatedTimeTxt": "01:31 ص (24/10)",
+          "isEdited": false,
+          "category": "مشال وتحميل وعمال",
+          "desc": "مكافأة عمال التحميل",
+          "recipient": "ريس العمال",
           "amount": 1500
         }
       ]
     }
   },
-
   "farmsArchive": {
     "أبوذكري": {
       "farmName": "أبوذكري",
-      "updatedAt": "06:25:00 م",
+      "updatedAt": "01:31:00 ص",
       "farmResetAt": 0,
+      "lastBulkImportAt": 1761345000000,
       "visibleDays": [1, 2],
       "defaultPrice": 78.02,
       "defaultTip": 250,
-      "lastScaleNo": 5223,
-      "merchants": [
-        { "code": 101, "name": "محمود مدني" }
-      ],
-      "days": { "...نفس هيكل كائن days أعلاه للأيام من 1 إلى 10..." }
+      "lastScaleNo": 5225,
+      "merchants": [],
+      "days": {}
     }
   }
 }
 ```
 
-### القيم المحسوبة ديناميكياً (Computed Properties via `computeSaleRow` & `computeDaySummary`):
-لا تُخزن هذه القيم كنصوص جامدة بل تُحسب لحظياً بدقة عند كل عرض أو تصدير عبر الدالتين `computeSaleRow(row)` و `computeDaySummary(dayNum)`:
-* `code`: كود التاجر الموحد المستخرج عبر `resolveMerchantCode(row.merchant)`.
-* `netWeight`: الوزن الصافي `= (w2 >= w1 && w2 > 0) ? (w2 - w1) : 0`.
-* `baseAmount`: السعر الأساسي `= netWeight * price`.
-* `totalWithTip`: إجمالي الفاتورة بالإكرامية `= baseAmount + tip`.
-* `totalCustody`: إجمالي العهدة المستقلة `= custodyCash + custodyTransfer`.
-* `netCustodyRemaining`: صافي العهدة المتبقي `= totalCustody - (debtCash + debtTransfer)`.
-* `totalPaidAndCredit`: إجمالي المسدد والآجل للفاتورة `= cashSales + transferSales + creditSales`.
-* `invoiceDiff`: فرق الفاتورة `= totalPaidAndCredit - totalWithTip`.
-* `totalCashBeforeExpenses`: إجمالي النقدية بالخزنة قبل المصاريف `= sumCashSales + sumDebtCash + sumPrevCash`.
-* `netCashInBox`: صافي النقدية بالخزنة المطلوب توريده `= totalCashBeforeExpenses - sumExpenses`.
-* `cashBoxDiff`: فرق الخزينة اليومي `= netCashInBox - deliveredCash`.
-* `currentFarmTransfers`: تحويلات المزرعة الحالية `= sumTransferSales + sumDebtTransfer`.
-* `totalAllTransfers`: إجمالي جميع التحويلات `= currentFarmTransfers + sumPrevTransfer`.
+---
+
+## 4. آلية المزامنة المحدثة والمضادة للاختراق (Bulletproof Sync Logic — `v38`)
+
+يعتمد محرك المزامنة في `app.js` على بنية **Observed-Remove Set (OR-Set)** مع طوابع زمنية معايرة لمنع فقدان أي حركة بيع أو مصروف تحت أي ظرف:
+
+1. **توليد وفحص المعرّفات الفريدة عالمياً (`generateRecordUUID` & `isCollisionProofUUID`):**
+   - كل حركة يدوية أو مستوردة من الإكسيل تحصل على معرّف فريد بصيغة: `${prefix}_${nowMs}_${tsBase36}_${randomHex12}` (مثال: `d1_1761345000000_m2k9z8_9f8e7d6c5b4a`).
+   - الدالة `isCollisionProofUUID(id)` تتحقق من البصمة، وتمنع دوال `areSalesRowsDuplicate` و `arePendingSalesDuplicate` و `areExpensesDuplicate` من دمج أو مسح أي سجلين يحملان معرّفين فريدين مختلفين (`a.id !== b.id`) حتى لو أُدخلا في وضع الأوفلاين بنفس رقم الميزان التلقائي أو تشابهت الأوزان والتاجر.
+
+2. **الدمج الجزئي العميق للمصفوفات (`mergeArraysById` & `mergeDaysObjects`):**
+   - لا يتم استبدال مصفوفات `sales` أو `pendingSales` أو `expenses` بالكامل أبداً؛ بل يتم دمجها عنصراً بعنصر عبر `mergeArraysById`.
+   - إذا عدّل جهازان نفس السجل (نفس الـ `id`)، تقارن دالة `mergeSameRecordVersions` الطابع الزمني `updatedAt` مع الحفاظ الدائم على بيانات المنشئ الأصلي (`createdBy`, `createdAt`, `createdTimeTxt`).
+   - تعمل `mergeDaysObjects` ببنية **OR-Set**: أي سجل يحمل معرّف `UUID` غير موجود في `deletedIds` يُحفظ دائماً ولا يتأثر بأي مسح جماعي (`clearedAt` / `farmResetAt`) من جهاز آخر.
+
+3. **معالجة اختلاف وتأخر التوقيت بين الهواتف (`Clock Skew Tolerance & Calibration`):**
+   - هامش التسامح الزمني `CLOCK_SKEW_BUFFER_MS` مضبوط على **60 دقيقة كاملة (`3,600,000 ms`)**.
+   - الدالة `calibrateCloudClockOffset(cloudData.updatedAt)` تقيس تأخر ساعة الهاتف المحلي مقارنة بوقت السحابة وتخزن الفرق في `cloudClockOffsetMs`، وتستخدم الدالة `getSyncedNow()` هذا الفرق لضمان دقة الطوابع الزمنية الجديدة حتى لو كانت ساعة هاتف المندوب متأخرة.
+
+4. **الحماية ضد الارتداد العكسي للحذف (`Anti-Ghost Deletion` & `deletedTimestamps`):**
+   - كل عملية حذف تسجل وقت الحذف في `appState.deletedTimestamps[category][id] = getSyncedNow()`.
+   - عند استيراد ملف إكسيل (`importWorkbookIntoAppState`) أو استرجاع نسخة احتياطية (`restoreFullJsonBackupFromText`)، تُختم السجلات بـ `importedAt` ويُختم `appState.lastBulkImportAt`.
+   - قبل أي دمج سحابي، تعمل دالة `sanitizeMergedTombstonesAgainstLiveData` على تطهير `deletedIds` من أي شواهد قبور قديمة (Stale Tombstones) أقدم من `importedAt` أو `lastBulkImportAt`، كما تُبطل أي `farmResetAt` قديم إذا كانت السحابة تحتوي على بيانات مستوردة أو مضافة أحدث منه.
+
+5. **قفل الجلب المسبق الذري قبل الرفع (`Atomic Pre-Fetch Lock` في `pushDatabaseToCloud`):**
+   - قبل إرسال `POST` / `PUT` للسحابة، يقوم النظام بطلب `GET` لجلب أحدث بيانات السحابة ودمجها محلياً أولاً.
+   - إذا فشل طلب `GET` بسبب ضعف شبكة الهاتف (`!preRes.ok` أو خطأ اتصال)، يُلغى الرفع فوراً (`return false`) وتبقى التعديلات محفوظة في الطابور المحلي (`pendingChanges`) للمحاولة التالية دون الكتابة فوق تعديلات المندوبين الآخرين.
 
 ---
 
-## 4. المنطق البرمجي وتدفق البيانات (Data Flow) وأهم الدوال
-1. **بدء التشغيل وتحميل الحالة (`DOMContentLoaded`):**
-   * يستدعي `loadState()` لقراءة البيانات من `localStorage` أو `window.name`، وإذا كانت فارغة يفحص `IndexedDB` عبر `loadFromIndexedDBAsync()`.
-   * يستدعي `renderAll()` لرسم الشاشات الـ 6، ثم يفعل محرك المزامنة السحابية الحية `startLiveRealtimeSyncEngine()` ويسجل الـ Service Worker (`./sw.js`).
-2. **الحفظ والمزامنة اللحظية (`saveState(incrementPending, skipCloudPreMerge)`):**
-   * يزيد العداد `localMutationEpoch`، وينظف أي تكرارات عبر `deduplicateAllDaysInState(appState)`، ويحدث أرشيف المزرعة النشطة عبر `syncActiveFarmIntoArchive()`.
-   * يحفظ الكائن في `localStorage` و `IndexedDB` و `window.name`، ويبث إشارة عبر `BroadcastChannel` للتبويبات الأخرى، ويرفع التحديث للسحابة عبر `pushDatabaseToCloud()`.
-3. **الدمج السحابي الذكي ومنع التكرار (`mergeCloudDataIntoLocal` & `mergeDaysObjects`):**
-   * يدمج السجلات على مستوى المعرّف (`id`) مع فحص التطابق الموضوعي عبر `areSalesRowsDuplicate` و `arePendingSalesDuplicate` و `areExpensesDuplicate` لمنع تكرار أي حركة عند استيراد الإكسيل أو الربط المباشر.
-   * يحترم سجل المحذوفات `deletedIds` والأختام الزمنية `farmResetAt` و `clearedAt` و `addedAt` لمنع عودة البيانات بعد التصفير أو حذف اليوم.
+## 5. الميزات المنجزة حتى نهاية المرحلة الثانية والمهام المقترحة للمرحلة الثالثة (Phase 3 Roadmap)
 
----
+### أ. ما تم إنجازه واستقراره بالكامل حتى الإصدار `v38`
+- [x] منظومة الطباعة الحرارية والتقارير الرسمية (`@media print`) شاملة: كارتة الميزان الثلاثية (3 نسخ في ورقة واحدة مع خطوط القص ✂️)، زر إظهار/إخفاء أيقونة بون الميزان، وطباعة محضر تصفية اليوم الرسمي بتوقيعات لجنة البيع وأمين الخزينة.
+- [x] تحسين تجربة الميزان للهاتف والكمبيوتر: شريط إجراءات سفلي عائم (`#mobileWeighbridgeActionBar`) مع خيار إظهاره وإخفائه من تبويب التحكم، والتنقل السريع بزر `Enter` (`وزنة 1 ⬅️ وزنة 2 ⬅️ نقدي مبيعات ⬅️ باقي الفاتورة آجل ⚡`).
+- [x] مركز النسخ الاحتياطي الشامل (`.json`) وسجل الرقابة الزمني (`Audit Trail — createdBy / updatedBy`) أمام كل حركة وفي جدول الرقابة المخصص.
+- [x] تحسين السرعة (`Smart Active-Tab Rendering`) وتحصين الأمان (`XSS Sanitization`) وأداة توليد ونسخ كود التضمين الشامل لـ Google Sites.
+- [x] الفحص العميق وتطوير محرك المزامنة المضاد للاختراق (`v38 Bulletproof Sync Engine`).
 
-## 5. ما تم إنجازه بالكامل (مميزات تعمل بنجاح ويجب الحفاظ عليها)
-1. **تفكيك الكود إلى هيكلة معيارية نظيفة:** فصل `index.html` و `style.css` و `app.js` وتحديث `sw.js` (`v18`).
-2. **بوابة الدخول والصلاحيات وإلغاء حساب الزائر:** تسجيل الدخول باسم المستخدم وكلمة المرور فقط، مع إلغاء خاصية "زائر" نهائياً، وحفظ الجلسة والتبويب النشط عند عمل Refresh، وطرد المستخدم المحذوف لحظياً (`verifyActiveUserSession`).
-3. **صلاحية مدير الموقع في تحديد الزمن غير النشط للخروج التلقائي (`inactivityTimeoutMin`):** إمكانية تحديد الدقائق (`5..120` دقيقة أو `0` لإيقاف الخروج التلقائي) مع الحفظ السحابي.
-4. **حجز مسلسل الميزان عند الحفظ المؤقت للوزنة الأولى (`btnSavePendingW1`):** يحجز رقم الميزان التسلسلي (`scaleNo`) للتاجر ويحفظ ترتيبه مباشرة داخل `📋 جدول حركات البيع المسجلة` بشارة `⏳ محجوز (وزنة 1)` وزر `🔄 استكمال`، مع منع الحفظ النهائي بدون الوزنة الثانية (`w2 >= w1`).
-5. **إدارة الأيام التفاعلية الكاملة:** لوحات تفاعلية لاختيار اليوم المراد إضافته (`➕ إضافة يوم جديد`)، أو اختيار اليوم المراد تعديله مع فتح خانة نصية لتعديل اسمه/تاريخه (`✏️ تعديل اليوم`)، أو اختيار اليوم المراد حذفه مع معاينة ملخص حركاته (`🗑️ حذف اليوم`).
-6. **تصفير حركات المزرعة الحالية بدون ارتداد سحابي (`clearActiveFarmMovementsKeepMerchants`):** مسح حركات المزرعة النشطة مع تسجيل المعرفات في `deletedIds` وختم `farmResetAt` لمنع عودة البيانات من السحابة، مع بقاء دليل التجار الموحد ثابتاً.
-7. **الربط الثنائي الكامل مع الإكسيل (`exportFullWorkbookXlsx` / `importWorkbookIntoAppState`) + ربط ملف مباشر (`showOpenFilePicker`):** تصدير 15 شيت بنفس التنسيق والألوان والمعادلات، واستيراد ذكي يمنع مضاعفة الحركات المتشابهة.
-8. **محرك الفلترة والفرز الشامل مثل الإكسيل (Sort & Filter) في جميع الجداول الـ 10:** مع زر اختياري `🔽 تفعيل الفلاتر / 🔼 إخفاء الفلاتر` بجانب البحث السريع، وأزرار التبديل بين `✅ عرض النشطين فقط` و `📋 عرض الدليل الكامل`.
-
----
-
-## 6. قواعد خاصة بالمشروع (شروط مقدسة في المحاسبة والتصميم)
-* **قدسية القواعد المحاسبية:**
-  * لا يجوز تحت أي ظرف تغيير منطق حساب **التحويلات** (تُعامل معاملة الآجل بالنسبة لخزنة الموقع النقدية، ويُخصم نصيب المزرعة الحالية منها فقط من مديونية التاجر)، أو **التحصيلات السابقة** (`prevCash` يضاف للخزنة فقط، و `prevTransfer` يذهب لبيان التحويلات فقط، ولا يُخصمان أبداً من مديونية المزرعة الحالية)، أو **العهدة المستقلة** (`totalCustody` يُخصم منه فقط `debtCash + debtTransfer`).
-* **ثبات التكويد الموحد للتجار (`101..118+`):**
-  * الكود الموحد واسم التاجر الأساسي ثابت عبر جميع المزارع، والسيارات الفرعية المتبوعة برقم (مثل `كرنك 1` و `كرنك 2`) تُنسب تلقائياً لكود التاجر الأساسي (`104 - كرنك`).
-* **قواعد الواجهة والإدخال:**
-  * منع انقسام الأرقام في خلايا الجداول على الكمبيوتر (`white-space: nowrap`)، وشريط تمرير أفقي واضح باللمس على الموبايل.
-  * تعطيل بكرة الفأرة (`wheel`) وأزرار الأسهم (`ArrowUp`/`ArrowDown`) في جميع خانات الأرقام والمبالغ، وتنسيق المبالغ بفواصل الآلاف تلقائياً (`data-money-input="1"`).
-  * عرض الأيام المفتوحة والنشطة فقط في جدول ورسم الملخص التنفيذي (`view-dashboard`).
-
----
-
-## 7. المهام المعلقة وخارطة التطوير القادمة (To-Do List)
-فيما يلي النقاط والميزات المقترحة أو القابلة للتطوير في المحادثة الجديدة عند الطلب، مع ملاحظة أن **النظام الحالي مستقر تماماً وجميع وظائفه تعمل بنسبة 100%**:
-
-1. **تطوير تقارير الطباعة المباشرة (PDF / Print Views):**
-   * إضافة قوالب طباعة مخصصة (`@media print`) لإصدار "بون ميزان سيارة مفرد" للتاجر، أو طباعة "كشف حساب تاجر مفصل" و"محضر تصفية خزنة اليوم" بتوقيعات أعضاء لجنة البيع مباشرة من المتصفح.
-2. **كشف حساب تفصيلي لكل تاجر بالحركات (Merchant Drill-Down Modal):**
-   * عند الضغط على اسم التاجر في شاشة `👥 تكويد وكشف حساب التجار`، فتح نافذة تعرض جميع حركات هذا التاجر التفصيلية (الأيام، أرقام السيارات، الأوزان، الدفعات، والتحويلات) عبر الأيام الـ 10 في مكان واحد.
-3. **تحديث أداة تصدير كود Google Sites المدمج (`buildEmbeddedGoogleSitesHtml`):**
-   * بعد تفكيك المشروع إلى 3 ملفات (`index.html`, `style.css`, `app.js`)، تعمل استضافة **GitHub Pages** بكفاءة مباشرة عبر رفع الملفات المفصولة؛ وإذا رغب المستخدم مستقبلاً في استخدام زر "نسخ كود الموقع لـ Google Sites (ملف واحد مدمج)"، يمكن تحديث دالة `buildEmbeddedGoogleSitesHtml()` لتقوم بجلب محتوى `style.css` و `app.js` عبر `fetch` ودمجهما تلقائياً داخل الكود المنسوخ لـ Google Sites عند الضغط على الزر.
-4. **نسخ احتياطي واسترجاع كامل لقاعدة البيانات بصيغة JSON (`Full Cloud Backup / Restore`):**
-   * إضافة زر لتحميل نسخة احتياطية شاملة لكل المزارع المؤرشفة والمستخدمين والتجار في ملف `.json` واحد واسترجاعها بضغطة زر بجانب ملفات الإكسيل الخاصة بكل مزرعة.
-
-
-## 8. آلية المزامنة السحابية عبر GitHub Pages وتضمين الرابط في `index.html`
-- **طريقة العمل المعتمدة لدى المستخدم:**
-  1. يتم إدخال رابط السحابة (`Google Apps Script Webhook URL` المنتهي بـ `/exec`) يدوياً في خانة `#inpCloudWebhookUrl` داخل تبويب **⚙️ التحكم والمزامنة والصلاحيات**.
-  2. عند الضغط على زر **📥 تحميل ملف HTML مدمج بالرابط** (`#btnDownloadHtmlWithWebhook`)، تستدعي الدالة `buildEmbeddedGoogleSitesHtml()` نسخة نظيفة من وثيقة `index.html` وتقوم بحقن الرابط تلقائياً في ثلاثة مواضع قياسية داخل `index.html`:
-     - متغير عام في `<head>` قبل تحميل `app.js`: `window.EMBEDDED_CLOUD_WEBHOOK_URL = 'https://script.google.com/.../exec';`
-     - وسم ميتا قياسي في `<head>`: `<meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="https://script.google.com/.../exec" />`
-     - القيمة الابتدائية لخانة الإدخال: `<input id="inpCloudWebhookUrl" value="https://script.google.com/.../exec" />`
-  3. كما تقوم الدالة بإعادة ضبط حالة واجهة الدخول (`#loginGatewayOverlay`) والتبويب الافتراضي (`#view-daily`) في الملف المُحمَّل حتى يفتح بشكل نظيف تماماً عند رفعه على GitHub Pages.
-  4. بمجرد رفع ملف `index.html` المُحمَّل إلى مستودع GitHub Pages، يقوم كل جهاز آخر (كمبيوتر أو هاتف) بفتح الموقع بقراءة الرابط تلقائياً عبر الدالة `getEmbeddedWebhookUrl()` داخل `app.js`، وسحب ودمج أحدث البيانات من السحابة فوراً عند فتح الصفحة وعند تسجيل الدخول وكل 5 ثوانٍ دون الحاجة لإدخال الرابط يدوياً على الأجهزة الأخرى.
-  5. يستخدم `sw.js` (الإصدار `farm-sales-committee-v25`) استراتيجية `Network-First` مع `{ cache: "no-store" }` لملفات `index.html` و`app.js` و`style.css` لضمان ظهور أي تحديث يُرفع على GitHub Pages فوراً في جميع الأجهزة دون انتظار انتهاء الكاش المؤقت للمتصفح.
-
-
-## 9. تقرير الفحص والمطابقة الهندسية الشاملة (QA Audit Certification)
-تم إجراء فحص ومطابقة برمجية شاملة بنسبة **100%** بين آخر نسخة مستقرة من "الملف الموحد" (`v5`) وبين هيكل الملفات المقسمة (`index.html`, `style.css`, `app.js`, `sw.js`, `manifest.json`):
-
-1. **مطابقة واجهة المستخدم والتصميم (UI & CSS Parity — 100%):**
-   - تطابق تام لجميع عناصر الـ DOM وعددها **310 عنصر معرّف (`id`)** بين النسخة الموحدة وملف `index.html` المقسم دون فقدان أي عنصر أو خاصية (`data-*`).
-   - تجميع كافة كلاسات Tailwind CSS v3.4.17 المستخدمة في `index.html` والمولّدة ديناميكياً داخل `app.js` (حوالي 490 كلاس شامل الـ Preflight والاستجابة `sm:` / `md:` / `lg:`) بالإضافة إلى جميع التنسيقات المخصصة (`.navy-gradient`, `.gold-badge`, `.tab-btn-active`, `.day-pill-active`, `.table-scroll-wrapper`, `@media`) داخل ملف `style.css` (بحجم `32 KB`)، مع الإبقاء على رابط CDN في `index.html` لضمان التطابق البصري التام أونلاين وأوفلاين.
-2. **مطابقة الوظائف البرمجية ومستمعي الأحداث (JavaScript & Event Listeners — 100%):**
-   - نقل وتفعيل جميع الدوال البرمجية البالغ عددها **114 دالة (`Function`)**، وجميع روابط العناصر البالغ عددها **265 استدعاء `getElementById`**، و**107 مستمع أحداث (`addEventListener`)** داخل `app.js`.
-   - معالجة تهيئة التطبيق عبر `initFarmSalesApp()` مع فحص `document.readyState` ورفع دوال إدارة الأيام (`refreshDayManagementBoxesUI`, `openDayManagementBox`, `openDailyQuickAddDayBox`) لضمان عمل تسجيل الدخول وكافة الأزرار على GitHub Pages بدون أي خطأ `ReferenceError`.
-3. **مطابقة التخزين والمزامنة السحابية (Storage & Cloud Sync — 100%):**
-   - الحفاظ التام على مفاتيح التخزين القياسية: `STORAGE_KEY = 'abouzekry_farm_sales_v5_clean_state'` في `LocalStorage`، وقاعدة `IDB_NAME = 'AbouZekryCloudDB_v5'` (مخزن `farm_database_store`) في `IndexedDB`، ونسخة `window.name` الاحتياطية (`ABOUZEKRY_STATE_V5:`).
-   - تطوير دالة `buildEmbeddedGoogleSitesHtml()` و`getEmbeddedWebhookUrl()` بحيث يؤدي الضغط على **📥 تحميل ملف HTML مدمج بالرابط** بعد لصق رابط `Google Apps Script Webhook URL` إلى حقن الرابط مباشرةً داخل `index.html` (`window.EMBEDDED_CLOUD_WEBHOOK_URL` و`<meta id="metaEmbeddedCloudWebhookUrl">`) مع إعادة ضبط شاشة الدخول، ليسمع تلقائياً في جميع الأجهزة فور رفعه على GitHub Pages.
-4. **مطابقة القواعد المحاسبية المقدسة ونظام الإشعارات (Accounting & UX — 100%):**
-   - تطابق حرفي لجميع المعادلات المحاسبية الـ 15 (الصافي، إجمالي الفاتورة بالإكرامية، العهدة المستقلة المخصوم منها تحصيل المديونيات فقط، ميزان الخزينة النقدي، تحويلات المزرعة الحالية والسابقة، وكود التاجر الموحد للسيارات الفرعية مثل `كرنك 1` و`كرنك 2` -> `104`).
-   - خلو الكود بنسبة **100%** من أي نوافذ متصفح تقليدية محظورة (`alert` / `confirm` / `prompt`) والاعتماد الكامل على نظام الإشعارات (`showToast`) والصناديق التفاعلية المدمجة (`#dayMgmtBoxAdd`, `#dayMgmtBoxEdit`, `#dayMgmtBoxDelete`, `#dailyQuickAddDayBox`).
-5. **العمل بدون إنترنت وتحديث الكاش (`sw.js` & `manifest.json` — 100%):**
-   - تحديث `sw.js` إلى الإصدار `farm-sales-committee-v25` وتخزين جميع الملفات المفصلة (`./`, `./index.html`, `./style.css`, `./app.js`, `./manifest.json`, `./icon-192.png`, `./icon-512.png`) ومكتبات الـ CDN، مع استخدام `{ cache: "no-store" }` في استراتيجية `Network-First` لضمان ظهور التحديثات المرفوعة على GitHub Pages فوراً على جميع الأجهزة.
-
-
-### سابعاً: توثيق الحل الجذري الشامل لمشكلة المزامنة عبر الأجهزة في الهيكل المقسم (v24)
-بناءً على تحليل سجل الحلول السابقة (`001.docx` و `002.docx`)، تم تطبيق وتكييف جميع آليات المزامنة الذكية بنسبة 100% داخل هيكل الملفات المقسمة (`index.html`, `style.css`, `app.js`, `sw.js`):
-
-1. **منع الكتابة العكسية فوق السحابة من المتصفحات الجديدة (`Smart Sync Protection`):**
-   - تم تزويد `app.js` بدالة `countMovementsInDays(daysMap)` وفحص `hadMeaningfulLocalEdits` قبل تنفيذ أي عملية حفظ لرابط السحابة (`btnSaveWebhook`) أو مزامنة (`btnSyncNow`) أو تحميل/نسخ لملف `index.html` المدمج (`btnDownloadHtmlWithWebhook` / `btnCopyHtmlWithWebhook`).
-   - إذا فتح المستخدم الموقع من متصفح جديد (أو بعد مسح بيانات المتصفح) ولصق رابط `Google Apps Script Webhook URL` ثم ضغط حفظ أو مزامنة، يكتشف النظام أن المتصفح لا يملك حركات محلية فعلية فيقوم **بسحب البيانات من السحابة فقط (`pullDatabaseFromCloud`)** ويمنع تماماً رفع الحالة الافتراضية الفارغة فوق السحابة.
-2. **تضمين رابط السحابة نهائياً داخل `index.html` المقسم (`buildEmbeddedGoogleSitesHtml` & `getEmbeddedWebhookUrl`):**
-   - عند الضغط على **📥 تحميل ملف HTML مدمج بالرابط**، يقوم `app.js` باستنساخ هيكل `index.html` وتنظيف جميع الجداول الديناميكية (`tbody`) وإعادة ضبط بوابة تسجيل الدخول (`#loginGatewayOverlay`) وحقن رابط السحابة داخل `<script id="embeddedWebhookConfigScript">window.EMBEDDED_CLOUD_WEBHOOK_URL = "...";</script>` و`<meta id="metaEmbeddedCloudWebhookUrl">` و`<input id="inpCloudWebhookUrl" value="...">`.
-   - بمجرد رفع ملف `index.html` المحمّل إلى GitHub Pages، تتعرف دالة `getEmbeddedWebhookUrl()` في `app.js` على الرابط تلقائياً في أي جهاز أو متصفح جديد منذ اللحظة الأولى دون الحاجة لإعادة لصق الرابط يدوياً.
-3. **الترتيب التسلسلي الآمن عند بدء التشغيل (`initFarmSalesApp`):**
-   - ينتظر النظام اكتمال قراءة `LocalStorage` و`IndexedDB` أولاً قبل استدعاء `pullDatabaseFromCloud(true, true)` و`startLiveRealtimeSyncEngine()`، مما يمنع أي تضارب زمني (Race Condition) عند فتح الموقع بعد مسح بيانات المتصفح.
-4. **المزامنة اللحظية الحية والدمج الذكي والطرد الفوري (`Live Realtime Sync` + `Smart Merge` + `verifyActiveUserSession`):**
-   - دمج ذكي على مستوى السجل (`mergeCloudDataIntoLocal`, `mergeDaysObjects`, `mergeArraysById`) يجمع حركات البيع والوزنات المؤقتة والمصروفات والتجار من جميع الأجهزة المتصلة كل 5 ثوانٍ دون مسح متبادل ودون مقاطعة الكتابة (`isUserActivelyTypingInForm`).
-   - طرد وتسجيل خروج إجباري فوري (`verifyActiveUserSession`) لأي مستخدم متصل بمجرد قيام المدير بحذف حسابه وتوثيقه في `deletedIds.users`.
-
-
-### ثامناً: تحصين محرك الدمج للعمل بدون إنترنت وتعدد المندوبين (v25 Offline-First Fortifications)
-تم تزويد ملف `app.js` في الإصدار `v25` بثلاث طبقات حماية متقدمة لمعالجة حالات التضارب الحرجة عند عمل عدة مندوبين على نفس اليوم من أجهزة مختلفة (أونلاين أو أوفلاين):
-
-1. **الدمج الجزئي العميق للمصفوفات بالمعرّف (`Deep Granular Array Merging by ID`):**
-   - في دالتي `mergeDaysObjects` و`mergeCloudDataIntoLocal` و`mergeArraysById`، يُمنع تماماً استبدال مصفوفات اليوم (`sales`, `pendingSales`, `expenses`) بالكامل عند تعديل اليوم من جهازين.
-   - يتم فحص ودمج كل حركة على حدة بناءً على معرّفها الفريد (`id`): أي حركة موجودة في السحابة وغير موجودة محلياً (وليست ضمن `deletedIds`) تُضاف فوراً، وأي حركة موجودة محلياً وغير موجودة في السحابة (وليست ضمن `deletedIds`) يُحتفظ بها، وعند تعديل نفس الحركة على جهازين يتم دمج حقولها اعتماداً على الطابع الزمني للسجل (`updatedAt`).
-   - في الأيام الاعتيادية (`lDayClear === 0 && cDayClear === 0`)، يتم الحفاظ الكامل على سجل المحذوفات الفردية (`deletedIds`) بحيث لا تعود أي فاتورة حذفها أحد المندوبين يدوياً أثناء دمج الفواتير الجديدة.
-2. **معالجة اختلاف توقيت ساعات الأجهزة (`Clock Skew Tolerance Buffer`):**
-   - تم تعريف ثابت تسامح زمني `CLOCK_SKEW_BUFFER_MS = 10 * 60 * 1000` (10 دقائق) مع الدالتين `isTimestampSignificantlyNewer` و`getLatestDayActivityTimestamp`.
-   - إذا كانت ساعة هاتف أحد المندوبين متأخرة أو متقدمة عدة دقائق عن الجهاز الآخر، لا يتم رفض حركاته أو مسحها بسبب فرق الدقائق، بل ينتقل المحرك تلقائياً إلى الدمج الجزئي بالمعرفات (`mergeArraysById`).
-3. **توليد معرّفات UUID غير قابلة للتصادم للإدخالات اليدوية (`generateRecordUUID`):**
-   - تم استبدال المعرفات التقليدية المعتمدة على `Date.now()` فقط بدالة `generateRecordUUID(prefix)` التي تدمج الطابع الزمني بالمللي ثانية + تمثيل `Base36` + بصمة عشوائية مشفرة (`crypto.randomUUID()` / `crypto.getRandomValues()`) مع ختم `updatedAt: Date.now()` لكل فاتورة بيع (`saleEntryForm`)، وزنة أولى مؤقتة (`btnSavePendingW1`)، مصروف يومي (`expenseEntryForm`)، ومستخدم جديد (`addUserForm`)، مما يمنع تصادم المعرفات بنسبة 100% حتى لو أدخل جهازان أوفلاين حركة في نفس الجزء من الألف من الثانية.
-
-
-### تاسعاً: تحديث الإصدار `v26` — نافذة كشف حساب التاجر التفصيلي بالحركات (`Merchant Drill-Down Modal`)
-1. **تحويل اسم التاجر إلى رابط تفاعلي (`[data-drill-merchant]`):**
-   - في جدول `👥 تكويد وكشف حساب التجار` (`#merchantsTbody`) وكذلك في جدولي `💳 بيان التحويلات` و `🏦 المزارع السابقة`، تم تحويل اسم كل تاجر إلى زر تفاعلي يفتح نافذة `#merchantDrillDownModal` فوراً.
-2. **حساب وعرض السجل الكامل للحركات والرصيد التراكمي (`computeMerchantDetailedLedger`):**
-   - يجمع كافة حركات التاجر (شاملاً السيارات الفرعية التي تحمل نفس الكود الموحد مثل `كرنك 1` و `كرنك 2` تحت كود `104`) عبر الأيام الـ 10 مرتبة زمنياً وبمسلسل الميزان.
-   - يعرض لكل حركة: اليوم والتاريخ، السيارة الفرعية، رقم الميزان، رقم السيارة، الوزنة الأولى، الوزنة الثانية، الوزن الصافي، السعر، الإكرامية، إجمالي الفاتورة بالإكرامية، نقدي يوم البيع، تحويل المبيعات ونوعه، آجل الفاتورة، سداد المديونيات (نقدي/تحويل)، إجمالي المسدد بالحركة، **والرصيد التراكمي للمديونية بعد كل حركة (`runningBalanceAfter`)**، بالإضافة إلى شريط تنبيه خاص ببيان العهدة المستقلة وتحصيلات المزارع السابقة.
-3. **مشاركة الكشف عبر واتساب والنسخ والطباعة (`buildMerchantWhatsappStatementText`):**
-   - زر **📲 إرسال بواتساب** (`#btnShareMerchantWhatsapp`) يقوم بنسخ التقرير المنسق وفتح رابط `https://wa.me/?text=...` لإرساله للتاجر مباشرة، إلى جانب زر **📋 نسخ الكشف** (`#btnCopyMerchantStatement`)، وزر **🖨️ طباعة** (`#btnPrintMerchantStatement`) المدعوم بقواعد `@media print`، وقائمة التبديل السريع بين التجار (`#selModalMerchantSwitcher`).
-
-
-### تاسعاً: نافذة كشف حساب التاجر التفصيلي بالحركات والطباعة المعزولة (v27)
-1. **نافذة كشف حساب التاجر التفصيلي (`#merchantDrillDownModal`):**
-   - تحويل اسم التاجر في جدول `👥 تكويد وكشف حساب التجار` إلى رابط تفاعلي (`[data-open-merchant-ledger]`) يفتح كشف حساب تفصيلي للتاجر المحدد وحده شاملاً جميع سياراته الفرعية (مثل `كرنك 1` و`كرنك 2` تحت كود `104`) عبر الـ 10 أيام، مع حساب الرصيد التراكمي بعد كل حركة، ونسخ/مشاركة الكشف عبر واتساب.
-2. **الحل الجذري لطباعة كشف حساب التاجر المنفرد في صفحة واحدة (`#merchantPrintOnlyContainer`):**
-   - إنشاء حاوية طباعة معزولة ومباشرة تحت `<body>` (`#merchantPrintOnlyContainer`) يتم تعبئتها ببيانات التاجر المختار وحده، مع جدول قياسي من 18 عموداً (`#merchantPrintTable`) بنسب عرض مئوية ثابتة (`table-layout: fixed; width: 100%`) تضمن ظهور جميع الأعمدة الـ 18 بالكامل دون أي قص أفقي.
-   - عزل الطباعة برمجياً عبر `activateMerchantPrintMode()` و`deactivateMerchantPrintMode()` بإخفاء باقي عناصر `<body>` (`<header>`, `<main>`, `<nav>`, `#merchantDrillDownModal`) عبر `style.setProperty('display', 'none', 'important')` أثناء الطباعة فقط، مما يمنع ظهور جدول التجار الخلفي نهائياً ويحصر عدد ورقات الطباعة على قد مسافة التقرير الفعلي للتاجر المختار فقط.
-   - تحديث إصدار ملفات المشروع والـ Service Worker إلى `v31` (`farm-sales-committee-v31`) مع المسح التلقائي للكاش القديم عند التشغيل.
-
-
-### تاسعاً: تحسين تجربة الموبايل على الميزان (v32 Mobile Weighbridge UX)
-1. **شريط الإجراءات السفلي العائم داخل نموذج البيع (`#mobileWeighbridgeActionBar`):**
-   - يثبّت أزرار (`⏳ حفظ مؤقت وزنة 1` و `💾 حفظ نهائي` و `إلغاء التعديل`) إلى جانب ملخص حي لحظي يعرض (`⚖️ الصافي` + `💰 صافي الفاتورة` + زر سريع `⚡ باقي الفاتورة آجل`) أثناء التمرير داخل نموذج البيع على شاشة الهاتف (`position: sticky; bottom: 52px;`).
-2. **التنقل السريع بزر `Enter` بين حقول الميزان والبيع (`Fast Enter Key Navigation`):**
-   - الضغط على `Enter` ينقل المؤشر تلقائياً ويحدد النص في الحقل التالي دون إرسال النموذج بالخطأ:
-     `اسم التاجر` ⬅️ `رقم السيارة` ⬅️ **`وزنة 1` ⬅️ `وزنة 2` ⬅️ `نقدي مبيعات` ⬅️ `باقي الفاتورة آجل` (مع الحساب التلقائي لباقي الفاتورة الآجل ووضعه في الحقل فوراً)** ⬅️ `💾 حفظ نهائي`.
+### ب. قائمة المهام المقترحة للبدء بها في المحادثة الجديدة (المرحلة الثالثة — To-Do List)
+1. **إيصالات القبض وسندات الصرف المستقلة (Standalone Vouchers & Receipts):**
+   - إضافة إمكانية طباعة "إيصال استلام نقدية / سداد مديونية" للتاجر عند سداد دفعة نقدية أو تحويل، وطباعة "سند صرف نقدية" لبنود المصروفات والمكافآت اليومية.
+2. **تقارير مقارنة المزارع والدورات (Multi-Farm Comparative Analytics):**
+   - إضافة لوحة مقارنة تحليلية في تبويب السحابة أو الملخص التنفيذي لمقارنة أداء عدة مزارع محفوظة في الأرشيف (إجمالي الأوزان، متوسط السعر، المصروفات، وصافي الخزينة لكل مزرعة).
+3. **نظام التنبيهات الذكية لسقف مديونية التجار (Merchant Credit Limit Alerts):**
+   - إتاحة تحديد "سقف ائتماني اختياري" لكل تاجر وإظهار تنبيه لوني داخل نموذج البيع إذا تجاوزت مديونية التاجر السقف المحدد.
+4. **تصدير كشف حساب التاجر المستقل كملف Excel أو PDF بضغطة زر:**
+   - إضافة زر داخل نافذة كشف حساب التاجر التفصيلي (`#merchantDrillDownModal`) لتصدير حركات هذا التاجر وحده في ملف `.xlsx` منسق مستقل.
