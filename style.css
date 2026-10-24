@@ -1689,12 +1689,14 @@ body {
       }
     }
 
-
 /* =========================================================================
-   4. MERCHANT DRILL-DOWN MODAL & PRINT STYLES (v26)
+   4. MERCHANT DRILL-DOWN MODAL & PRINT STYLES (v27)
    ========================================================================= */
 #merchantDrillDownModal.hidden {
   display: none !important;
+}
+#merchantPrintOnlyContainer {
+  display: none;
 }
 .bg-slate-900\/80 {
   background-color: rgb(15 23 42 / 0.82);
@@ -1738,6 +1740,7 @@ body {
 }
 @media print {
   html, body {
+    width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -1748,98 +1751,49 @@ body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  /* إخفاء جميع عناصر الموقع الأساسية بالكامل (display: none) حتى لا تحجز 3 صفحات فارغة في الطباعة */
-  body.printing-merchant-modal > header,
-  body.printing-merchant-modal > nav,
-  body.printing-merchant-modal > #loginGatewayOverlay,
-  body.printing-merchant-modal > #toastContainer,
-  body.printing-merchant-modal > main > #visitorModeBanner,
-  body.printing-merchant-modal > main > section,
-  body.printing-merchant-modal > main > #excelFilterPopover {
+  /* إخفاء جميع عناصر الموقع الأساسية بالكامل (display: none) وإظهار حاوية طباعة التاجر فقط */
+  body.printing-merchant-modal > *:not(#merchantPrintOnlyContainer) {
     display: none !important;
   }
-  body.printing-merchant-modal > main {
-    margin: 0 !important;
-    padding: 0 !important;
-    max-width: 100% !important;
-    width: 100% !important;
-  }
-  #merchantDrillDownModal {
-    position: static !important;
+  body.printing-merchant-modal > #merchantPrintOnlyContainer {
     display: block !important;
-    inset: auto !important;
+    position: static !important;
     width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
-    background: #ffffff !important;
+    margin: 0 !important;
     padding: 0 !important;
-    margin: 0 !important;
-    overflow: visible !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    direction: rtl !important;
   }
-  #merchantDrillDownModal > div {
-    max-height: none !important;
-    height: auto !important;
-    border: 1.5px solid #1b365d !important;
-    border-radius: 8px !important;
-    box-shadow: none !important;
+  #merchantPrintTable {
     width: 100% !important;
     max-width: 100% !important;
-    margin: 0 !important;
-    overflow: visible !important;
-  }
-  #merchantDrillDownModal .navy-gradient {
-    padding: 6px 10px !important;
-  }
-  #merchantDrillDownModal .overflow-y-auto,
-  #merchantDrillDownModal .table-scroll-wrapper {
-    overflow: visible !important;
-    max-height: none !important;
-    padding: 4px !important;
-  }
-  #mdlMerchKpiGrid {
-    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-    gap: 4px !important;
-    margin-bottom: 4px !important;
-  }
-  #mdlMerchKpiGrid > div {
-    padding: 4px 6px !important;
-  }
-  /* إخفاء أزرار التحكم والفلترة وعمود الانتقال الأخير (العمود 19) أثناء الطباعة لتوفير المساحة */
-  #btnShareMerchantWhatsapp,
-  #btnCopyMerchantStatement,
-  #btnPrintMerchantStatement,
-  #btnCloseMerchantModal,
-  #selModalMerchantSwitcher,
-  #inpFilterMerchantModal,
-  #merchantDrillDownModal .bg-slate-50.border.border-slate-200.rounded-xl,
-  #merchantDrillDownTable th:last-child,
-  #merchantDrillDownTable tbody td:last-child,
-  #merchantDrillDownTable tfoot td:last-child {
-    display: none !important;
-  }
-  /* ضبط عرض الجدول والأعمدة الـ 18 لتظهر كاملة في عرض ورقة واحدة (Landscape) دون قص أي عمود */
-  #merchantDrillDownTable {
-    width: 100% !important;
     min-width: 0 !important;
-    max-width: 100% !important;
-    table-layout: auto !important;
+    table-layout: fixed !important;
     border-collapse: collapse !important;
+    margin-top: 4px !important;
   }
-  #merchantDrillDownTable th {
+  #merchantPrintTable th,
+  #merchantPrintTable td,
+  #merchantPrintTable tfoot td {
+    box-sizing: border-box !important;
     padding: 3px 2px !important;
     font-size: 8.5px !important;
-    line-height: 1.15 !important;
-    white-space: normal !important;
-    word-break: break-word !important;
-  }
-  #merchantDrillDownTable td,
-  #merchantDrillDownTable tfoot td {
-    padding: 3px 2.5px !important;
-    font-size: 9px !important;
     line-height: 1.2 !important;
     white-space: normal !important;
     word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    border: 1px solid #334155 !important;
   }
-  #merchantDrillDownTable tr {
+  #merchantPrintTable thead {
+    display: table-header-group !important;
+  }
+  #merchantPrintTable tfoot {
+    display: table-row-group !important;
+  }
+  #merchantPrintTable tr {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }

@@ -21,7 +21,43 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=26" />
+  <link rel="stylesheet" href="./style.css?v=27" />
+  <style id="criticalPrintStyles">
+    #merchantPrintOnlyContainer {
+      display: none;
+    }
+    @page {
+      size: A4 landscape;
+      margin: 5mm 4mm;
+    }
+    @media print {
+      html, body {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        overflow: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      body.printing-merchant-modal > *:not(#merchantPrintOnlyContainer) {
+        display: none !important;
+      }
+      body.printing-merchant-modal > #merchantPrintOnlyContainer {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        direction: rtl !important;
+      }
+    }
+  </style>
 </head>
 <body class="min-h-screen pb-24 md:pb-10">
 
@@ -1792,6 +1828,9 @@
     </button>
   </nav>
 
-  <script src="./app.js?v=26"></script>
+    <!-- Dedicated Print-Only Container for Single Merchant Statement -->
+  <div id="merchantPrintOnlyContainer" dir="rtl"></div>
+
+  <script src="./app.js?v=27"></script>
 </body>
 </html>

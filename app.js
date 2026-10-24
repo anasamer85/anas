@@ -3406,6 +3406,330 @@ function computeMerchantDetailedLedger(merchantCode) {
   };
 }
 
+function ensureMerchantPrintDomElements() {
+  if (typeof document === 'undefined') return null;
+  if (!document.getElementById('criticalPrintStyles')) {
+    const st = document.createElement('style');
+    st.id = 'criticalPrintStyles';
+    st.textContent = `
+      #merchantPrintOnlyContainer { display: none; }
+      @page { size: A4 landscape; margin: 5mm 4mm; }
+      @media print {
+        html, body {
+          background: #ffffff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body.printing-merchant-modal > *:not(#merchantPrintOnlyContainer) {
+          display: none !important;
+        }
+        body.printing-merchant-modal > #merchantPrintOnlyContainer {
+          display: block !important;
+          position: static !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          color: #0f172a !important;
+          direction: rtl !important;
+        }
+        #merchantPrintTable {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          table-layout: fixed !important;
+          border-collapse: collapse !important;
+        }
+        #merchantPrintTable th,
+        #merchantPrintTable td,
+        #merchantPrintTable tfoot td {
+          box-sizing: border-box !important;
+          padding: 3px 2px !important;
+          font-size: 8.5px !important;
+          line-height: 1.2 !important;
+          white-space: normal !important;
+          word-break: break-word !important;
+          overflow-wrap: anywhere !important;
+          border: 1px solid #334155 !important;
+        }
+        #merchantPrintTable thead { display: table-header-group !important; }
+        #merchantPrintTable tfoot { display: table-row-group !important; }
+        #merchantPrintTable tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+      }
+    `;
+    (document.head || document.documentElement).appendChild(st);
+  }
+  let printContainer = document.getElementById('merchantPrintOnlyContainer');
+  if (!printContainer) {
+    printContainer = document.createElement('div');
+    printContainer.id = 'merchantPrintOnlyContainer';
+    printContainer.setAttribute('dir', 'rtl');
+    document.body.appendChild(printContainer);
+  } else if (printContainer.parentElement !== document.body) {
+    document.body.appendChild(printContainer);
+  }
+  return printContainer;
+}
+
+let isMerchantPrintActive = false;
+
+function activateMerchantPrintMode() {
+  if (!activeDrillDownMerchantCode) return;
+  renderMerchantDrillDownModal();
+  const printContainer = ensureMerchantPrintDomElements();
+  if (!printContainer) return;
+  isMerchantPrintActive = true;
+  document.body.classList.add('printing-merchant-modal');
+  Array.from(document.body.children).forEach(el => {
+    if (!el || !el.style || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
+    if (el.id === 'merchantPrintOnlyContainer') {
+      el.style.setProperty('display', 'block', 'important');
+    } else {
+      if (el.dataset.prevPrintDisplay === undefined) {
+        el.dataset.prevPrintDisplay = el.style.getPropertyValue('display') || '';
+        el.dataset.prevPrintPriority = el.style.getPropertyPriority('display') || '';
+      }
+      el.style.setProperty('display', 'none', 'important');
+    }
+  });
+}
+
+function deactivateMerchantPrintMode() {
+  if (!isMerchantPrintActive) return;
+  isMerchantPrintActive = false;
+  Array.from(document.body.children).forEach(el => {
+    if (!el || !el.style || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
+    if (el.id === 'merchantPrintOnlyContainer') {
+      el.style.removeProperty('display');
+    } else if (el.dataset.prevPrintDisplay !== undefined) {
+      const prevVal = el.dataset.prevPrintDisplay;
+      const prevPrio = el.dataset.prevPrintPriority;
+      delete el.dataset.prevPrintDisplay;
+      delete el.dataset.prevPrintPriority;
+      if (prevVal) {
+        el.style.setProperty('display', prevVal, prevPrio);
+      } else {
+        el.style.removeProperty('display');
+      }
+    }
+  });
+  const modal = document.getElementById('merchantDrillDownModal');
+  if (!modal || modal.classList.contains('hidden')) {
+    document.body.classList.remove('printing-merchant-modal');
+  }
+}
+
+function triggerMerchantStatementPrint() {
+  if (!activeDrillDownMerchantCode) return;
+  activateMerchantPrintMode();
+  setTimeout(() => {
+    try {
+      window.print();
+    } finally {
+      setTimeout(deactivateMerchantPrintMode, 250);
+    }
+  }, 60);
+}
+
+function renderMerchantPrintOnlyContainer(ledger, filteredMovements) {
+  const printContainer = ensureMerchantPrintDomElements();
+  if (!printContainer || !ledger) return;
+  const fName = appState.farmName || 'أبوذكري';
+  const pendTxt = ledger.totalPendingCars > 0 ? ` (+${ledger.totalPendingCars} مؤقت)` : '';
+  const balLabel = ledger.finalRunningBalance > 0
+    ? 'عليه للمزرعة'
+    : (ledger.finalRunningBalance < 0 ? 'له رصيد دائن' : 'خالص ✓');
+  const balBg = ledger.finalRunningBalance > 0 ? '#fef3c7' : (ledger.finalRunningBalance < 0 ? '#e0f2fe' : '#d1fae5');
+  const subCarsTxt = ledger.subCarNames && ledger.subCarNames.length > 1
+    ? `السيارات التابعة للكود: (${ledger.subCarNames.join(' ، ')})`
+    : `اسم التاجر الأساسي: ${ledger.name}`;
+  const printDateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+
+  let extraLineHtml = '';
+  const extraParts = [];
+  if (ledger.sumTotalCustody > 0) {
+    extraParts.push(`💼 بيان العهدة المستقلة: إجمالي العهدة المدفوعة = ${fmtInt(ledger.sumTotalCustody)} ج.م | المتبقي من العهدة بعد سداد المديونيات = ${fmtInt(ledger.sumNetCustodyRem)} ج.م`);
+  }
+  if ((ledger.sumPrevCash + ledger.sumPrevTransfer) > 0) {
+    extraParts.push(`🏦 تحصيلات مزارع سابقة (لا تخصم من الحالية): نقدي = ${fmtInt(ledger.sumPrevCash)} ج.م | تحويل = ${fmtInt(ledger.sumPrevTransfer)} ج.م`);
+  }
+  if (extraParts.length > 0) {
+    extraLineHtml = `<div style="margin-top:4px; padding:3px 6px; border:1px solid #cbd5e1; border-radius:4px; background:#f8fafc; font-size:8.5px; font-weight:700; color:#1e293b;">${extraParts.join(' &nbsp;|&nbsp; ')}</div>`;
+  }
+
+  let rowsHtml = '';
+  if (!filteredMovements || filteredMovements.length === 0) {
+    rowsHtml = `<tr><td colspan="18" style="padding:10px; text-align:center; font-weight:700;">لا توجد حركات مسجلة لهذا التاجر في المزرعة الحالية.</td></tr>`;
+  } else {
+    rowsHtml = filteredMovements.map((r, idx) => {
+      const trSalesTxt = r.transferSales > 0
+        ? `${fmtInt(r.transferSales)} (${r.transferSalesType || 'تحويل'})`
+        : '-';
+      const debtPaidTotal = r.debtCash + r.debtTransfer;
+      const debtPaidTxt = debtPaidTotal > 0
+        ? `${fmtInt(debtPaidTotal)} (${r.debtCash > 0 && r.debtTransfer > 0 ? `نقدي ${fmtInt(r.debtCash)}+${r.debtTransferType || 'تحويل'} ${fmtInt(r.debtTransfer)}` : (r.debtTransfer > 0 ? (r.debtTransferType || 'تحويل') : 'نقدي')})`
+        : '-';
+      const extraNotesArr = [];
+      if ((r.prevCash + r.prevTransfer) > 0) {
+        extraNotesArr.push(`سابقة: ${fmtInt(r.prevCash + r.prevTransfer)}${r.prevTransfer > 0 ? ` (${r.prevTransferType || 'تحويل'})` : ' (نقدي)'}`);
+      }
+      if (r.totalCustody > 0) {
+        extraNotesArr.push(`عهدة: ${fmtInt(r.totalCustody)} (متبقي: ${fmtInt(r.netCustodyRemaining)})`);
+      }
+      if (r.notes) extraNotesArr.push(r.notes);
+      const notesCellTxt = extraNotesArr.join(' | ') || (r.isPending ? '⏳ محجوز (وزنة 1)' : '-');
+      const rowBg = r.isPending ? '#fef3c7' : (idx % 2 === 0 ? '#ffffff' : '#f8fafc');
+      const runBalBg = r.runningBalanceAfter > 0 ? '#fffbeb' : (r.runningBalanceAfter < 0 ? '#f0f9ff' : '#ecfdf5');
+
+      return `<tr style="background:${rowBg};">
+        <td style="text-align:center; font-weight:700;">${idx + 1}</td>
+        <td style="text-align:right; font-weight:800;">يوم ${r.dayNum} (${r.dateLabel})</td>
+        <td style="text-align:right; font-weight:800;">${r.merchant}${r.isPending ? ' (مؤقت)' : ''}</td>
+        <td style="text-align:center; font-weight:700;">${r.scaleNo || '-'}</td>
+        <td style="text-align:center; font-weight:700;">${r.carNo || '-'}</td>
+        <td style="text-align:center; font-weight:700;">${fmtInt(r.w1)}</td>
+        <td style="text-align:center; font-weight:700;">${r.isPending ? 'مؤقت' : fmtInt(r.w2)}</td>
+        <td style="text-align:center; font-weight:800; background:#eff6ff;">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
+        <td style="text-align:center;">${fmtDec(r.price)}</td>
+        <td style="text-align:center;">${fmtInt(r.tip)}</td>
+        <td style="text-align:center; font-weight:800; background:#eff6ff;">${r.isPending ? '0' : fmtDec(r.totalWithTip)}</td>
+        <td style="text-align:center; font-weight:700; color:#065f46;">${r.cashSales > 0 ? fmtInt(r.cashSales) : '-'}</td>
+        <td style="text-align:center; font-weight:700; color:#115e59;">${trSalesTxt}</td>
+        <td style="text-align:center; font-weight:700; color:#78350f;">${r.creditSales > 0 ? fmtInt(r.creditSales) : '-'}</td>
+        <td style="text-align:center; font-weight:700; color:#115e59;">${debtPaidTxt}</td>
+        <td style="text-align:center; font-weight:800; background:#ecfdf5; color:#064e3b;">${r.isPending ? '0' : fmtInt(r.settledInRow)}</td>
+        <td style="text-align:center; font-weight:800; background:${runBalBg};">${fmtInt(r.runningBalanceAfter)}</td>
+        <td style="text-align:right; font-size:8px; font-weight:700;">${notesCellTxt}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  printContainer.innerHTML = `
+    <div style="border:2px solid #1b365d; border-radius:6px; padding:6px 8px; background:#ffffff; color:#0f172a; font-family:'Cairo',sans-serif;">
+      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:4px; margin-bottom:5px;">
+        <div>
+          <div style="font-size:13px; font-weight:800; color:#1b365d;">
+            📋 كشف حساب تفصيلي للتاجر: <span style="color:#b45309;">${ledger.name}</span> (الكود الموحد: ${ledger.code}) — مزرعة ${fName}
+          </div>
+          <div style="font-size:9px; font-weight:700; color:#475569; margin-top:1px;">
+            ${subCarsTxt} &nbsp;|&nbsp; عدد الحركات المعروضة: ${filteredMovements.length} حركة
+          </div>
+        </div>
+        <div style="text-align:left; font-size:9px; font-weight:700; color:#334155;">
+          <div>نظام محاضر لجان بيع المزارع</div>
+          <div>تاريخ الطباعة: ${printDateStr}</div>
+        </div>
+      </div>
+
+      <table style="width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:4px; font-size:9px; text-align:center;">
+        <tbody>
+          <tr>
+            <td style="border:1px solid #94a3b8; padding:3px 4px; background:#f8fafc;">
+              <div style="font-size:8px; color:#475569; font-weight:700;">عدد السيارات / الصافي</div>
+              <div style="font-weight:800; color:#0f172a;">${fmtInt(ledger.totalCompletedCars)} سيارة${pendTxt} | ${fmtInt(ledger.sumNetWeight)} كجم</div>
+            </td>
+            <td style="border:1px solid #94a3b8; padding:3px 4px; background:#eff6ff;">
+              <div style="font-size:8px; color:#1e3a8a; font-weight:700;">إجمالي الفواتير بالإكرامية</div>
+              <div style="font-weight:800; color:#172554;">${fmtDec(ledger.sumTotalSales)} ج.م</div>
+            </td>
+            <td style="border:1px solid #94a3b8; padding:3px 4px; background:#ecfdf5;">
+              <div style="font-size:8px; color:#065f46; font-weight:700;">مسدد نقدي (مبيعات+مديونيات)</div>
+              <div style="font-weight:800; color:#064e3b;">${fmtInt(ledger.sumCashSales + ledger.sumDebtCash)} ج.م</div>
+            </td>
+            <td style="border:1px solid #94a3b8; padding:3px 4px; background:#f0fdfa;">
+              <div style="font-size:8px; color:#115e59; font-weight:700;">مسدد بتحويل (مبيعات+مديونيات)</div>
+              <div style="font-weight:800; color:#134e4a;">${fmtInt(ledger.sumTransferSales + ledger.sumDebtTransfer)} ج.م</div>
+            </td>
+            <td style="border:1px solid #94a3b8; padding:3px 4px; background:#d1fae5;">
+              <div style="font-size:8px; color:#064e3b; font-weight:700;">إجمالي المسدد للمزرعة الحالية</div>
+              <div style="font-weight:800; color:#022c22;">${fmtInt(ledger.sumTotalSettledCurrent)} ج.م</div>
+            </td>
+            <td style="border:1.5px solid #1e293b; padding:3px 4px; background:${balBg};">
+              <div style="font-size:8px; color:#0f172a; font-weight:800;">صافي المديونية (${balLabel})</div>
+              <div style="font-size:10px; font-weight:800; color:#0f172a;">${fmtInt(ledger.finalRunningBalance)} ج.م</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      ${extraLineHtml}
+
+      <table id="merchantPrintTable" dir="rtl" style="width:100%; max-width:100%; table-layout:fixed; border-collapse:collapse; margin-top:4px;">
+        <colgroup>
+          <col style="width:2.2%;" />
+          <col style="width:7.0%;" />
+          <col style="width:6.8%;" />
+          <col style="width:3.8%;" />
+          <col style="width:3.8%;" />
+          <col style="width:4.8%;" />
+          <col style="width:4.8%;" />
+          <col style="width:5.2%;" />
+          <col style="width:4.2%;" />
+          <col style="width:3.8%;" />
+          <col style="width:6.8%;" />
+          <col style="width:6.0%;" />
+          <col style="width:6.6%;" />
+          <col style="width:6.0%;" />
+          <col style="width:6.6%;" />
+          <col style="width:6.4%;" />
+          <col style="width:6.8%;" />
+          <col style="width:8.4%;" />
+        </colgroup>
+        <thead>
+          <tr style="background:#1b365d; color:#ffffff; font-weight:800; text-align:center;">
+            <th>م</th>
+            <th>اليوم والتاريخ</th>
+            <th>السيارة / البيان</th>
+            <th>ميزان</th>
+            <th>سيارة</th>
+            <th>وزنة 1</th>
+            <th>وزنة 2</th>
+            <th>الصافي</th>
+            <th>السعر</th>
+            <th>إكرامية</th>
+            <th>إجمالي الفاتورة</th>
+            <th>نقدي مبيعات</th>
+            <th>تحويل مبيعات</th>
+            <th>آجل اليوم</th>
+            <th>سداد مديونية</th>
+            <th>إجمالي المسدد</th>
+            <th>الرصيد التراكمي</th>
+            <th>ملاحظات / سابقة</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+        <tfoot>
+          <tr style="background:#fbbf24; color:#0f172a; font-weight:800; text-align:center;">
+            <td colspan="5" style="text-align:center;">إجمالي التاجر (${ledger.name} — ${ledger.totalCompletedCars} حركة)</td>
+            <td>${fmtInt(ledger.sumW1)}</td>
+            <td>${fmtInt(ledger.sumW2)}</td>
+            <td>${fmtInt(ledger.sumNetWeight)}</td>
+            <td>${fmtDec(ledger.avgPrice)}</td>
+            <td>${fmtInt(ledger.sumTip)}</td>
+            <td>${fmtDec(ledger.sumTotalSales)}</td>
+            <td>${fmtInt(ledger.sumCashSales)}</td>
+            <td>${fmtInt(ledger.sumTransferSales)}</td>
+            <td>${fmtInt(ledger.sumCreditSales)}</td>
+            <td>${fmtInt(ledger.sumDebtCash + ledger.sumDebtTransfer)}</td>
+            <td>${fmtInt(ledger.sumTotalSettledCurrent)}</td>
+            <td>${fmtInt(ledger.finalRunningBalance)} ج.م</td>
+            <td>${ledger.sumPrevCash + ledger.sumPrevTransfer > 0 ? `سابقة: ${fmtInt(ledger.sumPrevCash + ledger.sumPrevTransfer)}` : 'المزرعة الحالية ✓'}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+
 function openMerchantDrillDownModal(merchantCode) {
   const code = Number(merchantCode) || 0;
   if (!code) return;
@@ -3415,12 +3739,15 @@ function openMerchantDrillDownModal(merchantCode) {
   renderMerchantDrillDownModal();
   const modal = document.getElementById('merchantDrillDownModal');
   if (modal) modal.classList.remove('hidden');
+  document.body.classList.add('printing-merchant-modal');
 }
 
 function closeMerchantDrillDownModal() {
+  deactivateMerchantPrintMode();
   activeDrillDownMerchantCode = 0;
   const modal = document.getElementById('merchantDrillDownModal');
   if (modal) modal.classList.add('hidden');
+  document.body.classList.remove('printing-merchant-modal');
 }
 
 function renderMerchantDrillDownModal() {
@@ -3529,6 +3856,9 @@ function renderMerchantDrillDownModal() {
       )
     : ledger.movements;
 
+  // Populate the dedicated print-only container for this single merchant
+  renderMerchantPrintOnlyContainer(ledger, filteredMovements);
+
   const countBadge = document.getElementById('mdlMerchMovementsCountBadge');
   if (countBadge) {
     countBadge.textContent = q
@@ -3599,7 +3929,7 @@ function renderMerchantDrillDownModal() {
         <td class="p-2 border text-left font-extrabold bg-emerald-50 text-emerald-950">${r.isPending ? '0' : fmtInt(r.settledInRow)}</td>
         <td class="p-2 border text-left font-extrabold ${runBalCls}">${fmtInt(r.runningBalanceAfter)}</td>
         <td class="p-2 border text-right text-[11px] font-bold text-purple-900">${notesCellTxt}</td>
-        <td class="p-1.5 border text-center">
+        <td class="p-1.5 border text-center print-hide-col">
           <button type="button" data-modal-jump-day="${r.dayNum}" class="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 font-extrabold text-[11px] whitespace-nowrap">
             📂 يوم ${r.dayNum}
           </button>
@@ -3624,7 +3954,8 @@ function renderMerchantDrillDownModal() {
       <td class="p-2 border text-left">${fmtInt(ledger.sumDebtCash + ledger.sumDebtTransfer)}</td>
       <td class="p-2 border text-left bg-emerald-300/60">${fmtInt(ledger.sumTotalSettledCurrent)}</td>
       <td class="p-2 border text-left bg-amber-300 text-slate-950">${fmtInt(ledger.finalRunningBalance)} ج.م</td>
-      <td colspan="2" class="p-2 border text-center">${ledger.sumPrevCash + ledger.sumPrevTransfer > 0 ? `مزارع سابقة: ${fmtInt(ledger.sumPrevCash + ledger.sumPrevTransfer)} ج.م` : 'رصيد المزرعة الحالية ✓'}</td>
+      <td class="p-2 border text-center">${ledger.sumPrevCash + ledger.sumPrevTransfer > 0 ? `مزارع سابقة: ${fmtInt(ledger.sumPrevCash + ledger.sumPrevTransfer)} ج.م` : 'رصيد المزرعة الحالية ✓'}</td>
+      <td class="p-2 border text-center print-hide-col"></td>
     </tr>
   `;
 }
@@ -5343,6 +5674,19 @@ function initFarmSalesApp() {
   if (btnDropUpdate) btnDropUpdate.addEventListener('click', forceAppHardReload);
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
+
+  // Auto-purge legacy Service Worker caches (v25/v26) so updated print styles & scripts apply immediately
+  try {
+    if ('caches' in window) {
+      caches.keys().then(keys => {
+        keys.forEach(k => {
+          if (k !== 'farm-sales-committee-v27') {
+            caches.delete(k).catch(() => {});
+          }
+        });
+      }).catch(() => {});
+    }
+  } catch (e) {}
 
   // Register Offline Service Worker with auto-update detection
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
@@ -7535,9 +7879,18 @@ function initFarmSalesApp() {
   const btnPrintMerchStmt = document.getElementById('btnPrintMerchantStatement');
   if (btnPrintMerchStmt) {
     btnPrintMerchStmt.addEventListener('click', () => {
-      window.print();
+      triggerMerchantStatementPrint();
     });
   }
+  window.addEventListener('beforeprint', () => {
+    const mdl = document.getElementById('merchantDrillDownModal');
+    if ((mdl && !mdl.classList.contains('hidden')) || activeDrillDownMerchantCode > 0) {
+      activateMerchantPrintMode();
+    }
+  });
+  window.addEventListener('afterprint', () => {
+    deactivateMerchantPrintMode();
+  });
 
   document.getElementById('merchantsTbody').addEventListener('click', (e) => {
     const editBtn = e.target.closest('[data-edit-merchant]');
@@ -7686,7 +8039,7 @@ function initFarmSalesApp() {
     // 1. Remove runtime <style> tags injected by Tailwind Play CDN if ./style.css link is present
     const hasExternalStyleLink = Boolean(cloneDoc.querySelector('link[href*="style.css"]'));
     if (hasExternalStyleLink) {
-      cloneDoc.querySelectorAll('head style').forEach(st => st.remove());
+      cloneDoc.querySelectorAll('head style:not(#criticalPrintStyles)').forEach(st => st.remove());
     }
 
     // 2. Embed the Webhook URL in <meta id="metaEmbeddedCloudWebhookUrl"> and <script id="embeddedWebhookConfigScript">
@@ -7731,7 +8084,8 @@ function initFarmSalesApp() {
       '#dashKpiGrid',
       '#merchantDrillDownTbody',
       '#merchantDrillDownTfoot',
-      '#mdlMerchKpiGrid'
+      '#mdlMerchKpiGrid',
+      '#merchantPrintOnlyContainer'
     ].forEach(sel => {
       const el = cloneDoc.querySelector(sel);
       if (el) el.innerHTML = '';
@@ -7754,6 +8108,10 @@ function initFarmSalesApp() {
     const cloneMerchModal = cloneDoc.querySelector('#merchantDrillDownModal');
     if (cloneMerchModal) {
       cloneMerchModal.classList.add('hidden');
+    }
+    const cloneBody = cloneDoc.querySelector('body');
+    if (cloneBody) {
+      cloneBody.classList.remove('printing-merchant-modal');
     }
     ['daily', 'dashboard', 'merchants', 'transfers', 'expenses', 'sync'].forEach(v => {
       const sec = cloneDoc.querySelector(`#view-${v}`);
