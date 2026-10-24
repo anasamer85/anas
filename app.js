@@ -3627,8 +3627,14 @@ function cleanPrintCellText(cellEl) {
   if (!cellEl) return '';
   const clone = cellEl.cloneNode(true);
   clone.querySelectorAll('[data-excel-filter-btn], .print-hide-col').forEach(el => el.remove());
-  // Remove interactive drill-down badge ("📋 كشف تفصيلي" / "📋") inside merchant buttons so only the merchant name prints cleanly
-  clone.querySelectorAll('[data-drill-merchant] span.text-\[10px\]').forEach(el => el.remove());
+  // حذف شارة (📋 كشف تفصيلي / 📋) التفاعلية داخل أزرار أسماء التجار بدون استخدام أقواس مربعة في محدد CSS
+  clone.querySelectorAll('[data-drill-merchant] span').forEach(spanEl => {
+    const cls = String(spanEl.className || '');
+    const txt = (spanEl.textContent || '').trim();
+    if (cls.includes('text-[10px]') || txt.includes('كشف تفصيلي') || txt === '📋') {
+      spanEl.remove();
+    }
+  });
   return (clone.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
@@ -6081,7 +6087,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v28') {
+          if (k !== 'farm-sales-committee-v29') {
             caches.delete(k).catch(() => {});
           }
         });

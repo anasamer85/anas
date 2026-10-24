@@ -351,4 +351,4 @@
 2. **الحل الجذري لطباعة كشف حساب التاجر المنفرد في صفحة واحدة (`#merchantPrintOnlyContainer`):**
    - إنشاء حاوية طباعة معزولة ومباشرة تحت `<body>` (`#merchantPrintOnlyContainer`) يتم تعبئتها ببيانات التاجر المختار وحده، مع جدول قياسي من 18 عموداً (`#merchantPrintTable`) بنسب عرض مئوية ثابتة (`table-layout: fixed; width: 100%`) تضمن ظهور جميع الأعمدة الـ 18 بالكامل دون أي قص أفقي.
    - عزل الطباعة برمجياً عبر `activateMerchantPrintMode()` و`deactivateMerchantPrintMode()` بإخفاء باقي عناصر `<body>` (`<header>`, `<main>`, `<nav>`, `#merchantDrillDownModal`) عبر `style.setProperty('display', 'none', 'important')` أثناء الطباعة فقط، مما يمنع ظهور جدول التجار الخلفي نهائياً ويحصر عدد ورقات الطباعة على قد مسافة التقرير الفعلي للتاجر المختار فقط.
-   - تحديث إصدار ملفات المشروع والـ Service Worker إلى `v28` (`farm-sales-committee-v28`) مع المسح التلقائي للكاش القديم عند التشغيل.
+   - تحديث إصدار ملفات المشروع والـ Service Worker إلى `v29` (`farm-sales-committee-v29`) مع المسح التلقائي للكاش القديم عند التشغيل.
