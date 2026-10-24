@@ -1999,3 +1999,31 @@ body.floating-bar-hidden #mobileWeighbridgeActionBar,
     display: none !important;
   }
 }
+
+/* =========================================================================
+   6. FULL JSON BACKUP & AUDIT TRAIL STYLES (v36)
+   ========================================================================= */
+.max-h-80 {
+  max-height: 20rem;
+}
+.z-10 {
+  z-index: 10;
+}
+.rounded-md {
+  border-radius: 0.375rem;
+}
+.bg-indigo-50\/70 {
+  background-color: rgba(238, 242, 255, 0.7);
+}
+.hover\:bg-indigo-50:hover {
+  background-color: #eef2ff;
+}
+.border-indigo-200 {
+  border-color: #c7d2fe;
+}
+.text-indigo-950 {
+  color: #1e1b4b;
+}
+.border-teal-400\/50 {
+  border-color: rgba(45, 212, 191, 0.5);
+}

@@ -493,6 +493,80 @@ function hasPermission(permKey) {
   return Boolean(u.perms[permKey]);
 }
 
+function getActiveUserShortLabel() {
+  const u = getActiveUser();
+  if (!u) return 'مدير الموقع';
+  const raw = String(u.name || u.username || u.id || 'مدير الموقع')
+    .replace('(كامل الصلاحيات)', '')
+    .replace('(عرض وسحب إكسيل فقط)', '')
+    .trim();
+  return raw || 'مدير الموقع';
+}
+
+function formatAuditTimeArabic(tsInput) {
+  const ts = Number(tsInput) || Date.now();
+  try {
+    const dt = new Date(ts);
+    if (isNaN(dt.getTime())) return '';
+    const timeStr = dt.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = dt.toLocaleDateString('ar-EG', { month: 'numeric', day: 'numeric' });
+    return `${timeStr} (${dateStr})`;
+  } catch (e) {
+    return '';
+  }
+}
+
+function buildRecordAuditMeta(existingRec = null, isEdit = false) {
+  const actor = getActiveUserShortLabel();
+  const nowMs = Date.now();
+  const nowTxt = formatAuditTimeArabic(nowMs);
+  if (existingRec && (existingRec.createdBy || existingRec.createdAt)) {
+    const origCreatedAt = Number(existingRec.createdAt) || extractTimestampFromRecord(existingRec) || nowMs;
+    const origCreatedBy = String(existingRec.createdBy || existingRec.updatedBy || actor).trim();
+    const origCreatedTxt = String(existingRec.createdTimeTxt || formatAuditTimeArabic(origCreatedAt)).trim();
+    return {
+      createdAt: origCreatedAt,
+      createdBy: origCreatedBy,
+      createdTimeTxt: origCreatedTxt,
+      updatedAt: nowMs,
+      updatedBy: actor,
+      updatedTimeTxt: nowTxt,
+      isEdited: Boolean(isEdit || origCreatedBy !== actor || (nowMs - origCreatedAt > 2000))
+    };
+  }
+  return {
+    createdAt: nowMs,
+    createdBy: actor,
+    createdTimeTxt: nowTxt,
+    updatedAt: nowMs,
+    updatedBy: actor,
+    updatedTimeTxt: nowTxt,
+    isEdited: false
+  };
+}
+
+function renderAuditTrailBadgeHtml(rec) {
+  if (!rec || typeof rec !== 'object') return '';
+  const ts = Number(rec.updatedAt) || Number(rec.createdAt) || extractTimestampFromRecord(rec) || 0;
+  const createdBy = String(rec.createdBy || rec.updatedBy || (ts > 0 ? 'مدير الموقع' : '')).trim();
+  const updatedBy = String(rec.updatedBy || createdBy).trim();
+  const timeTxt = String(rec.updatedTimeTxt || rec.createdTimeTxt || (ts > 0 ? formatAuditTimeArabic(ts) : '')).trim();
+  if (!createdBy && !timeTxt) return '';
+
+  const wasEdited = Boolean(rec.isEdited || (createdBy && updatedBy && createdBy !== updatedBy));
+  const titleTip = wasEdited
+    ? `سجل الرقابة — سجّله: ${createdBy} (${rec.createdTimeTxt || timeTxt}) | عدّله: ${updatedBy} (${rec.updatedTimeTxt || timeTxt})`
+    : `سجل الرقابة — سجّله: ${createdBy || 'مدير الموقع'} | وقت الحركة: ${timeTxt || '-'}`;
+
+  const labelHtml = wasEdited
+    ? (createdBy !== updatedBy
+        ? `<span>👤 ${escXmlStr(createdBy)}</span><span class="text-amber-700">✏️ ${escXmlStr(updatedBy)}</span>`
+        : `<span>👤 ${escXmlStr(updatedBy)}</span><span class="text-amber-700">(✏️ معدّل)</span>`)
+    : `<span>👤 ${escXmlStr(createdBy || 'مدير الموقع')}</span>`;
+
+  return `<span class="print-hide-col inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-300 text-slate-800 text-[10px] font-extrabold ml-1 whitespace-nowrap" title="${escXmlStr(titleTip)}">${labelHtml}${timeTxt ? `<span class="text-blue-900 font-bold">| 🕒 ${escXmlStr(timeTxt)}</span>` : ''}</span>`;
+}
+
 function getVisibleDays() {
   if (!Array.isArray(appState.visibleDays) || appState.visibleDays.length === 0) {
     appState.visibleDays = [1];
@@ -955,6 +1029,7 @@ function renderAllPreservingActiveInputs() {
     renderMerchantsAndStatements();
     renderExpensesStatementView();
     renderCloudDatabaseHub();
+    renderBackupAndAuditCenterUI();
     updateLiveFormCalculation();
   } else {
     renderAll();
@@ -974,22 +1049,36 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
     if (!cloudItem) return { ...localItem };
     const lUpdated = extractTimestampFromRecord(localItem);
     const cUpdated = extractTimestampFromRecord(cloudItem);
+    const lCreated = Number(localItem.createdAt) || lUpdated || 0;
+    const cCreated = Number(cloudItem.createdAt) || cUpdated || 0;
+    const earliestCreatedAt = (lCreated > 0 && cCreated > 0) ? Math.min(lCreated, cCreated) : (lCreated || cCreated || undefined);
+    const origCreatedBy = (lCreated > 0 && cCreated > 0 && lCreated <= cCreated)
+      ? (localItem.createdBy || cloudItem.createdBy)
+      : (cloudItem.createdBy || localItem.createdBy);
+    const origCreatedTimeTxt = (lCreated > 0 && cCreated > 0 && lCreated <= cCreated)
+      ? (localItem.createdTimeTxt || cloudItem.createdTimeTxt)
+      : (cloudItem.createdTimeTxt || localItem.createdTimeTxt);
 
+    let mergedObj;
     if (lUpdated > 0 && cUpdated > 0 && lUpdated !== cUpdated) {
       if (isTimestampSignificantlyNewer(lUpdated, cUpdated, CLOCK_SKEW_BUFFER_MS)) {
-        return { ...cloudItem, ...localItem, updatedAt: lUpdated };
+        mergedObj = { ...cloudItem, ...localItem, updatedAt: lUpdated };
+      } else if (isTimestampSignificantlyNewer(cUpdated, lUpdated, CLOCK_SKEW_BUFFER_MS)) {
+        mergedObj = { ...localItem, ...cloudItem, updatedAt: cUpdated };
+      } else {
+        mergedObj = (cUpdated > lUpdated || (cUpdated === lUpdated && preferCloudItem))
+          ? { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) }
+          : { ...cloudItem, ...localItem, updatedAt: Math.max(lUpdated, cUpdated) };
       }
-      if (isTimestampSignificantlyNewer(cUpdated, lUpdated, CLOCK_SKEW_BUFFER_MS)) {
-        return { ...localItem, ...cloudItem, updatedAt: cUpdated };
-      }
-      // داخل هامش التسامح الزمني (Clock Skew Buffer): نعتمد الأحدث زمنياً أو الأولوية المحددة مع الحفاظ على الحقول المحدثة
-      return (cUpdated > lUpdated || (cUpdated === lUpdated && preferCloudItem))
-        ? { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) }
-        : { ...cloudItem, ...localItem, updatedAt: Math.max(lUpdated, cUpdated) };
+    } else {
+      mergedObj = preferCloudItem
+        ? { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) || undefined }
+        : { ...cloudItem, ...localItem, updatedAt: Math.max(lUpdated, cUpdated) || undefined };
     }
-    return preferCloudItem
-      ? { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) || undefined }
-      : { ...cloudItem, ...localItem, updatedAt: Math.max(lUpdated, cUpdated) || undefined };
+    if (origCreatedBy) mergedObj.createdBy = origCreatedBy;
+    if (earliestCreatedAt) mergedObj.createdAt = earliestCreatedAt;
+    if (origCreatedTimeTxt) mergedObj.createdTimeTxt = origCreatedTimeTxt;
+    return mergedObj;
   };
 
   const primaryArr = preferCloudItem ? safeCloud : safeLocal;
@@ -2128,12 +2217,13 @@ function renderDailyView() {
       const receiptBtnHtml = showReceiptBtn
         ? `<button type="button" data-print-receipt="${r.id}" data-receipt-day="${d}" class="px-2 py-1 rounded bg-indigo-800 text-white font-extrabold hover:bg-indigo-700 ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة) للتاجر والسائق والأرشيف">🖨️ طباعة بون ميزان</button>`
         : '';
+      const auditBadgeHtml = renderAuditTrailBadgeHtml(r);
       const actionCellHtml = !hasPermission('sales')
-        ? `${receiptBtnHtml}<span class="text-slate-400 text-[11px]">🔒 عرض فقط</span>`
+        ? `${auditBadgeHtml}${receiptBtnHtml}<span class="text-slate-400 text-[11px]">🔒 عرض فقط</span>`
         : (r.isPending
-          ? `${receiptBtnHtml}<button type="button" data-recall-pending="${r.id}" class="px-2 py-1 rounded bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 ml-1 shadow-sm" title="استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية">🔄 استكمال</button>
+          ? `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-recall-pending="${r.id}" class="px-2 py-1 rounded bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 ml-1 shadow-sm" title="استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية">🔄 استكمال</button>
              <button type="button" data-del-pending="${r.id}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`
-          : `${receiptBtnHtml}<button type="button" data-edit-sale="${r.id}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
+          : `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-edit-sale="${r.id}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
              <button type="button" data-del-sale="${r.id}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`);
 
       tr.innerHTML = `
@@ -2201,6 +2291,7 @@ function renderDailyView() {
         <td class="p-2 border font-bold">${exp.recipient || '-'}</td>
         <td class="p-2 border font-extrabold text-rose-800 text-left">${fmtInt(exp.amount)} ج.م</td>
         <td class="p-1.5 border text-center whitespace-nowrap">
+          ${renderAuditTrailBadgeHtml(exp)}
           ${hasPermission('expenses') ? `
             <button type="button" data-edit-exp="${exp.id}" class="px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">✏️ تعديل</button>
             <button type="button" data-del-exp="${exp.id}" class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">🗑️ حذف</button>
@@ -2280,6 +2371,7 @@ function renderDailyView() {
           <td class="p-1.5 border text-left">${fmtMoney(item.price)} | إكرامية: ${fmtMoney(item.tip)}</td>
           <td class="p-1.5 border text-right text-[11px]">${(item.custodyCash || item.custodyTransfer) ? `عهدة: ${fmtMoney((Number(item.custodyCash)||0)+(Number(item.custodyTransfer)||0))}` : (item.notes || 'بانتظار الوزنة الثانية')}</td>
           <td class="p-1 border text-center whitespace-nowrap">
+            ${renderAuditTrailBadgeHtml(item)}
             ${excelTableState && excelTableState.showScaleReceiptButtons ? `<button type="button" data-print-receipt="${item.id}" data-receipt-day="${d}" class="px-2 py-0.5 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-[11px] ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة)">
               🖨️ طباعة بون ميزان
             </button>` : ''}
@@ -4930,6 +5022,7 @@ function renderMerchantDrillDownModal() {
         <td class="p-2 border text-left font-extrabold ${runBalCls}">${fmtInt(r.runningBalanceAfter)}</td>
         <td class="p-2 border text-right text-[11px] font-bold text-purple-900">${notesCellTxt}</td>
         <td class="p-1.5 border text-center print-hide-col whitespace-nowrap">
+          ${renderAuditTrailBadgeHtml(r)}
           ${excelTableState && excelTableState.showScaleReceiptButtons ? `<button type="button" data-print-receipt="${r.id}" data-receipt-day="${r.dayNum}" class="px-2 py-1 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-[11px] whitespace-nowrap ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة)">
             🖨️ طباعة بون ميزان
           </button>` : ''}
@@ -5229,6 +5322,8 @@ function renderUsersAndPermissionsUI() {
   if (dayMgmtSec) dayMgmtSec.classList.toggle('hidden', !showQuickCtrl);
   const cardCloud = document.getElementById('syncCloudDbHubCard');
   if (cardCloud) cardCloud.classList.toggle('hidden', !showCloudHub);
+  const cardBackupAudit = document.getElementById('fullJsonBackupAndAuditCard');
+  if (cardBackupAudit) cardBackupAudit.classList.toggle('hidden', isVis);
   const cardTwoWay = document.getElementById('syncTwoWayExcelCard');
   if (cardTwoWay) cardTwoWay.classList.toggle('hidden', !showTwoWay);
   const usersModalCard = document.getElementById('usersPermissionsModal');
@@ -5378,6 +5473,277 @@ function setFloatingActionBarVisibility(showFlag, notify = true) {
   }
 }
 
+function renderBackupAndAuditCenterUI() {
+  syncActiveFarmIntoArchive();
+  const archive = appState.farmsArchive || {};
+  const farmNames = Object.keys(archive);
+  const merchCount = (appState.merchants || []).length;
+  const usersCount = (appState.users || []).filter(u => u && u.id !== 'visitor').length;
+  const activeUser = getActiveUser();
+  const isAdm = Boolean(activeUser && activeUser.perms && activeUser.perms.admin);
+
+  const elFarms = document.getElementById('backupKpiFarmsCount');
+  if (elFarms) elFarms.textContent = `${farmNames.length} مزرعة محفوظة`;
+
+  const elMerchUsers = document.getElementById('backupKpiMerchUsersCount');
+  if (elMerchUsers) elMerchUsers.textContent = `${merchCount} تاجر | ${usersCount} مستخدم`;
+
+  const elDel = document.getElementById('backupKpiActiveDelegate');
+  if (elDel) {
+    elDel.textContent = `${isAdm ? '👑' : '👤'} ${getActiveUserShortLabel()}`;
+  }
+
+  const lastBadge = document.getElementById('backupLastStatusBadge');
+  if (lastBadge && appState.lastJsonBackup) {
+    lastBadge.textContent = appState.lastJsonBackup;
+  }
+
+  // Collect all movements in active farm for Audit Trail Table
+  const auditEntries = [];
+  for (let d = 1; d <= 10; d++) {
+    const dayObj = (appState.days && appState.days[d]) || {};
+    const dateLbl = dayObj.dateLabel || `اليوم ${d}`;
+
+    (dayObj.sales || []).forEach(s => {
+      const comp = computeSaleRow(s);
+      const ts = Number(s.updatedAt) || Number(s.createdAt) || extractTimestampFromRecord(s) || 0;
+      const cBy = String(s.createdBy || s.updatedBy || 'مدير الموقع').trim();
+      const uBy = String(s.updatedBy || cBy).trim();
+      const cTxt = String(s.createdTimeTxt || (ts > 0 ? formatAuditTimeArabic(Number(s.createdAt) || ts) : '-')).trim();
+      const uTxt = String(s.updatedTimeTxt || cTxt).trim();
+      auditEntries.push({
+        type: 'sale',
+        typeLabel: '🚛 وزنة بيع مكتملة',
+        typeBadgeCls: 'bg-emerald-100 text-emerald-950 border-emerald-300',
+        dayNum: d,
+        dateLabel: dateLbl,
+        title: `${s.merchant || '-'} (ميزان ${s.scaleNo || '-'} / سيارة ${s.carNo || '-'})`,
+        detail: `صافي: ${fmtInt(comp.netWeight)} كجم | فاتورة: ${fmtDec(comp.totalWithTip)} ج.م`,
+        createdBy: cBy,
+        updatedBy: uBy,
+        createdTimeTxt: cTxt,
+        updatedTimeTxt: uTxt,
+        isEdited: Boolean(s.isEdited || cBy !== uBy),
+        sortTs: ts
+      });
+    });
+
+    (dayObj.pendingSales || []).forEach(p => {
+      const ts = Number(p.updatedAt) || Number(p.createdAt) || extractTimestampFromRecord(p) || 0;
+      const cBy = String(p.createdBy || p.updatedBy || 'مدير الموقع').trim();
+      const uBy = String(p.updatedBy || cBy).trim();
+      const cTxt = String(p.createdTimeTxt || (ts > 0 ? formatAuditTimeArabic(Number(p.createdAt) || ts) : '-')).trim();
+      const uTxt = String(p.updatedTimeTxt || cTxt).trim();
+      auditEntries.push({
+        type: 'pending',
+        typeLabel: '⏳ وزنة أولى مؤقتة',
+        typeBadgeCls: 'bg-amber-100 text-amber-950 border-amber-300',
+        dayNum: d,
+        dateLabel: dateLbl,
+        title: `${p.merchant || '-'} (ميزان ${p.scaleNo || '-'} / سيارة ${p.carNo || '-'})`,
+        detail: `وزنة 1 (فارغ): ${fmtInt(p.w1)} كجم`,
+        createdBy: cBy,
+        updatedBy: uBy,
+        createdTimeTxt: cTxt,
+        updatedTimeTxt: uTxt,
+        isEdited: Boolean(p.isEdited || cBy !== uBy),
+        sortTs: ts
+      });
+    });
+
+    (dayObj.expenses || []).forEach(ex => {
+      const ts = Number(ex.updatedAt) || Number(ex.createdAt) || extractTimestampFromRecord(ex) || 0;
+      const cBy = String(ex.createdBy || ex.updatedBy || 'مدير الموقع').trim();
+      const uBy = String(ex.updatedBy || cBy).trim();
+      const cTxt = String(ex.createdTimeTxt || (ts > 0 ? formatAuditTimeArabic(Number(ex.createdAt) || ts) : '-')).trim();
+      const uTxt = String(ex.updatedTimeTxt || cTxt).trim();
+      auditEntries.push({
+        type: 'expense',
+        typeLabel: '💸 مصروف / مكافأة',
+        typeBadgeCls: 'bg-rose-100 text-rose-950 border-rose-300',
+        dayNum: d,
+        dateLabel: dateLbl,
+        title: `${ex.category || '-'} — ${ex.desc || '-'}${ex.recipient ? ` (المستلم: ${ex.recipient})` : ''}`,
+        detail: `المنصرف: ${fmtInt(ex.amount)} ج.م`,
+        createdBy: cBy,
+        updatedBy: uBy,
+        createdTimeTxt: cTxt,
+        updatedTimeTxt: uTxt,
+        isEdited: Boolean(ex.isEdited || cBy !== uBy),
+        sortTs: ts
+      });
+    });
+  }
+
+  auditEntries.sort((a, b) => (b.sortTs - a.sortTs) || (b.dayNum - a.dayNum));
+
+  const elTotMov = document.getElementById('backupKpiTotalMovements');
+  if (elTotMov) elTotMov.textContent = `${fmtInt(auditEntries.length)} حركة موثقة`;
+
+  const q = (document.getElementById('inpFilterAuditTrail')?.value || '').trim().toLowerCase();
+  const typeFilter = document.getElementById('selFilterAuditType')?.value || 'all';
+
+  const filteredAudit = auditEntries.filter(item => {
+    if (typeFilter !== 'all' && item.type !== typeFilter) return false;
+    if (!q) return true;
+    return (
+      item.title.toLowerCase().includes(q) ||
+      item.detail.toLowerCase().includes(q) ||
+      item.createdBy.toLowerCase().includes(q) ||
+      item.updatedBy.toLowerCase().includes(q) ||
+      `يوم ${item.dayNum}`.includes(q) ||
+      item.dateLabel.toLowerCase().includes(q) ||
+      item.typeLabel.toLowerCase().includes(q)
+    );
+  });
+
+  const cntBadge = document.getElementById('auditTrailCountBadge');
+  if (cntBadge) {
+    cntBadge.textContent = q || typeFilter !== 'all'
+      ? `معروض ${filteredAudit.length} من ${auditEntries.length} حركة`
+      : `${auditEntries.length} حركة في مزرعة (${appState.farmName || 'أبوذكري'})`;
+  }
+
+  const tbody = document.getElementById('auditTrailTbody');
+  if (!tbody) return;
+  if (filteredAudit.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="p-5 text-center text-slate-500 font-bold">
+          لا توجد حركات مسجلة في سجل الرقابة حتى الآن — عند إضافة أو تعديل أي وزنة أو مصروف سيظهر هنا اسم المندوب ووقت الحركة تلقائياً.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = filteredAudit.map((item, idx) => {
+    const timeCellHtml = item.isEdited
+      ? `<span class="text-slate-600">إنشاء: ${escXmlStr(item.createdTimeTxt)}</span> <span class="text-blue-900 font-extrabold">| آخر تعديل: ${escXmlStr(item.updatedTimeTxt)}</span>`
+      : `<span class="text-emerald-900 font-extrabold">🕒 ${escXmlStr(item.createdTimeTxt)}</span>`;
+    return `
+      <tr class="hover:bg-slate-50">
+        <td class="p-2 border text-center font-bold">${idx + 1}</td>
+        <td class="p-2 border text-center">
+          <span class="px-2 py-0.5 rounded-lg border text-[11px] font-extrabold ${item.typeBadgeCls}">${item.typeLabel}</span>
+        </td>
+        <td class="p-2 border text-center font-extrabold text-blue-950">يوم ${item.dayNum} <span class="text-[10px] text-slate-500">(${escXmlStr(item.dateLabel)})</span></td>
+        <td class="p-2 border font-extrabold text-slate-900">${escXmlStr(item.title)}</td>
+        <td class="p-2 border text-center font-extrabold text-blue-900">${escXmlStr(item.detail)}</td>
+        <td class="p-2 border text-center font-extrabold bg-emerald-50/50 text-emerald-950">👤 ${escXmlStr(item.createdBy)}</td>
+        <td class="p-2 border text-center font-extrabold ${item.isEdited ? 'bg-amber-50 text-amber-950' : 'text-slate-600'}">
+          ${item.isEdited ? `✏️ ${escXmlStr(item.updatedBy)}` : `✓ نفس المسجل (${escXmlStr(item.updatedBy)})`}
+        </td>
+        <td class="p-2 border text-center text-[11px] font-bold">${timeCellHtml}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function exportFullJsonBackup() {
+  try {
+    syncActiveFarmIntoArchive();
+    unifyGlobalMerchantsRegistry();
+    const now = new Date();
+    const dateSlug = now.toISOString().slice(0, 10);
+    const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const actor = getActiveUserShortLabel();
+    const fName = (appState.farmName || 'أبوذكري').trim();
+    const fSlug = fName.replace(/\s+/g, '_');
+
+    appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
+    const backupPayload = {
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V36',
+      version: 36,
+      exportedAtIso: now.toISOString(),
+      exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
+      exportedBy: actor,
+      activeFarmName: fName,
+      summary: {
+        farmsCount: Object.keys(appState.farmsArchive || {}).length,
+        merchantsCount: (appState.merchants || []).length,
+        usersCount: (appState.users || []).length
+      },
+      state: JSON.parse(JSON.stringify(appState))
+    };
+
+    const jsonStr = JSON.stringify(backupPayload, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fileName = `نسخة_احتياطية_شاملة_مبيعات_المزارع_${fSlug}_${dateSlug}.json`;
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    saveState(false);
+    renderBackupAndAuditCenterUI();
+    const farmsCnt = Object.keys(appState.farmsArchive || {}).length;
+    showToast(
+      `📦 تم تحميل النسخة الاحتياطية الشاملة (${fileName}) شاملة (${farmsCnt} مزرعة، ${(appState.merchants || []).length} تاجر، وجميع المستخدمين والحركات)!`,
+      '📦'
+    );
+  } catch (err) {
+    showToast('حدث خطأ أثناء تجهيز ملف النسخة الاحتياطية (.json)', '⚠️');
+  }
+}
+
+function restoreFullJsonBackupFromText(rawText, sourceFileName = '') {
+  try {
+    const parsed = JSON.parse(rawText);
+    const targetState = (parsed && parsed.state && parsed.state.days && parsed.state.merchants)
+      ? parsed.state
+      : ((parsed && parsed.days && parsed.merchants) ? parsed : null);
+
+    if (!targetState) {
+      showToast('⚠️ ملف (.json) غير صالح أو لا يحتوي على هيكل بيانات المزارع والتجار!', '⚠️');
+      return false;
+    }
+
+    const wasLoggedIn = Boolean(appState.isLoggedIn);
+    const prevActiveUserId = appState.activeUserId || 'admin';
+    const currentWebhook = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
+
+    if (!applyParsedStateObject(targetState)) {
+      showToast('⚠️ تعذر استرجاع البيانات من الملف المختار!', '⚠️');
+      return false;
+    }
+
+    if (currentWebhook && !appState.webhookUrl) {
+      appState.webhookUrl = currentWebhook;
+    }
+    if (wasLoggedIn) {
+      appState.isLoggedIn = true;
+      const userStillExists = (appState.users || []).some(u => u && u.id === prevActiveUserId);
+      appState.activeUserId = userStillExists ? prevActiveUserId : 'admin';
+      appState.lastActivityAt = Date.now();
+    }
+
+    const nowTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    appState.lastJsonBackup = `تم الاسترجاع من (${sourceFileName || 'ملف .json'}) الساعة ${nowTime} ✓`;
+    appState.lastExcelSync = `استرجاع نسخة شاملة (.json) الساعة ${nowTime}`;
+    appState.hasLocalEdits = true;
+    syncActiveFarmIntoArchive();
+    saveState(true, true);
+    renderAll();
+
+    const farmsCnt = Object.keys(appState.farmsArchive || {}).length;
+    const merchCnt = (appState.merchants || []).length;
+    const usersCnt = (appState.users || []).length;
+    showToast(
+      `✅ تم استرجاع النسخة الاحتياطية الشاملة بنجاح: (${farmsCnt} مزرعة | ${merchCnt} تاجر | ${usersCnt} مستخدم) بجميع الحركات وسجل الرقابة!`,
+      '📂'
+    );
+    return true;
+  } catch (err) {
+    showToast('⚠️ تعذر قراءة ملف النسخة الاحتياطية (.json)، تأكد من صحة الملف!', '⚠️');
+    return false;
+  }
+}
+
 function renderAll() {
   updateConnectionAndSyncUI();
   renderUsersAndPermissionsUI();
@@ -5388,6 +5754,7 @@ function renderAll() {
   renderMerchantsAndStatements();
   renderExpensesStatementView();
   renderCloudDatabaseHub();
+  renderBackupAndAuditCenterUI();
   applyStickySaleDefaults();
   updateLiveFormCalculation();
 }
@@ -6751,7 +7118,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v34') {
+          if (k !== 'farm-sales-committee-v36') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -8184,9 +8551,13 @@ function initFarmSalesApp() {
     appState.defaultTip = enteredTip;
     appState.lastScaleNo = Math.max(Number(appState.lastScaleNo) || 0, enteredScale);
 
+    const existingPendingForAudit = activeRecalledPendingId
+      ? dayObj.pendingSales.find(x => x.id === activeRecalledPendingId)
+      : null;
+    const pendingAuditMeta = buildRecordAuditMeta(existingPendingForAudit, Boolean(existingPendingForAudit));
     const pendingObj = {
       id: activeRecalledPendingId || generateRecordUUID(`pend_d${appState.currentDay}`),
-      updatedAt: Date.now(),
+      ...pendingAuditMeta,
       merchant: mName,
       scaleNo: enteredScale,
       carNo: Number(document.getElementById('inpCarNo').value) || '',
@@ -8305,9 +8676,20 @@ function initFarmSalesApp() {
     appState.defaultTip = enteredTip;
     appState.lastScaleNo = Math.max(Number(appState.lastScaleNo) || 0, enteredScale);
 
+    const existingSaleForAudit = editId ? daySales.find(x => x.id === editId) : null;
+    const recalledPendForAudit = !existingSaleForAudit && Array.isArray(dayObj.pendingSales)
+      ? dayObj.pendingSales.find(pItem =>
+          (activeRecalledPendingId && pItem.id === activeRecalledPendingId) ||
+          (String(pItem.merchant || '').trim() === mName && Number(pItem.scaleNo) > 0 && Number(pItem.scaleNo) === enteredScale)
+        )
+      : null;
+    const saleAuditMeta = buildRecordAuditMeta(
+      existingSaleForAudit || recalledPendForAudit || null,
+      Boolean(existingSaleForAudit || (recalledPendForAudit && recalledPendForAudit.createdBy))
+    );
     const rowObj = {
       id: editId || generateRecordUUID(`d${appState.currentDay}`),
-      updatedAt: Date.now(),
+      ...saleAuditMeta,
       merchant: mName,
       scaleNo: enteredScale,
       carNo: Number(document.getElementById('inpCarNo').value) || '',
@@ -8517,9 +8899,10 @@ function initFarmSalesApp() {
     if (editExpId) {
       const idx = dayExps.findIndex(x => x.id === editExpId);
       if (idx !== -1) {
+        const expAuditMeta = buildRecordAuditMeta(dayExps[idx], true);
         dayExps[idx] = {
           ...dayExps[idx],
-          updatedAt: Date.now(),
+          ...expAuditMeta,
           category,
           desc,
           recipient,
@@ -8539,10 +8922,11 @@ function initFarmSalesApp() {
     }
 
     const newExpId = generateRecordUUID(`exp_d${appState.currentDay}`);
+    const newExpAuditMeta = buildRecordAuditMeta(null, false);
     unrecordDeletedItem('expenses', newExpId);
     dayExps.push({
       id: newExpId,
-      updatedAt: Date.now(),
+      ...newExpAuditMeta,
       category,
       desc,
       recipient,
@@ -9233,9 +9617,60 @@ function initFarmSalesApp() {
     document.body.removeChild(ta);
   });
 
-  // Export Excel Buttons
+  // Export Excel Buttons & Full JSON Backup / Restore Buttons
   document.getElementById('btnQuickExportXlsx').addEventListener('click', exportFullWorkbookXlsx);
   document.getElementById('btnExportFullExcel2').addEventListener('click', exportFullWorkbookXlsx);
+
+  const btnQuickJsonEl = document.getElementById('btnQuickExportJsonBackup');
+  if (btnQuickJsonEl) btnQuickJsonEl.addEventListener('click', exportFullJsonBackup);
+
+  const btnFullJsonEl = document.getElementById('btnDownloadFullJsonBackup');
+  if (btnFullJsonEl) btnFullJsonEl.addEventListener('click', exportFullJsonBackup);
+
+  const btnDdJsonEl = document.getElementById('btnDropdownJsonBackup');
+  if (btnDdJsonEl) {
+    btnDdJsonEl.addEventListener('click', () => {
+      const dd = document.getElementById('headerUserDropdownMenu');
+      if (dd) dd.classList.add('hidden');
+      const syncTabBtn = document.querySelector('[data-nav="sync"]');
+      if (syncTabBtn) syncTabBtn.click();
+      setTimeout(() => {
+        const cardEl = document.getElementById('fullJsonBackupAndAuditCard');
+        if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth' });
+      }, 80);
+    });
+  }
+
+  const btnTrigRestoreEl = document.getElementById('btnTriggerRestoreJsonBackup');
+  if (btnTrigRestoreEl) {
+    btnTrigRestoreEl.addEventListener('click', () => {
+      const fileInp = document.getElementById('fileRestoreJsonBackup');
+      if (fileInp) fileInp.click();
+    });
+  }
+
+  const fileRestoreJsonEl = document.getElementById('fileRestoreJsonBackup');
+  if (fileRestoreJsonEl) {
+    fileRestoreJsonEl.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        restoreFullJsonBackupFromText(String(evt.target.result || ''), file.name);
+      };
+      reader.readAsText(file, 'utf-8');
+      e.target.value = '';
+    });
+  }
+
+  const inpAuditFilterEl = document.getElementById('inpFilterAuditTrail');
+  if (inpAuditFilterEl) {
+    inpAuditFilterEl.addEventListener('input', renderBackupAndAuditCenterUI);
+  }
+  const selAuditTypeEl = document.getElementById('selFilterAuditType');
+  if (selAuditTypeEl) {
+    selAuditTypeEl.addEventListener('change', renderBackupAndAuditCenterUI);
+  }
 
   // Sync Button (Smart Sync: pulls if fresh browser without local edits, pushes if local edits exist)
   document.getElementById('btnSyncNow').addEventListener('click', async () => {
@@ -9364,6 +9799,7 @@ function initFarmSalesApp() {
       '#prevFarmsTbody',
       '#usersListTbody',
       '#cloudFarmsTbody',
+      '#auditTrailTbody',
       '#expSummaryTbody',
       '#daySelectorContainer',
       '#dashKpiGrid',
@@ -9483,10 +9919,19 @@ function initFarmSalesApp() {
     );
   });
 
-  // Import Excel (.xlsx) or JSON file (Full Two-Way Parser)
+  // Import Excel (.xlsx) or JSON Backup file (Full Two-Way Parser)
   document.getElementById('fileImportXlsx').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.name.toLowerCase().endsWith('.json')) {
+      const textReader = new FileReader();
+      textReader.onload = (evt) => {
+        restoreFullJsonBackupFromText(String(evt.target.result || ''), file.name);
+      };
+      textReader.readAsText(file, 'utf-8');
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -9494,7 +9939,7 @@ function initFarmSalesApp() {
         const workbook = XLSX.read(data, { type: 'array' });
         importWorkbookIntoAppState(workbook, file.name);
       } catch (err) {
-        showToast('تعذر قراءة الملف، تأكد من اختيار ملف إكسيل صحيح (.xlsx)', '⚠️');
+        showToast('تعذر قراءة الملف، تأكد من اختيار ملف إكسيل (.xlsx) أو نسخة احتياطية (.json)', '⚠️');
       }
     };
     reader.readAsArrayBuffer(file);
