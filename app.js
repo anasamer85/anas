@@ -6683,7 +6683,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v32') {
+          if (k !== 'farm-sales-committee-v33') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -7874,6 +7874,14 @@ function initFarmSalesApp() {
   document.getElementById('btnAutoFillCredit').addEventListener('click', () => {
     calculateAndFillRemainingCredit(true);
   });
+
+    const btnInlineW1 = document.getElementById('btnInlineSavePendingW1');
+  if (btnInlineW1) {
+    btnInlineW1.addEventListener('click', () => {
+      const mainBtnW1 = document.getElementById('btnSavePendingW1');
+      if (mainBtnW1) mainBtnW1.click();
+    });
+  }
 
   const btnStickyAutoCreditEl = document.getElementById('btnStickyAutoCredit');
   if (btnStickyAutoCreditEl) {
