@@ -283,7 +283,7 @@
      - القيمة الابتدائية لخانة الإدخال: `<input id="inpCloudWebhookUrl" value="https://script.google.com/.../exec" />`
   3. كما تقوم الدالة بإعادة ضبط حالة واجهة الدخول (`#loginGatewayOverlay`) والتبويب الافتراضي (`#view-daily`) في الملف المُحمَّل حتى يفتح بشكل نظيف تماماً عند رفعه على GitHub Pages.
   4. بمجرد رفع ملف `index.html` المُحمَّل إلى مستودع GitHub Pages، يقوم كل جهاز آخر (كمبيوتر أو هاتف) بفتح الموقع بقراءة الرابط تلقائياً عبر الدالة `getEmbeddedWebhookUrl()` داخل `app.js`، وسحب ودمج أحدث البيانات من السحابة فوراً عند فتح الصفحة وعند تسجيل الدخول وكل 5 ثوانٍ دون الحاجة لإدخال الرابط يدوياً على الأجهزة الأخرى.
-  5. يستخدم `sw.js` (الإصدار `farm-sales-committee-v22`) استراتيجية `Network-First` مع `{ cache: "no-store" }` لملفات `index.html` و`app.js` و`style.css` لضمان ظهور أي تحديث يُرفع على GitHub Pages فوراً في جميع الأجهزة دون انتظار انتهاء الكاش المؤقت للمتصفح.
+  5. يستخدم `sw.js` (الإصدار `farm-sales-committee-v23`) استراتيجية `Network-First` مع `{ cache: "no-store" }` لملفات `index.html` و`app.js` و`style.css` لضمان ظهور أي تحديث يُرفع على GitHub Pages فوراً في جميع الأجهزة دون انتظار انتهاء الكاش المؤقت للمتصفح.
 
 
 ## 9. تقرير الفحص والمطابقة الهندسية الشاملة (QA Audit Certification)
@@ -302,4 +302,20 @@
    - تطابق حرفي لجميع المعادلات المحاسبية الـ 15 (الصافي، إجمالي الفاتورة بالإكرامية، العهدة المستقلة المخصوم منها تحصيل المديونيات فقط، ميزان الخزينة النقدي، تحويلات المزرعة الحالية والسابقة، وكود التاجر الموحد للسيارات الفرعية مثل `كرنك 1` و`كرنك 2` -> `104`).
    - خلو الكود بنسبة **100%** من أي نوافذ متصفح تقليدية محظورة (`alert` / `confirm` / `prompt`) والاعتماد الكامل على نظام الإشعارات (`showToast`) والصناديق التفاعلية المدمجة (`#dayMgmtBoxAdd`, `#dayMgmtBoxEdit`, `#dayMgmtBoxDelete`, `#dailyQuickAddDayBox`).
 5. **العمل بدون إنترنت وتحديث الكاش (`sw.js` & `manifest.json` — 100%):**
-   - تحديث `sw.js` إلى الإصدار `farm-sales-committee-v22` وتخزين جميع الملفات المفصلة (`./`, `./index.html`, `./style.css`, `./app.js`, `./manifest.json`, `./icon-192.png`, `./icon-512.png`) ومكتبات الـ CDN، مع استخدام `{ cache: "no-store" }` في استراتيجية `Network-First` لضمان ظهور التحديثات المرفوعة على GitHub Pages فوراً على جميع الأجهزة.
+   - تحديث `sw.js` إلى الإصدار `farm-sales-committee-v23` وتخزين جميع الملفات المفصلة (`./`, `./index.html`, `./style.css`, `./app.js`, `./manifest.json`, `./icon-192.png`, `./icon-512.png`) ومكتبات الـ CDN، مع استخدام `{ cache: "no-store" }` في استراتيجية `Network-First` لضمان ظهور التحديثات المرفوعة على GitHub Pages فوراً على جميع الأجهزة.
+
+
+### سابعاً: توثيق الحل الجذري الشامل لمشكلة المزامنة عبر الأجهزة في الهيكل المقسم (v23)
+بناءً على تحليل سجل الحلول السابقة (`001.docx` و `002.docx`)، تم تطبيق وتكييف جميع آليات المزامنة الذكية بنسبة 100% داخل هيكل الملفات المقسمة (`index.html`, `style.css`, `app.js`, `sw.js`):
+
+1. **منع الكتابة العكسية فوق السحابة من المتصفحات الجديدة (`Smart Sync Protection`):**
+   - تم تزويد `app.js` بدالة `countMovementsInDays(daysMap)` وفحص `hadMeaningfulLocalEdits` قبل تنفيذ أي عملية حفظ لرابط السحابة (`btnSaveWebhook`) أو مزامنة (`btnSyncNow`) أو تحميل/نسخ لملف `index.html` المدمج (`btnDownloadHtmlWithWebhook` / `btnCopyHtmlWithWebhook`).
+   - إذا فتح المستخدم الموقع من متصفح جديد (أو بعد مسح بيانات المتصفح) ولصق رابط `Google Apps Script Webhook URL` ثم ضغط حفظ أو مزامنة، يكتشف النظام أن المتصفح لا يملك حركات محلية فعلية فيقوم **بسحب البيانات من السحابة فقط (`pullDatabaseFromCloud`)** ويمنع تماماً رفع الحالة الافتراضية الفارغة فوق السحابة.
+2. **تضمين رابط السحابة نهائياً داخل `index.html` المقسم (`buildEmbeddedGoogleSitesHtml` & `getEmbeddedWebhookUrl`):**
+   - عند الضغط على **📥 تحميل ملف HTML مدمج بالرابط**، يقوم `app.js` باستنساخ هيكل `index.html` وتنظيف جميع الجداول الديناميكية (`tbody`) وإعادة ضبط بوابة تسجيل الدخول (`#loginGatewayOverlay`) وحقن رابط السحابة داخل `<script id="embeddedWebhookConfigScript">window.EMBEDDED_CLOUD_WEBHOOK_URL = "...";</script>` و`<meta id="metaEmbeddedCloudWebhookUrl">` و`<input id="inpCloudWebhookUrl" value="...">`.
+   - بمجرد رفع ملف `index.html` المحمّل إلى GitHub Pages، تتعرف دالة `getEmbeddedWebhookUrl()` في `app.js` على الرابط تلقائياً في أي جهاز أو متصفح جديد منذ اللحظة الأولى دون الحاجة لإعادة لصق الرابط يدوياً.
+3. **الترتيب التسلسلي الآمن عند بدء التشغيل (`initFarmSalesApp`):**
+   - ينتظر النظام اكتمال قراءة `LocalStorage` و`IndexedDB` أولاً قبل استدعاء `pullDatabaseFromCloud(true, true)` و`startLiveRealtimeSyncEngine()`، مما يمنع أي تضارب زمني (Race Condition) عند فتح الموقع بعد مسح بيانات المتصفح.
+4. **المزامنة اللحظية الحية والدمج الذكي والطرد الفوري (`Live Realtime Sync` + `Smart Merge` + `verifyActiveUserSession`):**
+   - دمج ذكي على مستوى السجل (`mergeCloudDataIntoLocal`, `mergeDaysObjects`, `mergeArraysById`) يجمع حركات البيع والوزنات المؤقتة والمصروفات والتجار من جميع الأجهزة المتصلة كل 5 ثوانٍ دون مسح متبادل ودون مقاطعة الكتابة (`isUserActivelyTypingInForm`).
+   - طرد وتسجيل خروج إجباري فوري (`verifyActiveUserSession`) لأي مستخدم متصل بمجرد قيام المدير بحذف حسابه وتوثيقه في `deletedIds.users`.

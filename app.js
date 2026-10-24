@@ -25,6 +25,17 @@ function getEmbeddedWebhookUrl() {
   } catch (e) {}
   return String(EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
 }
+function countMovementsInDays(daysMap) {
+  if (!daysMap || typeof daysMap !== 'object') return 0;
+  let cnt = 0;
+  for (let d = 1; d <= 10; d++) {
+    const dm = daysMap[d];
+    if (!dm) continue;
+    cnt += (dm.sales ? dm.sales.length : 0) + (dm.pendingSales ? dm.pendingSales.length : 0) + (dm.expenses ? dm.expenses.length : 0);
+  }
+  return cnt;
+}
+
 let liveExcelFileHandle = null;
 
 const EXPENSE_CATEGORIES = [
@@ -6815,7 +6826,8 @@ function initFarmSalesApp() {
       return;
     }
     if (appState.webhookUrl || getEmbeddedWebhookUrl()) {
-      if (!appState.hasLocalEdits) {
+      const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
+      if (!hadMeaningfulLocalEdits) {
         const pulled = await pullDatabaseFromCloud(false, true);
         if (!pulled) {
           await pushDatabaseToCloud(false, true);
@@ -6844,18 +6856,25 @@ function initFarmSalesApp() {
 
   document.getElementById('btnSaveWebhook').addEventListener('click', async () => {
     const enteredUrl = document.getElementById('inpCloudWebhookUrl').value.trim();
+    const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
     appState.webhookUrl = enteredUrl;
     if (enteredUrl) {
       window.EMBEDDED_CLOUD_WEBHOOK_URL = enteredUrl;
       const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
       if (liveMeta) liveMeta.setAttribute('content', enteredUrl);
+      const inpEl = document.getElementById('inpCloudWebhookUrl');
+      if (inpEl) inpEl.setAttribute('value', enteredUrl);
     }
     saveState(false);
     startLiveRealtimeSyncEngine();
     if (enteredUrl) {
-      const pulled = await pullDatabaseFromCloud(false, true);
-      if (!pulled || appState.hasLocalEdits) {
-        await pushDatabaseToCloud(true, true);
+      if (!hadMeaningfulLocalEdits) {
+        const pulled = await pullDatabaseFromCloud(false, true);
+        if (!pulled) {
+          await pushDatabaseToCloud(false, true);
+        }
+      } else {
+        await pushDatabaseToCloud(false, true);
       }
     } else {
       showToast('تم مسح رابط المزامنة السحابية');
@@ -6912,12 +6931,35 @@ function initFarmSalesApp() {
       cloneInp.setAttribute('value', url);
     }
 
-    // 3. Reset login overlay & default tab state in the cloned HTML so opening on any device starts cleanly
+    // 3. Clear runtime-populated table bodies & dynamic containers so the template HTML is 100% clean
+    [
+      '#pendingWeighInsTbody',
+      '#dailySalesTbody',
+      '#dailyExpensesTbody',
+      '#dashTableTbody',
+      '#merchantsTbody',
+      '#transfersTbody',
+      '#prevFarmsTbody',
+      '#usersListTbody',
+      '#cloudFarmsTbody',
+      '#expSummaryTbody',
+      '#daySelectorContainer',
+      '#dashKpiGrid'
+    ].forEach(sel => {
+      const el = cloneDoc.querySelector(sel);
+      if (el) el.innerHTML = '';
+    });
+
+    // 4. Reset login overlay & default tab state in the cloned HTML so opening on any device starts cleanly
     const cloneLogin = cloneDoc.querySelector('#loginGatewayOverlay');
     if (cloneLogin) {
       cloneLogin.classList.remove('hidden');
       cloneLogin.removeAttribute('style');
     }
+    const cloneLoginUser = cloneDoc.querySelector('#inpLoginUsername');
+    if (cloneLoginUser) cloneLoginUser.setAttribute('value', '');
+    const cloneLoginPass = cloneDoc.querySelector('#inpLoginPassword');
+    if (cloneLoginPass) cloneLoginPass.setAttribute('value', '');
     const cloneToast = cloneDoc.querySelector('#toastContainer');
     if (cloneToast) {
       cloneToast.classList.add('hidden');
@@ -6945,6 +6987,7 @@ function initFarmSalesApp() {
   }
 
   document.getElementById('btnCopyHtmlWithWebhook').addEventListener('click', async () => {
+    const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
     const { rawHtml, url } = buildEmbeddedGoogleSitesHtml();
     if (!url) {
       showToast('⚠️ الصق رابط السكربت (script.google.com) في الخانة أعلاه أولاً قبل نسخ الكود لـ Google Sites!', '⚠️');
@@ -6957,14 +7000,19 @@ function initFarmSalesApp() {
     ta.select();
     try { document.execCommand('copy'); } catch (err) {}
     document.body.removeChild(ta);
-    const pulled = await pullDatabaseFromCloud(true, true);
-    if (!pulled || appState.hasLocalEdits) {
+    if (!hadMeaningfulLocalEdits) {
+      const pulled = await pullDatabaseFromCloud(true, true);
+      if (!pulled) {
+        await pushDatabaseToCloud(true, true);
+      }
+    } else {
       await pushDatabaseToCloud(true, true);
     }
     showToast('✅ تم نسخ كود index.html مدمجاً به رابط السحابة! الصقه أو ارفعه الآن ليسمع في جميع الأجهزة.', '📋');
   });
 
   document.getElementById('btnDownloadHtmlWithWebhook').addEventListener('click', async () => {
+    const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
     const { rawHtml, url } = buildEmbeddedGoogleSitesHtml();
     if (!url) {
       showToast('⚠️ الصق رابط السكربت (script.google.com) في الخانة أعلاه أولاً قبل التحميل!', '⚠️');
@@ -6978,8 +7026,12 @@ function initFarmSalesApp() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    const pulled = await pullDatabaseFromCloud(true, true);
-    if (!pulled || appState.hasLocalEdits) {
+    if (!hadMeaningfulLocalEdits) {
+      const pulled = await pullDatabaseFromCloud(true, true);
+      if (!pulled) {
+        await pushDatabaseToCloud(true, true);
+      }
+    } else {
       await pushDatabaseToCloud(true, true);
     }
     showToast('✅ تم تحميل ملف index.html مدمجاً به رابط السحابة! ارفعه إلى GitHub ليسمع تلقائياً في كل الأجهزة.', '📥');
