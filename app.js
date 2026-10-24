@@ -1018,21 +1018,12 @@ function isUserActivelyTypingInForm() {
   return false;
 }
 
-function renderAllPreservingActiveInputs() {
+function renderAllPreservingActiveInputs(forceAllTabs = false) {
   if (!verifyActiveUserSession()) return;
   if (isUserActivelyTypingInForm()) {
-    updateConnectionAndSyncUI();
-    renderUsersAndPermissionsUI();
-    renderDaySelector();
-    renderDailyView();
-    renderDashboardView();
-    renderMerchantsAndStatements();
-    renderExpensesStatementView();
-    renderCloudDatabaseHub();
-    renderBackupAndAuditCenterUI();
-    updateLiveFormCalculation();
+    renderAll(forceAllTabs, true);
   } else {
-    renderAll();
+    renderAll(forceAllTabs, false);
   }
 }
 
@@ -1708,18 +1699,23 @@ function startLiveRealtimeSyncEngine() {
   }, intervalMs);
 }
 
-function renderCloudDatabaseHub() {
+function updateTopCloudFarmDropdownUI() {
   syncActiveFarmIntoArchive();
   const archive = appState.farmsArchive || {};
   const farmNames = Object.keys(archive);
-
-  // Populate Top Header Farm Switcher Dropdown
   const selTop = document.getElementById('selTopCloudFarm');
-  if (selTop) {
-    selTop.innerHTML = farmNames.map(fn =>
-      `<option value="${fn}" ${fn === appState.farmName ? 'selected' : ''}>☁️ ${fn}</option>`
-    ).join('');
+  if (selTop && document.activeElement !== selTop) {
+    selTop.innerHTML = farmNames.map(fn => {
+      const safeFn = escXmlStr(fn);
+      return `<option value="${safeFn}" ${fn === appState.farmName ? 'selected' : ''}>☁️ ${safeFn}</option>`;
+    }).join('');
   }
+}
+
+function renderCloudDatabaseHub() {
+  updateTopCloudFarmDropdownUI();
+  const archive = appState.farmsArchive || {};
+  const farmNames = Object.keys(archive);
 
   // Compute Cloud KPIs across all archived farms
   let totalSalesRowsAllFarms = 0;
@@ -1751,11 +1747,12 @@ function renderCloudDatabaseHub() {
 
     if (tbody) {
       const isCurrent = fn === appState.farmName;
+      const safeFn = escXmlStr(fn);
       const tr = document.createElement('tr');
       tr.className = isCurrent ? 'bg-emerald-50/70 font-bold' : 'hover:bg-slate-50';
       tr.innerHTML = `
         <td class="p-2 border font-extrabold text-slate-900">
-          ${fn}
+          ${safeFn}
           ${isCurrent ? '<span class="mr-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px]">المزرعة النشطة</span>' : ''}
         </td>
         <td class="p-2 border text-center font-bold">${fmtInt(fCars)} سيارة</td>
@@ -1764,15 +1761,15 @@ function renderCloudDatabaseHub() {
         <td class="p-2 border text-left font-extrabold text-emerald-800">${fmtInt(fCashInBox)} ج.م</td>
         <td class="p-2 border text-left font-bold text-amber-900">${fmtInt(fNetDebt)} ج.م</td>
         <td class="p-1 border text-center">
-          <button type="button" data-switch-farm="${fn}" class="px-2 py-1 rounded-lg ${isCurrent ? 'bg-slate-200 text-slate-700' : 'bg-blue-900 text-white hover:bg-blue-800'} font-bold text-xs ml-1">
+          <button type="button" data-switch-farm="${safeFn}" class="px-2 py-1 rounded-lg ${isCurrent ? 'bg-slate-200 text-slate-700' : 'bg-blue-900 text-white hover:bg-blue-800'} font-bold text-xs ml-1">
             ${isCurrent ? 'مفتوحة' : '📂 فتح'}
           </button>
-          <button type="button" data-export-farm="${fn}" class="px-2 py-1 rounded-lg gold-badge font-extrabold text-xs shadow hover:opacity-90 ml-1">
+          <button type="button" data-export-farm="${safeFn}" class="px-2 py-1 rounded-lg gold-badge font-extrabold text-xs shadow hover:opacity-90 ml-1">
             📥 سحب إكسيل
           </button>
           ${hasPermission('farms') ? `
-            <button type="button" data-rename-farm="${fn}" class="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 hover:bg-amber-200 font-bold text-xs ml-1">✏️ تعديل</button>
-            <button type="button" data-delete-farm="${fn}" class="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 hover:bg-rose-200 font-bold text-xs">🗑️ حذف</button>
+            <button type="button" data-rename-farm="${safeFn}" class="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 hover:bg-amber-200 font-bold text-xs ml-1">✏️ تعديل</button>
+            <button type="button" data-delete-farm="${safeFn}" class="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 hover:bg-rose-200 font-bold text-xs">🗑️ حذف</button>
           ` : ''}
         </td>
       `;
@@ -2207,30 +2204,32 @@ function renderDailyView() {
         ? `${fmtInt(r.prevCash + r.prevTransfer)} ${r.notes ? `[${r.notes}]` : ''}${custodyBadge}`
         : ((r.notes || '') + custodyBadge || (r.isPending ? '⏳ محجوز (بانتظار الوزنة 2)' : '-'));
 
+      const safeMerchant = escXmlStr(r.merchant);
+      const safeId = escXmlStr(r.id);
       const merchantCellHtml = r.isPending
-        ? `${r.merchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold shadow-sm">⏳ محجوز (وزنة 1)</span>`
-        : r.merchant;
+        ? `${safeMerchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold shadow-sm">⏳ محجوز (وزنة 1)</span>`
+        : safeMerchant;
       const w2CellHtml = r.isPending
         ? '<span class="text-amber-800 font-extrabold text-[11px]">⏳ بانتظار وزنة 2</span>'
         : fmtInt(r.w2);
       const showReceiptBtn = Boolean(excelTableState && excelTableState.showScaleReceiptButtons);
       const receiptBtnHtml = showReceiptBtn
-        ? `<button type="button" data-print-receipt="${r.id}" data-receipt-day="${d}" class="px-2 py-1 rounded bg-indigo-800 text-white font-extrabold hover:bg-indigo-700 ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة) للتاجر والسائق والأرشيف">🖨️ طباعة بون ميزان</button>`
+        ? `<button type="button" data-print-receipt="${safeId}" data-receipt-day="${d}" class="px-2 py-1 rounded bg-indigo-800 text-white font-extrabold hover:bg-indigo-700 ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة) للتاجر والسائق والأرشيف">🖨️ طباعة بون ميزان</button>`
         : '';
       const auditBadgeHtml = renderAuditTrailBadgeHtml(r);
       const actionCellHtml = !hasPermission('sales')
         ? `${auditBadgeHtml}${receiptBtnHtml}<span class="text-slate-400 text-[11px]">🔒 عرض فقط</span>`
         : (r.isPending
-          ? `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-recall-pending="${r.id}" class="px-2 py-1 rounded bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 ml-1 shadow-sm" title="استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية">🔄 استكمال</button>
-             <button type="button" data-del-pending="${r.id}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`
-          : `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-edit-sale="${r.id}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
-             <button type="button" data-del-sale="${r.id}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`);
+          ? `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-recall-pending="${safeId}" class="px-2 py-1 rounded bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 ml-1 shadow-sm" title="استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية">🔄 استكمال</button>
+             <button type="button" data-del-pending="${safeId}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`
+          : `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-edit-sale="${safeId}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
+             <button type="button" data-del-sale="${safeId}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`);
 
       tr.innerHTML = `
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
         <td class="p-2 border text-center font-extrabold text-blue-900">${r.code || '-'}</td>
         <td class="p-2 border font-extrabold text-slate-900">${merchantCellHtml}</td>
-        <td class="p-2 border text-center text-[11px] font-extrabold ${r.isPending ? 'text-amber-900 bg-amber-100/60' : ''}">${r.scaleNo || '-'} / ${r.carNo || '-'}</td>
+        <td class="p-2 border text-center text-[11px] font-extrabold ${r.isPending ? 'text-amber-900 bg-amber-100/60' : ''}">${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}</td>
         <td class="p-2 border text-left font-bold">${fmtInt(r.w1)}</td>
         <td class="p-2 border text-left">${w2CellHtml}</td>
         <td class="p-2 border text-left font-extrabold bg-blue-50/50 text-blue-950">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
@@ -2238,10 +2237,10 @@ function renderDailyView() {
         <td class="p-2 border text-left">${fmtInt(r.tip)}</td>
         <td class="p-2 border text-left font-extrabold bg-blue-50/50">${r.isPending ? '0' : fmtDec(r.totalWithTip)}</td>
         <td class="p-2 border text-left font-bold text-emerald-800">${r.cashSales ? fmtInt(r.cashSales) : '-'}</td>
-        <td class="p-2 border text-left font-bold text-amber-900">${r.transferSales ? `${fmtInt(r.transferSales)} (${r.transferSalesType || 'تحويل'})` : '-'}</td>
+        <td class="p-2 border text-left font-bold text-amber-900">${r.transferSales ? `${fmtInt(r.transferSales)} (${escXmlStr(r.transferSalesType || 'تحويل')})` : '-'}</td>
         <td class="p-2 border text-left font-bold text-slate-800">${r.creditSales ? fmtInt(r.creditSales) : '-'}</td>
-        <td class="p-2 border text-left font-bold text-teal-900">${debtTxt}</td>
-        <td class="p-2 border text-left font-bold text-purple-900">${prevTxt}</td>
+        <td class="p-2 border text-left font-bold text-teal-900">${escXmlStr(debtTxt)}</td>
+        <td class="p-2 border text-left font-bold text-purple-900">${escXmlStr(prevTxt)}</td>
         <td class="p-2 border text-left font-bold ${!r.isPending && Math.abs(r.invoiceDiff) > 5 ? 'text-rose-700' : 'text-slate-600'}">${r.isPending ? '0' : fmtDec(r.invoiceDiff)}</td>
         <td class="p-1 border text-center">${actionCellHtml}</td>
       `;
@@ -2282,19 +2281,20 @@ function renderDailyView() {
     `;
   } else {
     summary.expenses.forEach((exp, idx) => {
+      const safeExpId = escXmlStr(exp.id);
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-rose-50/40';
       tr.innerHTML = `
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
-        <td class="p-2 border font-extrabold text-rose-950">${exp.category}</td>
-        <td class="p-2 border">${exp.desc || '-'}</td>
-        <td class="p-2 border font-bold">${exp.recipient || '-'}</td>
+        <td class="p-2 border font-extrabold text-rose-950">${escXmlStr(exp.category)}</td>
+        <td class="p-2 border">${escXmlStr(exp.desc || '-')}</td>
+        <td class="p-2 border font-bold">${escXmlStr(exp.recipient || '-')}</td>
         <td class="p-2 border font-extrabold text-rose-800 text-left">${fmtInt(exp.amount)} ج.م</td>
         <td class="p-1.5 border text-center whitespace-nowrap">
           ${renderAuditTrailBadgeHtml(exp)}
           ${hasPermission('expenses') ? `
-            <button type="button" data-edit-exp="${exp.id}" class="px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">✏️ تعديل</button>
-            <button type="button" data-del-exp="${exp.id}" class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">🗑️ حذف</button>
+            <button type="button" data-edit-exp="${safeExpId}" class="px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">✏️ تعديل</button>
+            <button type="button" data-del-exp="${safeExpId}" class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">🗑️ حذف</button>
           ` : '<span class="text-slate-400 text-[11px]">🔒 عرض فقط</span>'}
         </td>
       `;
@@ -2362,28 +2362,31 @@ function renderDailyView() {
       pendSec.classList.add('hidden');
     } else {
       pendSec.classList.remove('hidden');
-      pendTbody.innerHTML = pendingList.map(item => `
+      pendTbody.innerHTML = pendingList.map(item => {
+        const safePendId = escXmlStr(item.id);
+        return `
         <tr class="hover:bg-amber-50/60">
-          <td class="p-1.5 border text-center font-extrabold text-blue-900">${item.scaleNo || '-'}</td>
-          <td class="p-1.5 border font-extrabold text-slate-900">${item.merchant}</td>
-          <td class="p-1.5 border text-center font-bold">${item.carNo || '-'}</td>
+          <td class="p-1.5 border text-center font-extrabold text-blue-900">${escXmlStr(item.scaleNo || '-')}</td>
+          <td class="p-1.5 border font-extrabold text-slate-900">${escXmlStr(item.merchant)}</td>
+          <td class="p-1.5 border text-center font-bold">${escXmlStr(item.carNo || '-')}</td>
           <td class="p-1.5 border text-left font-extrabold text-amber-900">${fmtMoney(item.w1)} كجم</td>
           <td class="p-1.5 border text-left">${fmtMoney(item.price)} | إكرامية: ${fmtMoney(item.tip)}</td>
-          <td class="p-1.5 border text-right text-[11px]">${(item.custodyCash || item.custodyTransfer) ? `عهدة: ${fmtMoney((Number(item.custodyCash)||0)+(Number(item.custodyTransfer)||0))}` : (item.notes || 'بانتظار الوزنة الثانية')}</td>
+          <td class="p-1.5 border text-right text-[11px]">${(item.custodyCash || item.custodyTransfer) ? `عهدة: ${fmtMoney((Number(item.custodyCash)||0)+(Number(item.custodyTransfer)||0))}` : escXmlStr(item.notes || 'بانتظار الوزنة الثانية')}</td>
           <td class="p-1 border text-center whitespace-nowrap">
             ${renderAuditTrailBadgeHtml(item)}
-            ${excelTableState && excelTableState.showScaleReceiptButtons ? `<button type="button" data-print-receipt="${item.id}" data-receipt-day="${d}" class="px-2 py-0.5 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-[11px] ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة)">
+            ${excelTableState && excelTableState.showScaleReceiptButtons ? `<button type="button" data-print-receipt="${safePendId}" data-receipt-day="${d}" class="px-2 py-0.5 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-[11px] ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة)">
               🖨️ طباعة بون ميزان
             </button>` : ''}
-            <button type="button" data-recall-pending="${item.id}" class="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] ml-1 shadow-sm">
+            <button type="button" data-recall-pending="${safePendId}" class="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] ml-1 shadow-sm">
               🔄 استرجاع
             </button>
-            <button type="button" data-del-pending="${item.id}" class="px-2 py-0.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px]">
+            <button type="button" data-del-pending="${safePendId}" class="px-2 py-0.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px]">
               🗑️ حذف
             </button>
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
   }
   if (typeof updateReceiptToggleBtnsUI === 'function') updateReceiptToggleBtnsUI();
@@ -2987,7 +2990,7 @@ function renderDashboardView() {
             فتح يوم ${s.dayNum}
           </button>
         </td>
-        <td class="p-2 border font-bold">${s.dateLabel}</td>
+        <td class="p-2 border font-bold">${escXmlStr(s.dateLabel)}</td>
         <td class="p-2 border text-center font-bold">${fmtInt(s.countCars)}</td>
         <td class="p-2 border text-left font-bold">${fmtInt(s.sumNetW)}</td>
         <td class="p-2 border text-left font-extrabold">${fmtDec(s.sumTotalWithTip)}</td>
@@ -3003,7 +3006,7 @@ function renderDashboardView() {
         <td class="p-2 border text-left">${fmtInt(s.deliveredCash)}</td>
         <td class="p-2 border text-left font-bold">${fmtInt(s.cashBoxDiff)}</td>
         <td class="p-2 border text-center font-bold ${s.countCars === 0 && s.sumExpenses === 0 ? 'text-slate-500' : (s.statusOk ? 'text-emerald-800' : 'text-rose-700')}">
-          ${s.statusText}
+          ${escXmlStr(s.statusText)}
         </td>
       `;
       tbody.appendChild(tr);
@@ -3140,8 +3143,12 @@ function isMerchantActiveInCurrentFarm(m) {
   );
 }
 
-function renderMerchantsAndStatements() {
+function renderMerchantsAndStatements(scopeTab = 'all') {
   const fullList = computeMerchantAggregates();
+  const renderMerchTable = (scopeTab === 'all' || scopeTab === 'merchants');
+  const renderTransfersTables = (scopeTab === 'all' || scopeTab === 'transfers');
+
+  if (renderMerchTable) {
   const activeList = fullList.filter(isMerchantActiveInCurrentFarm);
   const filterMode = appState.merchantsViewFilter === 'active' ? 'active' : 'all';
   const baseList = filterMode === 'active' ? activeList : fullList;
@@ -3236,8 +3243,8 @@ function renderMerchantsAndStatements() {
       <td class="p-2 border text-center">${idx + 1}</td>
       <td class="p-2 border text-center font-extrabold text-blue-900">${m.code}</td>
       <td class="p-2 border font-extrabold text-slate-900">
-        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition group" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${m.name})">
-          <span>${m.name}</span>
+        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition group" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${escXmlStr(m.name)})">
+          <span>${escXmlStr(m.name)}</span>
           <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">📋 كشف تفصيلي</span>
         </button>
       </td>
@@ -3281,7 +3288,9 @@ function renderMerchantsAndStatements() {
       <td class="p-2 border"></td>
     </tr>
   `;
+  } // end if (renderMerchTable)
 
+  if (renderTransfersTables) {
   // 1) Transfers Table Filter (Active = merchants with transfers > 0 vs All coded merchants)
   const activeTransfersList = fullList.filter(m => (m.transferSales + m.debtTransfer + m.prevTransfer) > 0);
   const trFilterMode = appState.transfersViewFilter === 'active' ? 'active' : 'all';
@@ -3327,8 +3336,8 @@ function renderMerchantsAndStatements() {
     tr.innerHTML = `
       <td class="p-2 border text-center font-bold text-blue-900">${m.code}</td>
       <td class="p-2 border font-extrabold">
-        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${m.name})">
-          <span>${m.name}</span>
+        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${escXmlStr(m.name)})">
+          <span>${escXmlStr(m.name)}</span>
           <span class="text-[10px] text-blue-700">📋</span>
         </button>
       </td>
@@ -3393,19 +3402,20 @@ function renderMerchantsAndStatements() {
     sumPfCash += m.prevCash;
     sumPfTr += m.prevTransfer;
     const totPf = m.prevCash + m.prevTransfer;
+    const safeMName = escXmlStr(m.name);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="p-2 border text-center font-bold text-blue-900">${m.code}</td>
       <td class="p-2 border font-extrabold">
-        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${m.name})">
-          <span>${m.name}</span>
+        <button type="button" data-drill-merchant="${m.code}" class="text-right text-blue-900 hover:text-amber-700 underline font-extrabold inline-flex items-center gap-1 transition" title="اضغط لفتح كشف الحساب التفصيلي بالحركات للتاجر (${safeMName})">
+          <span>${safeMName}</span>
           <span class="text-[10px] text-blue-700">📋</span>
         </button>
       </td>
       <td class="p-2 border text-left font-bold text-emerald-900">${fmtInt(m.prevCash)}</td>
       <td class="p-2 border text-left font-bold text-amber-900">${fmtInt(m.prevTransfer)}</td>
       <td class="p-2 border text-left font-extrabold bg-purple-50 text-purple-950">${fmtInt(totPf)}</td>
-      <td class="p-2 border text-slate-700 font-semibold">${m.prevNotes.join(' | ') || (totPf > 0 ? 'مديونية موقع سابق' : '-')}</td>
+      <td class="p-2 border text-slate-700 font-semibold">${escXmlStr(m.prevNotes.join(' | ') || (totPf > 0 ? 'مديونية موقع سابق' : '-'))}</td>
     `;
     pfTbody.appendChild(tr);
   });
@@ -3423,6 +3433,7 @@ function renderMerchantsAndStatements() {
     applyDomTableExcelEngine('transfers');
     applyDomTableExcelEngine('prevFarms');
   }
+  } // end if (renderTransfersTables)
   if (activeDrillDownMerchantCode > 0) {
     const mdl = document.getElementById('merchantDrillDownModal');
     if (mdl && !mdl.classList.contains('hidden')) {
@@ -4421,6 +4432,20 @@ function renderOfficialDaySettlementReportPrintView(dayNumInput) {
   return true;
 }
 
+function ensureTableRenderedForPrint(tableKey) {
+  if (tableKey === 'dailySales' || tableKey === 'pendingWeighIns' || tableKey === 'dailyExpenses') {
+    renderDailyView();
+  } else if (tableKey === 'dash') {
+    renderDashboardView();
+  } else if (tableKey === 'merch') {
+    renderMerchantsAndStatements('merchants');
+  } else if (tableKey === 'transfers' || tableKey === 'prevFarms') {
+    renderMerchantsAndStatements('transfers');
+  } else if (tableKey === 'expSummary') {
+    renderExpensesStatementView();
+  }
+}
+
 function renderGenericTablePrintView(tableKey) {
   if (tableKey === 'merchantDrillDown') {
     if (!activeDrillDownMerchantCode) return false;
@@ -4439,6 +4464,7 @@ function renderGenericTablePrintView(tableKey) {
     const rId = parts.slice(2).join(':');
     return renderScaleReceiptPrintView(rId, rDay);
   }
+  ensureTableRenderedForPrint(tableKey);
   const cfg = UNIVERSAL_PRINT_TABLE_CONFIGS[tableKey];
   if (!cfg) return false;
   const printContainer = ensureMerchantPrintDomElements();
@@ -4681,10 +4707,10 @@ function renderMerchantPrintOnlyContainer(ledger, filteredMovements) {
 
       return `<tr style="background:${rowBg};">
         <td style="text-align:center; font-weight:700;">${idx + 1}</td>
-        <td style="text-align:right; font-weight:800;">يوم ${r.dayNum} (${r.dateLabel})</td>
-        <td style="text-align:right; font-weight:800;">${r.merchant}${r.isPending ? ' (مؤقت)' : ''}</td>
-        <td style="text-align:center; font-weight:700;">${r.scaleNo || '-'}</td>
-        <td style="text-align:center; font-weight:700;">${r.carNo || '-'}</td>
+        <td style="text-align:right; font-weight:800;">يوم ${r.dayNum} (${escXmlStr(r.dateLabel)})</td>
+        <td style="text-align:right; font-weight:800;">${escXmlStr(r.merchant)}${r.isPending ? ' (مؤقت)' : ''}</td>
+        <td style="text-align:center; font-weight:700;">${escXmlStr(r.scaleNo || '-')}</td>
+        <td style="text-align:center; font-weight:700;">${escXmlStr(r.carNo || '-')}</td>
         <td style="text-align:center; font-weight:700;">${fmtInt(r.w1)}</td>
         <td style="text-align:center; font-weight:700;">${r.isPending ? 'مؤقت' : fmtInt(r.w2)}</td>
         <td style="text-align:center; font-weight:800; background:#eff6ff;">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
@@ -4692,12 +4718,12 @@ function renderMerchantPrintOnlyContainer(ledger, filteredMovements) {
         <td style="text-align:center;">${fmtInt(r.tip)}</td>
         <td style="text-align:center; font-weight:800; background:#eff6ff;">${r.isPending ? '0' : fmtDec(r.totalWithTip)}</td>
         <td style="text-align:center; font-weight:700; color:#065f46;">${r.cashSales > 0 ? fmtInt(r.cashSales) : '-'}</td>
-        <td style="text-align:center; font-weight:700; color:#115e59;">${trSalesTxt}</td>
+        <td style="text-align:center; font-weight:700; color:#115e59;">${escXmlStr(trSalesTxt)}</td>
         <td style="text-align:center; font-weight:700; color:#78350f;">${r.creditSales > 0 ? fmtInt(r.creditSales) : '-'}</td>
-        <td style="text-align:center; font-weight:700; color:#115e59;">${debtPaidTxt}</td>
+        <td style="text-align:center; font-weight:700; color:#115e59;">${escXmlStr(debtPaidTxt)}</td>
         <td style="text-align:center; font-weight:800; background:#ecfdf5; color:#064e3b;">${r.isPending ? '0' : fmtInt(r.settledInRow)}</td>
         <td style="text-align:center; font-weight:800; background:${runBalBg};">${fmtInt(r.runningBalanceAfter)}</td>
-        <td style="text-align:right; font-size:8px; font-weight:700;">${notesCellTxt}</td>
+        <td style="text-align:right; font-size:8px; font-weight:700;">${escXmlStr(notesCellTxt)}</td>
       </tr>`;
     }).join('');
   }
@@ -4866,7 +4892,7 @@ function renderMerchantDrillDownModal() {
   if (selSwitcher && document.activeElement !== selSwitcher) {
     const allMerchants = computeMerchantAggregates();
     selSwitcher.innerHTML = allMerchants.map(m =>
-      `<option value="${m.code}" ${Number(m.code) === Number(ledger.code) ? 'selected' : ''}>${m.code} - ${m.name} (${m.cars} حركة)</option>`
+      `<option value="${m.code}" ${Number(m.code) === Number(ledger.code) ? 'selected' : ''}>${m.code} - ${escXmlStr(m.name)} (${m.cars} حركة)</option>`
     ).join('');
   }
 
@@ -4981,11 +5007,11 @@ function renderMerchantDrillDownModal() {
       }
 
       const trSalesTxt = r.transferSales > 0
-        ? `${fmtInt(r.transferSales)} <span class="text-[10px] text-teal-800">(${r.transferSalesType || 'تحويل'})</span>`
+        ? `${fmtInt(r.transferSales)} <span class="text-[10px] text-teal-800">(${escXmlStr(r.transferSalesType || 'تحويل')})</span>`
         : '-';
       const debtPaidTotal = r.debtCash + r.debtTransfer;
       const debtPaidTxt = debtPaidTotal > 0
-        ? `${fmtInt(debtPaidTotal)} <span class="text-[10px]">(${r.debtCash > 0 && r.debtTransfer > 0 ? `نقدي ${fmtInt(r.debtCash)} + ${r.debtTransferType || 'تحويل'} ${fmtInt(r.debtTransfer)}` : (r.debtTransfer > 0 ? (r.debtTransferType || 'تحويل') : 'نقدي')})</span>`
+        ? `${fmtInt(debtPaidTotal)} <span class="text-[10px]">(${r.debtCash > 0 && r.debtTransfer > 0 ? `نقدي ${fmtInt(r.debtCash)} + ${escXmlStr(r.debtTransferType || 'تحويل')} ${fmtInt(r.debtTransfer)}` : (r.debtTransfer > 0 ? escXmlStr(r.debtTransferType || 'تحويل') : 'نقدي')})</span>`
         : '-';
 
       const extraNotesArr = [];
@@ -5002,12 +5028,13 @@ function renderMerchantDrillDownModal() {
         ? 'text-rose-900 bg-amber-50/80'
         : (r.runningBalanceAfter < 0 ? 'text-sky-900 bg-sky-50' : 'text-emerald-900 bg-emerald-50');
 
+      const safeMovId = escXmlStr(r.id);
       tr.innerHTML = `
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
-        <td class="p-2 border font-extrabold text-blue-950 whitespace-nowrap">يوم ${r.dayNum} <span class="text-[10px] text-slate-500 font-bold">(${r.dateLabel})</span></td>
-        <td class="p-2 border font-extrabold text-slate-900">${r.merchant} ${r.isPending ? '<span class="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px]">⏳ مؤقت</span>' : ''}</td>
-        <td class="p-2 border text-center font-extrabold text-blue-900">${r.scaleNo || '-'}</td>
-        <td class="p-2 border text-center font-bold">${r.carNo || '-'}</td>
+        <td class="p-2 border font-extrabold text-blue-950 whitespace-nowrap">يوم ${r.dayNum} <span class="text-[10px] text-slate-500 font-bold">(${escXmlStr(r.dateLabel)})</span></td>
+        <td class="p-2 border font-extrabold text-slate-900">${escXmlStr(r.merchant)} ${r.isPending ? '<span class="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px]">⏳ مؤقت</span>' : ''}</td>
+        <td class="p-2 border text-center font-extrabold text-blue-900">${escXmlStr(r.scaleNo || '-')}</td>
+        <td class="p-2 border text-center font-bold">${escXmlStr(r.carNo || '-')}</td>
         <td class="p-2 border text-left font-bold">${fmtInt(r.w1)}</td>
         <td class="p-2 border text-left">${r.isPending ? '<span class="text-amber-800 font-extrabold text-[10px]">⏳ بانتظار وزنة 2</span>' : fmtInt(r.w2)}</td>
         <td class="p-2 border text-left font-extrabold bg-blue-50/60 text-blue-950">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
@@ -5020,10 +5047,10 @@ function renderMerchantDrillDownModal() {
         <td class="p-2 border text-left font-bold text-teal-900">${debtPaidTxt}</td>
         <td class="p-2 border text-left font-extrabold bg-emerald-50 text-emerald-950">${r.isPending ? '0' : fmtInt(r.settledInRow)}</td>
         <td class="p-2 border text-left font-extrabold ${runBalCls}">${fmtInt(r.runningBalanceAfter)}</td>
-        <td class="p-2 border text-right text-[11px] font-bold text-purple-900">${notesCellTxt}</td>
+        <td class="p-2 border text-right text-[11px] font-bold text-purple-900">${escXmlStr(notesCellTxt)}</td>
         <td class="p-1.5 border text-center print-hide-col whitespace-nowrap">
           ${renderAuditTrailBadgeHtml(r)}
-          ${excelTableState && excelTableState.showScaleReceiptButtons ? `<button type="button" data-print-receipt="${r.id}" data-receipt-day="${r.dayNum}" class="px-2 py-1 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-[11px] whitespace-nowrap ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة)">
+          ${excelTableState && excelTableState.showScaleReceiptButtons ? `<button type="button" data-print-receipt="${safeMovId}" data-receipt-day="${r.dayNum}" class="px-2 py-1 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-[11px] whitespace-nowrap ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة)">
             🖨️ طباعة بون ميزان
           </button>` : ''}
           <button type="button" data-modal-jump-day="${r.dayNum}" class="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 font-extrabold text-[11px] whitespace-nowrap">
@@ -5179,7 +5206,7 @@ function renderExpensesStatementView() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
-        <td class="p-2 border font-extrabold text-slate-900">${cat}</td>
+        <td class="p-2 border font-extrabold text-slate-900">${escXmlStr(cat)}</td>
         <td class="p-2 border text-left font-extrabold bg-rose-50 text-rose-900">${fmtInt(rowSum)}</td>
         <td class="p-2 border text-center">${pct}</td>
         ${[1,2,3,4,5,6,7,8,9,10].map(d => `<td class="p-2 border text-left">${fmtInt(rowArr[d])}</td>`).join('')}
@@ -5211,7 +5238,7 @@ function getInactivityLimitMs() {
   return mins > 0 ? mins * 60 * 1000 : 0;
 }
 
-function renderUsersAndPermissionsUI() {
+function renderUsersAndPermissionsUI(renderTable = true) {
   appState.users = (appState.users || []).filter(u => u && u.id !== 'visitor');
   const users = appState.users;
   const timeoutMin = getInactivityTimeoutMinutes();
@@ -5265,9 +5292,9 @@ function renderUsersAndPermissionsUI() {
 
   // Top Header Select
   const selRole = document.getElementById('selActiveUserRole');
-  if (selRole) {
+  if (selRole && document.activeElement !== selRole) {
     selRole.innerHTML = users.map(u =>
-      `<option value="${u.id}" ${u.id === activeUser.id ? 'selected' : ''}>${u.perms && u.perms.admin ? '👑 ' : '👤 '}${u.name}</option>`
+      `<option value="${escXmlStr(u.id)}" ${u.id === activeUser.id ? 'selected' : ''}>${u.perms && u.perms.admin ? '👑 ' : '👤 '}${escXmlStr(u.name)}</option>`
     ).join('');
   }
 
@@ -5377,9 +5404,9 @@ function renderUsersAndPermissionsUI() {
     });
   }
 
-  // Users Table inside Modal (Admin can edit ANY user's data!)
+  // Users Table inside Modal (Admin can edit ANY user's data! Rendered only when sync tab is active or requested)
   const uTbody = document.getElementById('usersListTbody');
-  if (uTbody) {
+  if (uTbody && renderTable) {
     const isAdminUser = hasPermission('admin');
     uTbody.innerHTML = users.map(u => {
       const pList = [];
@@ -5395,20 +5422,21 @@ function renderUsersAndPermissionsUI() {
         if (pList.length === 0) pList.push('👁️ عرض البيانات + حسابه الشخصي فقط');
       }
       const isCurr = u.id === activeUser.id;
+      const safeUid = escXmlStr(u.id);
       return `
         <tr class="${isCurr ? 'bg-amber-50 font-bold' : ''}">
-          <td class="p-2 border font-extrabold">${u.name} ${isCurr ? '<span class="px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] mr-1">المستخدم النشط</span>' : ''}</td>
-          <td class="p-2 border text-center font-bold text-blue-900">${u.username || u.id}</td>
-          <td class="p-2 border text-center font-mono text-xs">${isAdminUser ? (u.password ? u.password : '<span class="text-slate-400">بدون كلمة مرور</span>') : '••••••'}</td>
-          <td class="p-2 border text-center text-[11px]">${[u.jobTitle, u.phone].filter(Boolean).join(' | ') || '-'}</td>
+          <td class="p-2 border font-extrabold">${escXmlStr(u.name)} ${isCurr ? '<span class="px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] mr-1">المستخدم النشط</span>' : ''}</td>
+          <td class="p-2 border text-center font-bold text-blue-900">${escXmlStr(u.username || u.id)}</td>
+          <td class="p-2 border text-center font-mono text-xs">${isAdminUser ? (u.password ? escXmlStr(u.password) : '<span class="text-slate-400">بدون كلمة مرور</span>') : '••••••'}</td>
+          <td class="p-2 border text-center text-[11px]">${escXmlStr([u.jobTitle, u.phone].filter(Boolean).join(' | ') || '-')}</td>
           <td class="p-2 border text-center">${u.perms.admin ? 'مدير الموقع' : (pList[0].includes('عرض') ? 'زائر / عرض فقط' : 'مستخدم مخصص')}</td>
-          <td class="p-2 border text-slate-700">${pList.join(' + ')}</td>
+          <td class="p-2 border text-slate-700">${escXmlStr(pList.join(' + '))}</td>
           <td class="p-1 border text-center">
             ${isAdminUser ? `
-              <button type="button" data-activate-user="${u.id}" class="px-2 py-1 rounded bg-emerald-100 text-emerald-900 font-bold text-xs ml-1">تفعيل</button>
-              <button type="button" data-edit-user="${u.id}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold text-xs ml-1">✏️ تعديل البيانات</button>
+              <button type="button" data-activate-user="${safeUid}" class="px-2 py-1 rounded bg-emerald-100 text-emerald-900 font-bold text-xs ml-1">تفعيل</button>
+              <button type="button" data-edit-user="${safeUid}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold text-xs ml-1">✏️ تعديل البيانات</button>
               ${!u.isSystem ? `
-                <button type="button" data-del-user="${u.id}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold text-xs">🗑️ حذف</button>
+                <button type="button" data-del-user="${safeUid}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold text-xs">🗑️ حذف</button>
               ` : ''}
             ` : '<span class="text-slate-400 text-[11px]">🔒 خاص بالمدير</span>'}
           </td>
@@ -5653,7 +5681,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V36',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V37',
       version: 36,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -5744,19 +5772,72 @@ function restoreFullJsonBackupFromText(rawText, sourceFileName = '') {
   }
 }
 
-function renderAll() {
+// =========================================================================
+// SMART ACTIVE-TAB RENDERING ENGINE (قصر إعادة الرسم على التبويب النشط لتسريع الاستجابة > 70%)
+// =========================================================================
+function renderAll(forceAllTabs = false, preserveInputs = false) {
   updateConnectionAndSyncUI();
-  renderUsersAndPermissionsUI();
+  updateTopCloudFarmDropdownUI();
+  const activeTab = appState.activeTab || 'daily';
+  const isSyncTab = (activeTab === 'sync');
+  renderUsersAndPermissionsUI(Boolean(forceAllTabs || isSyncTab));
   updateFloatingActionBarVisibilityUI();
-  renderDaySelector();
-  renderDailyView();
-  renderDashboardView();
-  renderMerchantsAndStatements();
-  renderExpensesStatementView();
-  renderCloudDatabaseHub();
-  renderBackupAndAuditCenterUI();
-  applyStickySaleDefaults();
-  updateLiveFormCalculation();
+
+  if (forceAllTabs) {
+    renderDaySelector();
+    renderDailyView();
+    renderDashboardView();
+    renderMerchantsAndStatements('all');
+    renderExpensesStatementView();
+    renderCloudDatabaseHub();
+    renderBackupAndAuditCenterUI();
+    if (!preserveInputs) applyStickySaleDefaults();
+    updateLiveFormCalculation();
+    return;
+  }
+
+  // قصر إعادة بناء جداول الـ DOM والرسوم البيانية على التبويب النشط فقط
+  switch (activeTab) {
+    case 'daily':
+      renderDaySelector();
+      renderDailyView();
+      if (!preserveInputs) applyStickySaleDefaults();
+      updateLiveFormCalculation();
+      break;
+    case 'dashboard':
+      renderDashboardView();
+      break;
+    case 'merchants':
+      renderMerchantsAndStatements('merchants');
+      break;
+    case 'transfers':
+      renderMerchantsAndStatements('transfers');
+      break;
+    case 'expenses':
+      renderExpensesStatementView();
+      break;
+    case 'sync':
+      if (typeof window.refreshDayManagementBoxesUI === 'function') {
+        window.refreshDayManagementBoxesUI();
+      }
+      renderCloudDatabaseHub();
+      renderBackupAndAuditCenterUI();
+      break;
+    default:
+      renderDaySelector();
+      renderDailyView();
+      if (!preserveInputs) applyStickySaleDefaults();
+      updateLiveFormCalculation();
+      break;
+  }
+
+  // إذا كانت نافذة كشف حساب التاجر التفصيلي مفتوحة حالياً، يتم تحديثها لحظياً
+  if (activeDrillDownMerchantCode > 0) {
+    const mdl = document.getElementById('merchantDrillDownModal');
+    if (mdl && !mdl.classList.contains('hidden')) {
+      renderMerchantDrillDownModal();
+    }
+  }
 }
 
 // =========================================================================
@@ -7118,7 +7199,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v36') {
+          if (k !== 'farm-sales-committee-v37') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -8236,8 +8317,8 @@ function initFarmSalesApp() {
     }
 
     suggestBox.innerHTML = filtered.map(c => `
-      <div data-pick-merchant="${c.label}" class="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center justify-between text-xs font-bold border-b border-slate-100">
-        <span class="text-slate-900">${c.label}</span>
+      <div data-pick-merchant="${escXmlStr(c.label)}" class="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center justify-between text-xs font-bold border-b border-slate-100">
+        <span class="text-slate-900">${escXmlStr(c.label)}</span>
         <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-900">كود ${c.code}</span>
       </div>
     `).join('');
@@ -9179,12 +9260,12 @@ function initFarmSalesApp() {
     excelChecklistEl.innerHTML = uniqueVals.map(v => {
       const isChecked = allowedSet ? allowedSet.has(v) : true;
       const cnt = valueCounts.get(v) || 0;
-      const escapedV = v.replace(/"/g, '&quot;');
+      const escapedV = escXmlStr(v);
       return `
         <label data-excel-val-row="${escapedV.toLowerCase()}" class="flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-blue-50 cursor-pointer">
           <span class="inline-flex items-center gap-1.5 truncate">
             <input type="checkbox" class="chk-excel-val-item rounded text-blue-900 w-3.5 h-3.5" value="${escapedV}" ${isChecked ? 'checked' : ''} />
-            <span class="truncate">${v || '(فارغ)'}</span>
+            <span class="truncate">${escapedV || '(فارغ)'}</span>
           </span>
           <span class="text-[10px] text-slate-400 px-1.5 py-0.5 rounded bg-slate-100">${cnt}</span>
         </label>
@@ -9284,7 +9365,8 @@ function initFarmSalesApp() {
 
   function refreshTableById(tableId) {
     if (tableId === 'dash') renderDashboardView();
-    else if (tableId === 'merch' || tableId === 'transfers' || tableId === 'prevFarms') renderMerchantsAndStatements();
+    else if (tableId === 'merch') renderMerchantsAndStatements('merchants');
+    else if (tableId === 'transfers' || tableId === 'prevFarms') renderMerchantsAndStatements('transfers');
     else if (tableId === 'dailySales' || tableId === 'pendingWeighIns' || tableId === 'dailyExpenses') renderDailyView();
     else if (tableId === 'expSummary') renderExpensesStatementView();
     else if (tableId === 'usersList') renderUsersAndPermissionsUI();
@@ -9738,8 +9820,55 @@ function initFarmSalesApp() {
     }
   });
 
-  // Generate clean index.html with permanently embedded Webhook URL for GitHub Pages & Google Sites
-  function buildEmbeddedGoogleSitesHtml() {
+  // Pre-fetch and cache external style.css & app.js so Google Sites Embed generator can inline them into a 100% standalone HTML
+  async function preloadExternalAssetsForGoogleSitesEmbed() {
+    try {
+      const styleLink = document.querySelector('link[href*="style.css"]');
+      if (styleLink && !window.__cachedExternalStyleCss) {
+        const resCss = await fetch(styleLink.getAttribute('href'), { cache: 'no-store' });
+        if (resCss.ok) {
+          window.__cachedExternalStyleCss = await resCss.text();
+        }
+      }
+    } catch (e) {}
+    try {
+      const appScript = document.querySelector('script[src*="app.js"]');
+      if (appScript && !window.__cachedExternalAppJs) {
+        const resJs = await fetch(appScript.getAttribute('src'), { cache: 'no-store' });
+        if (resJs.ok) {
+          window.__cachedExternalAppJs = await resJs.text();
+        }
+      }
+    } catch (e) {}
+  }
+  preloadExternalAssetsForGoogleSitesEmbed();
+
+  function copyTextToClipboardReliable(text) {
+    let copied = false;
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '-9999px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { ta.setSelectionRange(0, text.length); } catch (e) {}
+      copied = Boolean(document.execCommand('copy'));
+      document.body.removeChild(ta);
+    } catch (err) {}
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text).catch(() => {});
+      copied = true;
+    }
+    return copied;
+  }
+
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages
+  function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
     const url = ((inpEl ? inpEl.value : '') || appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
@@ -9753,23 +9882,65 @@ function initFarmSalesApp() {
       startLiveRealtimeSyncEngine();
     }
 
-    // Clone the document and clean runtime DOM mutations so the downloaded index.html is pristine for GitHub Pages
     const cloneDoc = document.documentElement.cloneNode(true);
+    const headEl = cloneDoc.querySelector('head') || cloneDoc;
+    const bodyEl = cloneDoc.querySelector('body') || cloneDoc;
 
-    // 1. Remove runtime <style> tags injected by Tailwind Play CDN if ./style.css link is present
-    const hasExternalStyleLink = Boolean(cloneDoc.querySelector('link[href*="style.css"]'));
-    if (hasExternalStyleLink) {
+    // 1. Handle CSS & JS assets:
+    //    - When inlineAllAssets = true (for Google Sites Embed), inline ./style.css and ./app.js so the copied code works 100% standalone inside Google Sites iframe!
+    //    - When inlineAllAssets = false (for GitHub Pages index.html download), keep external ./style.css and ./app.js links clean.
+    const extStyleLink = cloneDoc.querySelector('link[href*="style.css"]');
+    const extAppScript = cloneDoc.querySelector('script[src*="app.js"]');
+
+    if (inlineAllAssets) {
+      if (extStyleLink) {
+        let cssText = window.__cachedExternalStyleCss || '';
+        if (!cssText) {
+          try {
+            cssText = Array.from(document.styleSheets)
+              .map(sheet => {
+                try { return Array.from(sheet.cssRules || []).map(r => r.cssText).join('\n'); } catch (e) { return ''; }
+              })
+              .join('\n');
+          } catch (e) {}
+        }
+        if (cssText) {
+          const inlineStyle = document.createElement('style');
+          inlineStyle.id = 'bundledGoogleSitesStyleCss';
+          inlineStyle.textContent = cssText;
+          extStyleLink.replaceWith(inlineStyle);
+        } else if (window.location.href.startsWith('http')) {
+          extStyleLink.setAttribute('href', new URL(extStyleLink.getAttribute('href'), window.location.href).href);
+        }
+      }
+      if (extAppScript) {
+        const jsText = window.__cachedExternalAppJs || '';
+        if (jsText) {
+          const inlineScript = document.createElement('script');
+          inlineScript.id = 'bundledGoogleSitesAppJs';
+          inlineScript.textContent = jsText;
+          extAppScript.replaceWith(inlineScript);
+        } else if (window.location.href.startsWith('http')) {
+          extAppScript.setAttribute('src', new URL(extAppScript.getAttribute('src'), window.location.href).href);
+        }
+      }
+      // Remove Tailwind CDN runtime-generated style tags ONLY if we still have the Tailwind CDN script in <head> so the copied HTML stays compact and fast
+      if (cloneDoc.querySelector('script[src*="tailwindcss"]')) {
+        cloneDoc.querySelectorAll('head style:not(#bundledGoogleSitesStyleCss):not(#criticalPrintStyles):not(#criticalMobileWeighbridgeStyles)').forEach(st => {
+          if ((st.textContent || '').includes('--tw-')) st.remove();
+        });
+      }
+    } else if (extStyleLink) {
       cloneDoc.querySelectorAll('head style:not(#criticalPrintStyles):not(#criticalMobileWeighbridgeStyles)').forEach(st => st.remove());
     }
 
-    // 2. Embed the Webhook URL in <meta id="metaEmbeddedCloudWebhookUrl"> and <script id="embeddedWebhookConfigScript">
-    const safeUrl = url.replace(/'/g, "\\'");
+    // 2. Embed the Webhook URL cleanly in <meta id="metaEmbeddedCloudWebhookUrl"> and <script id="embeddedWebhookConfigScript">
+    const safeUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     let metaNode = cloneDoc.querySelector('#metaEmbeddedCloudWebhookUrl');
     if (!metaNode) {
       metaNode = document.createElement('meta');
       metaNode.id = 'metaEmbeddedCloudWebhookUrl';
       metaNode.setAttribute('name', 'cloud-webhook-url');
-      const headEl = cloneDoc.querySelector('head') || cloneDoc;
       headEl.insertBefore(metaNode, headEl.firstChild);
     }
     metaNode.setAttribute('content', url);
@@ -9778,14 +9949,24 @@ function initFarmSalesApp() {
     if (!cfgScript) {
       cfgScript = document.createElement('script');
       cfgScript.id = 'embeddedWebhookConfigScript';
-      const headEl = cloneDoc.querySelector('head') || cloneDoc;
       headEl.appendChild(cfgScript);
     }
-    cfgScript.textContent = `\n    // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';\n  `;
+    cfgScript.textContent = `\n    // رابط المزامنة السحابية المدمج ليسمع تلقائياً في Google Sites و GitHub Pages\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';\n  `;
 
     const cloneInp = cloneDoc.querySelector('#inpCloudWebhookUrl');
     if (cloneInp) {
       cloneInp.setAttribute('value', url);
+    }
+
+    // Hide the Google Sites code preview box in the cloned output
+    const cloneGsPreview = cloneDoc.querySelector('#googleSitesEmbedCodePreviewBox');
+    if (cloneGsPreview) {
+      cloneGsPreview.classList.add('hidden');
+    }
+    const cloneGsTa = cloneDoc.querySelector('#txtGoogleSitesEmbedCodeOutput');
+    if (cloneGsTa) {
+      cloneGsTa.textContent = '';
+      cloneGsTa.value = '';
     }
 
     // 3. Clear runtime-populated table bodies & dynamic containers so the template HTML is 100% clean
@@ -9830,9 +10011,8 @@ function initFarmSalesApp() {
     if (cloneMerchModal) {
       cloneMerchModal.classList.add('hidden');
     }
-    const cloneBody = cloneDoc.querySelector('body');
-    if (cloneBody) {
-      cloneBody.classList.remove('printing-merchant-modal', 'floating-bar-hidden');
+    if (bodyEl) {
+      bodyEl.classList.remove('printing-merchant-modal', 'floating-bar-hidden');
     }
     const cloneFloatBar = cloneDoc.querySelector('#mobileWeighbridgeActionBar');
     if (cloneFloatBar) {
@@ -9846,53 +10026,80 @@ function initFarmSalesApp() {
       b.classList.toggle('tab-btn-active', b.getAttribute('data-nav') === 'daily');
     });
 
-    let rawHtml = '<!DOC' + 'TYPE html>\n' + cloneDoc.outerHTML;
-    if (url) {
-      rawHtml = rawHtml.replace(
-        /const EMBEDDED_CLOUD_WEBHOOK_URL = '[^']*';/g,
-        `const EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';`
-      );
-      rawHtml = rawHtml.replace(
-        /window\.EMBEDDED_CLOUD_WEBHOOK_URL = '[^']*';/g,
-        `window.EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';`
-      );
-    }
+    const rawHtml = '<!DOC' + 'TYPE html>\n' + cloneDoc.outerHTML;
     return { rawHtml, url };
   }
 
   document.getElementById('btnCopyHtmlWithWebhook').addEventListener('click', async () => {
     const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
-    const { rawHtml, url } = buildEmbeddedGoogleSitesHtml();
-    if (!url) {
-      showToast('⚠️ الصق رابط السكربت (script.google.com) في الخانة أعلاه أولاً قبل نسخ الكود لـ Google Sites!', '⚠️');
-      document.getElementById('inpCloudWebhookUrl').focus();
-      return;
+    await preloadExternalAssetsForGoogleSitesEmbed();
+    const { rawHtml, url } = buildEmbeddedGoogleSitesHtml(true);
+
+    copyTextToClipboardReliable(rawHtml);
+
+    // Show interactive Google Sites Embed Code Preview Box so user can also inspect/copy with 1 tap on any device
+    const previewBox = document.getElementById('googleSitesEmbedCodePreviewBox');
+    const previewTa = document.getElementById('txtGoogleSitesEmbedCodeOutput');
+    const previewStatus = document.getElementById('lblGoogleSitesEmbedStatus');
+    if (previewBox && previewTa) {
+      previewTa.value = rawHtml;
+      previewBox.classList.remove('hidden');
+      if (previewStatus) {
+        const sizeKb = Math.round(rawHtml.length / 1024);
+        previewStatus.textContent = url
+          ? `✅ كود Google Sites المدمج جاهز ومنسوخ للحافظة (${sizeKb} KB — شامل التصميم والبرمجة ورابط السحابة)`
+          : `✅ كود Google Sites المدمج جاهز ومنسوخ للحافظة (${sizeKb} KB — بدون رابط سحابة مدمج)`;
+      }
+      setTimeout(() => {
+        try {
+          previewTa.focus();
+          previewTa.select();
+        } catch (e) {}
+      }, 60);
     }
-    const ta = document.createElement('textarea');
-    ta.value = rawHtml;
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand('copy'); } catch (err) {}
-    document.body.removeChild(ta);
-    if (!hadMeaningfulLocalEdits) {
-      const pulled = await pullDatabaseFromCloud(true, true);
-      if (!pulled) {
+
+    if (url && navigator.onLine) {
+      if (!hadMeaningfulLocalEdits) {
+        const pulled = await pullDatabaseFromCloud(true, true);
+        if (!pulled) {
+          await pushDatabaseToCloud(true, true);
+        }
+      } else {
         await pushDatabaseToCloud(true, true);
       }
-    } else {
-      await pushDatabaseToCloud(true, true);
     }
-    showToast('✅ تم نسخ كود index.html مدمجاً به رابط السحابة! الصقه أو ارفعه الآن ليسمع في جميع الأجهزة.', '📋');
+    showToast(
+      url
+        ? '✅ تم نسخ كود Google Sites المدمج بالكامل (شاملاً التنسيق والبرمجة ورابط السحابة)! الصقه في Google Sites -> Embed -> Embed code.'
+        : '✅ تم نسخ كود Google Sites المدمج بالكامل! (للمزامنة التلقائية يمكنك لصق رابط السكربت أولاً ثم النسخ).',
+      '📋'
+    );
   });
+
+  const btnSelectAllGsCode = document.getElementById('btnSelectAndCopyGoogleSitesCode');
+  if (btnSelectAllGsCode) {
+    btnSelectAllGsCode.addEventListener('click', () => {
+      const previewTa = document.getElementById('txtGoogleSitesEmbedCodeOutput');
+      if (!previewTa || !previewTa.value) return;
+      copyTextToClipboardReliable(previewTa.value);
+      previewTa.focus();
+      previewTa.select();
+      showToast('✅ تم تحديد ونسخ كود Google Sites المدمج بالكامل للحافظة!', '📋');
+    });
+  }
+
+  const btnCloseGsPreview = document.getElementById('btnCloseGoogleSitesCodePreview');
+  if (btnCloseGsPreview) {
+    btnCloseGsPreview.addEventListener('click', () => {
+      const previewBox = document.getElementById('googleSitesEmbedCodePreviewBox');
+      if (previewBox) previewBox.classList.add('hidden');
+    });
+  }
 
   document.getElementById('btnDownloadHtmlWithWebhook').addEventListener('click', async () => {
     const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
-    const { rawHtml, url } = buildEmbeddedGoogleSitesHtml();
-    if (!url) {
-      showToast('⚠️ الصق رابط السكربت (script.google.com) في الخانة أعلاه أولاً قبل التحميل!', '⚠️');
-      document.getElementById('inpCloudWebhookUrl').focus();
-      return;
-    }
+    await preloadExternalAssetsForGoogleSitesEmbed();
+    const { rawHtml, url } = buildEmbeddedGoogleSitesHtml(true);
     const blob = new Blob([rawHtml], { type: 'text/html;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -9900,15 +10107,17 @@ function initFarmSalesApp() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    if (!hadMeaningfulLocalEdits) {
-      const pulled = await pullDatabaseFromCloud(true, true);
-      if (!pulled) {
+    if (url && navigator.onLine) {
+      if (!hadMeaningfulLocalEdits) {
+        const pulled = await pullDatabaseFromCloud(true, true);
+        if (!pulled) {
+          await pushDatabaseToCloud(true, true);
+        }
+      } else {
         await pushDatabaseToCloud(true, true);
       }
-    } else {
-      await pushDatabaseToCloud(true, true);
     }
-    showToast('✅ تم تحميل ملف index.html مدمجاً به رابط السحابة! ارفعه إلى GitHub ليسمع تلقائياً في كل الأجهزة.', '📥');
+    showToast('✅ تم تحميل ملف index.html الشامل مدمجاً به رابط السحابة! يعمل مباشرة على GitHub Pages و Google Sites وكل الأجهزة.', '📥');
   });
 
   // Reset / Clear Current Farm Movements while keeping Merchants & Cloud Sync

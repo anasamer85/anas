@@ -21,7 +21,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=36" />
+  <link rel="stylesheet" href="./style.css?v=37" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -1858,6 +1858,28 @@
               </button>
             </div>
           </div>
+
+          <!-- صندوق معاينة ونسخ كود Google Sites المدمج الشامل (يعمل على كل المتصفحات والموبايل 100%) -->
+          <div id="googleSitesEmbedCodePreviewBox" class="hidden bg-indigo-950 text-white rounded-xl p-3 border-2 border-amber-400 space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span id="lblGoogleSitesEmbedStatus" class="text-xs font-extrabold text-amber-300">
+                ✅ كود التضمين الكامل لـ Google Sites جاهز ومنسوخ للحافظة (شامل التصميم والبرمجة ورابط السحابة)
+              </span>
+              <div class="flex items-center gap-1.5">
+                <button type="button" id="btnSelectAndCopyGoogleSitesCode" class="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold shadow">
+                  📋 تحديد ونسخ الكود بالكامل
+                </button>
+                <button type="button" id="btnCloseGoogleSitesCodePreview" class="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold">
+                  إغلاق ✕
+                </button>
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-300 font-bold">
+              💡 في <strong>Google Sites</strong>: اختر <strong>Insert (إدراج) ⬅️ Embed (تضمين) ⬅️ Embed code (تضمين كود)</strong> ثم الصق هذا الكود مباشرة واضغط Next ثم Insert.
+            </p>
+            <textarea id="txtGoogleSitesEmbedCodeOutput" readonly rows="3" dir="ltr"
+              class="w-full p-2 rounded-lg bg-slate-900 text-emerald-300 font-mono text-[11px] border border-slate-700 focus:outline-none select-all"></textarea>
+          </div>
         </div>
       </div>
 
@@ -2122,6 +2144,6 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./app.js?v=36"></script>
+  <script src="./app.js?v=37"></script>
 </body>
 </html>
