@@ -46,7 +46,8 @@ const EXPENSE_CATEGORIES = [
   'تغذية وضيافة',
   'انتقالات وسولار',
   'سلف وعهد نقدية',
-  'مصاريف نثرية أخرى'
+  'مصاريف نثرية أخرى',
+  'منصرفات أخرى (بدون تصنيف محدد)'
 ];
 
 function getDefaultState(customFarmName = 'أبوذكري') {
@@ -109,6 +110,7 @@ function getDefaultState(customFarmName = 'أبوذكري') {
     lastScaleNo: 0,
     inactivityTimeoutMin: 20,
     showFloatingActionBar: true,
+    showAuditMetadata: true,
     activeUserId: 'admin',
     users: [
       { id: 'admin', username: 'admin', password: 'admin', name: 'مدير الموقع (كامل الصلاحيات)', phone: '', jobTitle: 'مدير عام المزرعة', isSystem: true, perms: { sales: true, expenses: true, merchants: true, farms: true, admin: true, showSyncExcel: true, showSyncCloud: true, showSyncWebhook: true } }
@@ -233,15 +235,32 @@ function sortSalesListByScaleNo(list) {
   });
 }
 
-function areSalesRowsDuplicate(a, b) {
+function isSameNumVal(x, y, eps = 0.05) {
+  return Math.abs((Number(x) || 0) - (Number(y) || 0)) <= eps;
+}
+
+function isSameMerchantIdentity(maRaw, mbRaw) {
+  const ma = String(maRaw || '').replace(/\s+/g, ' ').trim();
+  const mb = String(mbRaw || '').replace(/\s+/g, ' ').trim();
+  if (!ma || !mb) return false;
+  if (ma === mb) return true;
+  // إذا كان كلاهما يشير لنفس التاجر الأساسي ونفس رقم السيارة الفرعية (أو بدون رقم فرعي) مثل "مزرعه" و "المزرعه" أو "عصفور محمد " و "عصفور محمد"
+  const subA = (ma.match(/\d+/) || [''])[0];
+  const subB = (mb.match(/\d+/) || [''])[0];
+  if (subA === subB && normalizeArabicMerchantCompareKey(ma) === normalizeArabicMerchantCompareKey(mb)) {
+    return true;
+  }
+  return false;
+}
+
+function areSalesRowsDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
-  if (a.id !== undefined && b.id !== undefined && String(a.id) === String(b.id)) return true;
+  if (a.id !== undefined && b.id !== undefined && String(a.id) !== '' && String(a.id) === String(b.id)) return true;
+  if (a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
   // حماية مطلقة للتعديلات المتزامنة (Simultaneous Offline Edits):
-  // إذا كان كلا السجلين يحملان معرّفين فريدين مختلفين (UUIDs)، فهما حركتان مستقلتان تماماً ولا يجوز اعتبارهما مكررتين أبداً حتى لو تصادف تشابه رقم الميزان التلقائي أو الأوزان!
-  if (isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
-  const ma = String(a.merchant || '').trim();
-  const mb = String(b.merchant || '').trim();
-  if (!ma || !mb || ma !== mb) return false;
+  // إذا كان كلا السجلين يحملان معرّفين فريدين مختلفين (UUIDs)، فهما حركتان مستقلتان تماماً إلا عند المطابقة الموضوعية أثناء تحديث الإكسيل (ignoreDifferentUUIDs = true)
+  if (!ignoreDifferentUUIDs && isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
+  if (!isSameMerchantIdentity(a.merchant, b.merchant)) return false;
 
   const sa = Number(a.scaleNo) || 0;
   const sb = Number(b.scaleNo) || 0;
@@ -250,54 +269,53 @@ function areSalesRowsDuplicate(a, b) {
   const w1a = Number(a.w1) || 0, w1b = Number(b.w1) || 0;
   const w2a = Number(a.w2) || 0, w2b = Number(b.w2) || 0;
 
-  // 1. نفس التاجر ونفس رقم مسلسل الميزان مع تطابق الأوزان (حتى لا تُحذف حركة مندوب آخر أوفلاين تصادف أخذها لنفس رقم الميزان التلقائي بأوزان مختلفة)
-  if (sa > 0 && sb > 0 && sa === sb && w1a === w1b && w2a === w2b) return true;
+  // 1. نفس التاجر ونفس رقم مسلسل الميزان مع تطابق الأوزان (أو عند تحديث نفس رقم الميزان من الإكسيل)
+  if (sa > 0 && sb > 0 && sa === sb && (ignoreDifferentUUIDs || (isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b)))) return true;
 
   // 2. نفس التاجر ونفس رقم السيارة ونفس الأوزان الفعلية (وزنة 1 ووزنة 2)
-  if ((w1a > 0 || w2a > 0) && w1a === w1b && w2a === w2b && ca === cb) return true;
+  if ((w1a > 0 || w2a > 0) && isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b) && ca === cb) return true;
 
   // 3. تطابق كامل في الأوزان والمبالغ المالية لنفس التاجر
-  const sameWeights = (w1a === w1b && w2a === w2b);
+  const sameWeights = isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b);
   const sameFinancials =
-    (Number(a.price) || 0) === (Number(b.price) || 0) &&
-    (Number(a.tip) || 0) === (Number(b.tip) || 0) &&
-    (Number(a.cashSales) || 0) === (Number(b.cashSales) || 0) &&
-    (Number(a.transferSales) || 0) === (Number(b.transferSales) || 0) &&
-    (Number(a.creditSales) || 0) === (Number(b.creditSales) || 0) &&
-    (Number(a.debtCash) || 0) === (Number(b.debtCash) || 0) &&
-    (Number(a.debtTransfer) || 0) === (Number(b.debtTransfer) || 0) &&
-    (Number(a.prevCash) || 0) === (Number(b.prevCash) || 0) &&
-    (Number(a.prevTransfer) || 0) === (Number(b.prevTransfer) || 0);
+    isSameNumVal(a.price, b.price) &&
+    isSameNumVal(a.tip, b.tip) &&
+    isSameNumVal(a.cashSales, b.cashSales, 0.5) &&
+    isSameNumVal(a.transferSales, b.transferSales, 0.5) &&
+    isSameNumVal(a.creditSales, b.creditSales, 0.5) &&
+    isSameNumVal(a.debtCash, b.debtCash, 0.5) &&
+    isSameNumVal(a.debtTransfer, b.debtTransfer, 0.5) &&
+    isSameNumVal(a.prevCash, b.prevCash, 0.5) &&
+    isSameNumVal(a.prevTransfer, b.prevTransfer, 0.5);
 
   return sameWeights && sameFinancials;
 }
 
-function arePendingSalesDuplicate(a, b) {
+function arePendingSalesDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
-  if (a.id !== undefined && b.id !== undefined && String(a.id) === String(b.id)) return true;
-  if (isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
-  const ma = String(a.merchant || '').trim();
-  const mb = String(b.merchant || '').trim();
-  if (!ma || !mb || ma !== mb) return false;
+  if (a.id !== undefined && b.id !== undefined && String(a.id) !== '' && String(a.id) === String(b.id)) return true;
+  if (a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
+  if (!ignoreDifferentUUIDs && isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
+  if (!isSameMerchantIdentity(a.merchant, b.merchant)) return false;
   const sa = Number(a.scaleNo) || 0;
   const sb = Number(b.scaleNo) || 0;
-  const w1a_chk = Number(a.w1) || 0, w1b_chk = Number(b.w1) || 0;
-  if (sa > 0 && sb > 0 && sa === sb && w1a_chk === w1b_chk) return true;
+  const w1a = Number(a.w1) || 0, w1b = Number(b.w1) || 0;
+  if (sa > 0 && sb > 0 && sa === sb && (ignoreDifferentUUIDs || isSameNumVal(w1a, w1b))) return true;
   const ca = String(a.carNo || '').trim();
   const cb = String(b.carNo || '').trim();
-  const w1a = Number(a.w1) || 0, w1b = Number(b.w1) || 0;
-  return ca === cb && w1a === w1b;
+  return ca === cb && isSameNumVal(w1a, w1b);
 }
 
-function areExpensesDuplicate(a, b) {
+function areExpensesDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
-  if (a.id !== undefined && b.id !== undefined && String(a.id) === String(b.id)) return true;
-  if (isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
+  if (a.id !== undefined && b.id !== undefined && String(a.id) !== '' && String(a.id) === String(b.id)) return true;
+  if (a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
+  if (!ignoreDifferentUUIDs && isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
   return (
-    String(a.category || '').trim() === String(b.category || '').trim() &&
-    String(a.desc || '').trim() === String(b.desc || '').trim() &&
-    String(a.recipient || '').trim() === String(b.recipient || '').trim() &&
-    (Number(a.amount) || 0) === (Number(b.amount) || 0)
+    String(a.category || '').replace(/\s+/g, ' ').trim() === String(b.category || '').replace(/\s+/g, ' ').trim() &&
+    String(a.desc || '').replace(/\s+/g, ' ').trim() === String(b.desc || '').replace(/\s+/g, ' ').trim() &&
+    String(a.recipient || '').replace(/\s+/g, ' ').trim() === String(b.recipient || '').replace(/\s+/g, ' ').trim() &&
+    isSameNumVal(a.amount, b.amount)
   );
 }
 
@@ -422,6 +440,20 @@ function applyParsedStateObject(parsed) {
   } else {
     appState.showFloatingActionBar = Boolean(appState.showFloatingActionBar);
   }
+  try {
+    const savedAuditPref = localStorage.getItem(STORAGE_KEY + '_show_audit_metadata');
+    if (savedAuditPref !== null) {
+      appState.showAuditMetadata = (savedAuditPref === '1' || savedAuditPref === 'true');
+    } else if (appState.showAuditMetadata === undefined || appState.showAuditMetadata === null) {
+      appState.showAuditMetadata = true;
+    } else {
+      appState.showAuditMetadata = Boolean(appState.showAuditMetadata);
+    }
+  } catch (e) {
+    appState.showAuditMetadata = appState.showAuditMetadata !== undefined && appState.showAuditMetadata !== null
+      ? Boolean(appState.showAuditMetadata)
+      : true;
+  }
   if (!Array.isArray(appState.users) || appState.users.length === 0) {
     appState.users = getDefaultState().users;
   }
@@ -530,6 +562,12 @@ function loadState() {
       } catch (e) {}
     }
   }
+  try {
+    const savedAuditPref = localStorage.getItem(STORAGE_KEY + '_show_audit_metadata');
+    if (savedAuditPref !== null) {
+      appState.showAuditMetadata = (savedAuditPref === '1' || savedAuditPref === 'true');
+    }
+  } catch (e) {}
   return loaded;
 }
 
@@ -600,6 +638,7 @@ function buildRecordAuditMeta(existingRec = null, isEdit = false) {
 }
 
 function renderAuditTrailBadgeHtml(rec) {
+  if (appState && appState.showAuditMetadata === false) return '';
   if (!rec || typeof rec !== 'object') return '';
   const ts = Number(rec.updatedAt) || Number(rec.createdAt) || extractTimestampFromRecord(rec) || 0;
   const createdBy = String(rec.createdBy || rec.updatedBy || (ts > 0 ? 'مدير الموقع' : '')).trim();
@@ -618,7 +657,7 @@ function renderAuditTrailBadgeHtml(rec) {
         : `<span>👤 ${escXmlStr(updatedBy)}</span><span class="text-amber-700">(✏️ معدّل)</span>`)
     : `<span>👤 ${escXmlStr(createdBy || 'مدير الموقع')}</span>`;
 
-  return `<span class="print-hide-col inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-300 text-slate-800 text-[10px] font-extrabold ml-1 whitespace-nowrap" title="${escXmlStr(titleTip)}">${labelHtml}${timeTxt ? `<span class="text-blue-900 font-bold">| 🕒 ${escXmlStr(timeTxt)}</span>` : ''}</span>`;
+  return `<span class="audit-metadata-badge print-hide-col inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-300 text-slate-800 text-[10px] font-extrabold ml-1 whitespace-nowrap" title="${escXmlStr(titleTip)}">${labelHtml}${timeTxt ? `<span class="text-blue-900 font-bold">| 🕒 ${escXmlStr(timeTxt)}</span>` : ''}</span>`;
 }
 
 function getVisibleDays() {
@@ -1078,7 +1117,7 @@ function isUserActivelyTypingInForm() {
   const ae = document.activeElement;
   if (!ae || !ae.tagName) return false;
   if (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA') {
-    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm'];
+    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm', 'chkShowFloatingActionBar', 'chkShowAuditMetadata', 'inpFilterAuditTrail', 'selFilterAuditType'];
     if (!ignoreIds.includes(ae.id)) return true;
   }
   return false;
@@ -2073,6 +2112,7 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
   const serialized = JSON.stringify(appState);
   try {
     localStorage.setItem(STORAGE_KEY, serialized);
+    localStorage.setItem(STORAGE_KEY + '_show_audit_metadata', appState.showAuditMetadata !== false ? '1' : '0');
     if (appState.webhookUrl) {
       localStorage.setItem(STORAGE_KEY + '_webhook_url', appState.webhookUrl);
     }
@@ -2121,20 +2161,43 @@ function showToast(msg, icon = '✅') {
 // =========================================================================
 function cleanMerchantBaseName(rawName) {
   if (!rawName) return '';
-  return String(rawName).replace(/[0-9\-\(\)]/g, '').trim();
+  return String(rawName)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[0-9\-\(\)]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeArabicMerchantCompareKey(str) {
+  if (!str) return '';
+  return cleanMerchantBaseName(str)
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/^ال/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function resolveMerchantCode(rawName) {
   if (!rawName || !String(rawName).trim()) return 0;
-  const trimmed = String(rawName).trim();
-  const exact = appState.merchants.find(m => m.name === trimmed);
+  const trimmed = String(rawName).replace(/\s+/g, ' ').trim();
+  const exact = appState.merchants.find(m => String(m.name || '').trim() === trimmed);
   if (exact) return exact.code;
 
   const cleaned = cleanMerchantBaseName(trimmed);
   if (cleaned) {
-    const byClean = appState.merchants.find(m => m.name === cleaned);
+    const byClean = appState.merchants.find(m => cleanMerchantBaseName(m.name) === cleaned);
     if (byClean) return byClean.code;
-    const byPartial = appState.merchants.find(m => m.name.includes(cleaned) || cleaned.includes(m.name));
+    const normTarget = normalizeArabicMerchantCompareKey(cleaned);
+    if (normTarget) {
+      const byNorm = appState.merchants.find(m => normalizeArabicMerchantCompareKey(m.name) === normTarget);
+      if (byNorm) return byNorm.code;
+    }
+    const byPartial = appState.merchants.find(m => {
+      const mClean = cleanMerchantBaseName(m.name);
+      return mClean && (mClean.includes(cleaned) || cleaned.includes(mClean));
+    });
     if (byPartial) return byPartial.code;
   }
   return 0;
@@ -5772,8 +5835,75 @@ function setFloatingActionBarVisibility(showFlag, notify = true) {
   }
 }
 
+function updateAuditMetadataVisibilityUI() {
+  const isVisible = appState.showAuditMetadata !== false;
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.classList.toggle('audit-metadata-hidden', !isVisible);
+  }
+  const chkEl = document.getElementById('chkShowAuditMetadata');
+  if (chkEl) {
+    chkEl.checked = isVisible;
+  }
+  const badgeEl = document.getElementById('auditMetadataStatusBadge');
+  if (badgeEl) {
+    if (isVisible) {
+      badgeEl.textContent = '✅ ظاهرة في جدول البيع';
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold';
+    } else {
+      badgeEl.textContent = '🙈 مخفية حالياً من جدول البيع';
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-slate-200 text-slate-800 border border-slate-300 text-xs font-extrabold';
+    }
+  }
+  const btnEl = document.getElementById('btnToggleAuditMetadata');
+  const btnIcon = document.getElementById('btnToggleAuditMetadataIcon');
+  const btnTxt = document.getElementById('btnToggleAuditMetadataText');
+  if (btnEl) {
+    btnEl.className = isVisible
+      ? 'px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-xs shadow transition flex items-center gap-1.5'
+      : 'px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition flex items-center gap-1.5';
+  }
+  if (btnIcon) btnIcon.textContent = isVisible ? '🙈' : '👁️';
+  if (btnTxt) btnTxt.textContent = isVisible ? 'إخفاء نصوص الرقابة' : 'إظهار نصوص الرقابة';
+
+  const hdrBtnEl = document.getElementById('btnToggleAuditMetadataHeader');
+  const hdrBtnIcon = document.getElementById('btnToggleAuditMetadataHeaderIcon');
+  const hdrBtnTxt = document.getElementById('btnToggleAuditMetadataHeaderText');
+  if (hdrBtnEl) {
+    hdrBtnEl.className = isVisible
+      ? 'px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow-sm transition flex items-center gap-1'
+      : 'px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-sm transition flex items-center gap-1';
+  }
+  if (hdrBtnIcon) hdrBtnIcon.textContent = isVisible ? '🙈' : '👁️';
+  if (hdrBtnTxt) hdrBtnTxt.textContent = isVisible ? 'إخفاء نصوص الرقابة بجدول البيع' : 'إظهار نصوص الرقابة بجدول البيع';
+}
+
+function setAuditMetadataVisibility(showFlag, notify = true) {
+  appState.showAuditMetadata = Boolean(showFlag);
+  try {
+    localStorage.setItem(STORAGE_KEY + '_show_audit_metadata', appState.showAuditMetadata ? '1' : '0');
+  } catch (e) {}
+  updateAuditMetadataVisibilityUI();
+  saveState(false);
+  renderDailyView();
+  if (activeDrillDownMerchantCode > 0) {
+    const mdl = document.getElementById('merchantDrillDownModal');
+    if (mdl && !mdl.classList.contains('hidden')) {
+      renderMerchantDrillDownModal();
+    }
+  }
+  if (notify) {
+    showToast(
+      appState.showAuditMetadata
+        ? 'تم إظهار نصوص الرقابة التفصيلية (👤 اسم المندوب | 🕒 وقت الحركة) في جدول حركات البيع المسجلة 👁️'
+        : 'تم إخفاء نصوص الرقابة التفصيلية من جدول حركات البيع المسجلة وحفظ تفضيلك 🙈',
+      appState.showAuditMetadata ? '👁️' : '🙈'
+    );
+  }
+}
+
 function renderBackupAndAuditCenterUI() {
   syncActiveFarmIntoArchive();
+  updateAuditMetadataVisibilityUI();
   const archive = appState.farmsArchive || {};
   const farmNames = Object.keys(archive);
   const merchCount = (appState.merchants || []).length;
@@ -6056,6 +6186,7 @@ function renderAll(forceAllTabs = false, preserveInputs = false) {
   const isSyncTab = (activeTab === 'sync');
   renderUsersAndPermissionsUI(Boolean(forceAllTabs || isSyncTab));
   updateFloatingActionBarVisibilityUI();
+  updateAuditMetadataVisibilityUI();
 
   if (forceAllTabs) {
     renderDaySelector();
@@ -6453,6 +6584,26 @@ async function buildStyled15SheetExcelBytes() {
     const totNetDebtCurrent = mList.reduce((acc, m) => acc + m.netDebtCurrent, 0);
     const totAllTransfers = totCurrTr + totPrevTr;
 
+    const activeDaysForAvg = Math.max(1, [1,2,3,4,5,6,7,8,9,10].filter(d => summaries[d].sumNetW > 0 || summaries[d].countCars > 0).length);
+    s1 = setXmlFormulaVal(s1, 'D18', Number((totCars / activeDaysForAvg).toFixed(1)));
+    s1 = setXmlFormulaVal(s1, 'E18', Number((totNetW / activeDaysForAvg).toFixed(1)));
+    s1 = setXmlFormulaVal(s1, 'F18', totAvgPrice);
+    s1 = setXmlFormulaVal(s1, 'G18', Number((totBase / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'H18', Number((totTip / activeDaysForAvg).toFixed(1)));
+    s1 = setXmlFormulaVal(s1, 'I18', Number((totSales / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'J18', Number((totCashS / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'K18', Number((totCredS / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'L18', Number((totDebtC / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'M18', Number((totCurrTr / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'N18', Number((totPrevC / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'O18', Number((totPrevTr / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'P18', Number((totCashBef / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'Q18', Number((totExp / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'R18', Number((totNetCash / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'S18', Number((totDeliv / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'T18', Number((totCashDiff / activeDaysForAvg).toFixed(2)));
+    s1 = setXmlFormulaVal(s1, 'U18', Number((totInvDiff / activeDaysForAvg).toFixed(2)));
+
     s1 = setXmlFormulaVal(s1, 'D19', totCars);
     s1 = setXmlFormulaVal(s1, 'E19', totNetW);
     s1 = setXmlFormulaVal(s1, 'F19', totAvgPrice);
@@ -6601,6 +6752,9 @@ async function buildStyled15SheetExcelBytes() {
     s3 = setXmlFormulaVal(s3, 'J56', sumJ);
     s3 = setXmlFormulaVal(s3, 'K56', sumK);
     s3 = setXmlFormulaVal(s3, 'L56', sumL);
+    for (let d = 1; d <= 10; d++) {
+      s3 = setXmlFormulaVal(s3, `${dayColLetters[d]}56`, summaries[d].totalAllTransfers);
+    }
     outFiles['xl/worksheets/sheet3.xml'] = s3;
   }
 
@@ -6638,6 +6792,9 @@ async function buildStyled15SheetExcelBytes() {
     s4 = setXmlFormulaVal(s4, 'D56', sumD);
     s4 = setXmlFormulaVal(s4, 'E56', sumE);
     s4 = setXmlFormulaVal(s4, 'F56', sumF);
+    for (let d = 1; d <= 10; d++) {
+      s4 = setXmlFormulaVal(s4, `${dayColLetters[d]}56`, summaries[d].sumPrevCash + summaries[d].sumPrevTransfer);
+    }
     outFiles['xl/worksheets/sheet4.xml'] = s4;
   }
 
@@ -6792,7 +6949,8 @@ async function buildStyled15SheetExcelBytes() {
       let eXml = cloneXmlTemplateRow(baseXml, baseR, er, eIdx + 1);
       const ex = s.expenses[eIdx];
       if (ex && Number(ex.amount) > 0) {
-        eXml = setXmlCellVal(eXml, `C${er}`, ex.category, false);
+        const exportCat = ex.category === 'منصرفات أخرى (بدون تصنيف محدد)' ? '' : (ex.category || '');
+        eXml = setXmlCellVal(eXml, `C${er}`, exportCat, false);
         eXml = setXmlCellVal(eXml, `H${er}`, ex.desc || '', false);
         eXml = setXmlCellVal(eXml, `P${er}`, ex.recipient || '', false);
         eXml = setXmlCellVal(eXml, `U${er}`, Number(ex.amount) || 0, true, true);
@@ -6847,12 +7005,18 @@ async function buildStyled15SheetExcelBytes() {
     dayXml = setXmlFormulaVal(dayXml, 'J102', s.sumTip);
     dayXml = setXmlFormulaVal(dayXml, 'K102', Number(s.sumBase.toFixed(2)));
     dayXml = setXmlFormulaVal(dayXml, 'L102', s.sumCashSales);
+    const cntTrSales = (s.rows || []).filter(r => r.transferSales > 0).length;
+    const cntDebtTr = (s.rows || []).filter(r => r.debtTransfer > 0).length;
+    const cntPrevTr = (s.rows || []).filter(r => r.prevTransfer > 0).length;
     dayXml = setXmlFormulaVal(dayXml, 'M102', s.sumTransferSales);
+    dayXml = setXmlFormulaVal(dayXml, 'N102', `${cntTrSales} تحويل`);
     dayXml = setXmlFormulaVal(dayXml, 'O102', s.sumCreditSales);
     dayXml = setXmlFormulaVal(dayXml, 'P102', s.sumDebtCash);
     dayXml = setXmlFormulaVal(dayXml, 'Q102', s.sumDebtTransfer);
+    dayXml = setXmlFormulaVal(dayXml, 'R102', `${cntDebtTr} تحويل`);
     dayXml = setXmlFormulaVal(dayXml, 'S102', s.sumPrevCash);
     dayXml = setXmlFormulaVal(dayXml, 'T102', s.sumPrevTransfer);
+    dayXml = setXmlFormulaVal(dayXml, 'U102', `${cntPrevTr} تحويل`);
     dayXml = setXmlFormulaVal(dayXml, 'W102', Number(s.sumTotalWithTip.toFixed(2)));
     dayXml = setXmlFormulaVal(dayXml, 'X102', s.sumPaidAndCredit);
     dayXml = setXmlFormulaVal(dayXml, 'Y102', Number(s.sumInvoiceDiff.toFixed(2)));
@@ -6892,7 +7056,9 @@ async function exportFullWorkbookXlsx() {
         const writable = await liveExcelFileHandle.createWritable();
         await writable.write(blob);
         await writable.close();
-        appState.pendingChanges = 0;
+        if (!(appState.webhookUrl || getEmbeddedWebhookUrl())) {
+          appState.pendingChanges = 0;
+        }
         appState.lastExcelSync = `تم تحديث الملف المرتبط (${liveExcelFileHandle.name}) الساعة ${new Date().toLocaleTimeString('ar-EG')}`;
         saveState(false);
         showToast(`تم تحديث ملف الإكسيل المرتبط (${liveExcelFileHandle.name}) مباشرة بنفس التنسيق والمعادلات!`, '💾');
@@ -6911,7 +7077,9 @@ async function exportFullWorkbookXlsx() {
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
 
-    appState.pendingChanges = 0;
+    if (!(appState.webhookUrl || getEmbeddedWebhookUrl())) {
+      appState.pendingChanges = 0;
+    }
     appState.lastExcelSync = `آخر تصدير للإكسيل: ${new Date().toLocaleTimeString('ar-EG')}`;
     saveState(false);
     showToast(`تم تحميل شيت الإكسيل (${fileName}) بنفس التنسيق الكامل والألوان والمعادلات لآخر إصدار!`, '📥');
@@ -6920,27 +7088,209 @@ async function exportFullWorkbookXlsx() {
   }
 }
 
+// =========================================================================
+// EXCEL DATA SANITIZATION & COMPOSITE KEY ENGINE (تنظيف وتحصين بيانات الإكسيل ومنع التكرار)
+// =========================================================================
+function sanitizeExcelText(val) {
+  if (val === null || val === undefined) return '';
+  const cleaned = String(val)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned === 'ـ' || cleaned === '-' || cleaned === '—' || cleaned === 'null' || cleaned === 'undefined' || cleaned.startsWith('#')) {
+    return '';
+  }
+  return cleaned;
+}
+
+function sanitizeExcelNum(val, roundDecimals = 2) {
+  if (typeof val === 'number') {
+    if (!isFinite(val)) return 0;
+    const factor = Math.pow(10, roundDecimals);
+    return Math.round(val * factor) / factor;
+  }
+  if (val === null || val === undefined || val === '') return 0;
+  let s = String(val)
+    .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[,،\s]/g, '')
+    .replace(/ج\.م|كجم|تحويل/g, '')
+    .trim();
+  if (!s || s === '-' || s === 'ـ' || s.startsWith('#')) return 0;
+  const n = parseFloat(s);
+  if (!isFinite(n)) return 0;
+  const factor = Math.pow(10, roundDecimals);
+  return Math.round(n * factor) / factor;
+}
+
+function sanitizeExcelPositiveIntOrEmpty(val) {
+  const n = Math.round(sanitizeExcelNum(val, 0));
+  return n > 0 ? n : '';
+}
+
+function normalizeExcelTransferType(rawType, amount = 0) {
+  const t = sanitizeExcelText(rawType);
+  if (!t && !(Number(amount) > 0)) return '';
+  if (!t && Number(amount) > 0) return 'تحويل كاش';
+  if (t.includes('شيك')) return 'شيكات';
+  if (t.includes('إنستا') || t.includes('انستا') || /insta/i.test(t)) return 'إنستا باي';
+  if (t.includes('بنك')) return 'تحويل بنكي';
+  if (t.includes('كاش') || t.includes('محفظ')) return 'تحويل كاش';
+  return t;
+}
+
+function normalizeExcelExpenseCategory(rawCat) {
+  const c = sanitizeExcelText(rawCat);
+  if (!c) return 'منصرفات أخرى (بدون تصنيف محدد)';
+  const exact = EXPENSE_CATEGORIES.find(x => x === c);
+  if (exact) return exact;
+  if (c.includes('مكاف') || c.includes('حوافز')) return 'مكافآت وحوافز';
+  if (c.includes('موقع') || c.includes('تشغيل')) return 'مصاريف موقع وتشغيل';
+  if (c.includes('مشال') || c.includes('تحميل') || c.includes('عمال')) return 'مشال وتحميل وعمال';
+  if (c.includes('إكرامي') || c.includes('اكرامي') || c.includes('ميزان')) return 'إكراميات وميزان';
+  if (c.includes('تغذي') || c.includes('ضياف')) return 'تغذية وضيافة';
+  if (c.includes('انتقال') || c.includes('سولار')) return 'انتقالات وسولار';
+  if (c.includes('سلف') || c.includes('عهد')) return 'سلف وعهد نقدية';
+  if (c.includes('نثري')) return 'مصاريف نثرية أخرى';
+  return 'منصرفات أخرى (بدون تصنيف محدد)';
+}
+
+function extractCustodyAndCleanNotesFromExcel(rawNotes, colZVal, colAAVal) {
+  let notes = sanitizeExcelText(rawNotes);
+  let custodyCash = 0;
+  let custodyTransfer = 0;
+  let custodyTransferType = '';
+
+  // 1) فحص أعمدة العهدة الإضافية في شيت الإكسيل (Col Z = r[25], Col AA = r[26]) مثل (500000 | شيك) في يوم 5
+  const extraAmt = Math.max(0, sanitizeExcelNum(colZVal, 2));
+  const extraType = sanitizeExcelText(colAAVal);
+  if (extraAmt > 0) {
+    if (extraType && (extraType.includes('شيك') || extraType.includes('بنك') || extraType.includes('إنستا') || extraType.includes('انستا') || extraType.includes('تحويل') || extraType.includes('كاش') || extraType.includes('محفظ'))) {
+      custodyTransfer = extraAmt;
+      custodyTransferType = normalizeExcelTransferType(extraType, extraAmt);
+    } else {
+      custodyCash = extraAmt;
+    }
+  }
+
+  // 2) استخلاص العهدة المدمجة نصياً في عمود الملاحظات عند إعادة استيراد ملف تم تصديره من الموقع لمنع تكرار نص "[عهدة: ...]"
+  const custodyRegex = /(?:\s*\|\s*)?عهدة:\s*([0-9,.]+)\s*\(متبقي:\s*[-0-9,.]+\)/g;
+  const match = custodyRegex.exec(notes);
+  if (match && match[1]) {
+    const parsedCust = Math.max(0, sanitizeExcelNum(match[1], 2));
+    if (parsedCust > 0 && custodyCash === 0 && custodyTransfer === 0) {
+      custodyCash = parsedCust;
+    }
+    notes = notes.replace(custodyRegex, '').trim();
+  }
+  return { notes, custodyCash, custodyTransfer, custodyTransferType };
+}
+
+function buildExcelSaleCompositeKey(dayNum, seq, rec) {
+  const mKey = normalizeArabicMerchantCompareKey(rec.merchant) || sanitizeExcelText(rec.merchant);
+  const subNo = (String(rec.merchant || '').match(/\d+/) || [''])[0];
+  const sNo = Number(rec.scaleNo) || 0;
+  if (sNo > 0) {
+    return `d${dayNum}_scale_${sNo}_m_${mKey}${subNo}`;
+  }
+  const cNo = String(rec.carNo || '').trim() || 'nocar';
+  const w1 = Number(rec.w1) || 0;
+  const w2 = Number(rec.w2) || 0;
+  if (w1 > 0 || w2 > 0) {
+    return `d${dayNum}_car_${cNo}_m_${mKey}${subNo}_w_${w1}_${w2}`;
+  }
+  return `d${dayNum}_seq_${seq}_m_${mKey}${subNo}_coll_${rec.debtCash}_${rec.debtTransfer}_${rec.prevCash}_${rec.prevTransfer}`;
+}
+
+function buildExcelExpenseCompositeKey(dayNum, expSeq, exp) {
+  const cat = normalizeExcelExpenseCategory(exp.category);
+  const desc = sanitizeExcelText(exp.desc);
+  const recip = sanitizeExcelText(exp.recipient);
+  const amt = Number(exp.amount) || 0;
+  return `exp_d${dayNum}_s${expSeq}_${cat}_${desc}_${recip}_${amt}`;
+}
+
+function isSaleRecordUnchanged(oldRec, newRec) {
+  if (!oldRec || !newRec) return false;
+  return (
+     sanitizeExcelText(oldRec.merchant) === sanitizeExcelText(newRec.merchant) &&
+    (Number(oldRec.scaleNo) || 0) === (Number(newRec.scaleNo) || 0) &&
+    String(oldRec.carNo || '').trim() === String(newRec.carNo || '').trim() &&
+    isSameNumVal(oldRec.w1, newRec.w1) &&
+    isSameNumVal(oldRec.w2, newRec.w2) &&
+    isSameNumVal(oldRec.price, newRec.price) &&
+    isSameNumVal(oldRec.tip, newRec.tip) &&
+    isSameNumVal(oldRec.custodyCash, newRec.custodyCash) &&
+    isSameNumVal(oldRec.custodyTransfer, newRec.custodyTransfer) &&
+    sanitizeExcelText(oldRec.custodyTransferType) === sanitizeExcelText(newRec.custodyTransferType) &&
+    isSameNumVal(oldRec.cashSales, newRec.cashSales) &&
+    isSameNumVal(oldRec.transferSales, newRec.transferSales) &&
+    sanitizeExcelText(oldRec.transferSalesType) === sanitizeExcelText(newRec.transferSalesType) &&
+    isSameNumVal(oldRec.creditSales, newRec.creditSales) &&
+    isSameNumVal(oldRec.debtCash, newRec.debtCash) &&
+    isSameNumVal(oldRec.debtTransfer, newRec.debtTransfer) &&
+    sanitizeExcelText(oldRec.debtTransferType) === sanitizeExcelText(newRec.debtTransferType) &&
+    isSameNumVal(oldRec.prevCash, newRec.prevCash) &&
+    isSameNumVal(oldRec.prevTransfer, newRec.prevTransfer) &&
+    sanitizeExcelText(oldRec.prevTransferType) === sanitizeExcelText(newRec.prevTransferType) &&
+    sanitizeExcelText(oldRec.notes) === sanitizeExcelText(newRec.notes)
+  );
+}
+
 function importWorkbookIntoAppState(workbook, sourceFileName = '') {
+  if (!workbook || !workbook.Sheets || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length === 0) {
+    showToast('⚠️ ملف الإكسيل فارغ أو غير صالح للقراءة!', '⚠️');
+    return false;
+  }
+
   let importedSalesCount = 0;
+  let updatedExistingSalesCount = 0;
+  let unchangedSalesCount = 0;
   let importedExpCount = 0;
   let importedMerchantsCount = 0;
+  const masterImportTs = getSyncedNow();
 
-  // 1. Always target and update the currently active farm (المزرعة النشطة)
-  const activeFarmName = (appState.farmName || '').trim() || 'أبوذكري';
-  appState.farmName = activeFarmName;
+  // 1. استخلاص أو تثبيت اسم المزرعة النشطة بذكاء من شيت الملخص (الخلية C3 أو عنوان الخلية A1)
+  let detectedFarmName = sanitizeExcelText(appState.farmName) || 'أبوذكري';
+  const summarySheet = workbook.Sheets['لوحة التحكم والملخص'];
+  if (summarySheet) {
+    const c3Cell = summarySheet['C3'];
+    const a1Cell = summarySheet['A1'];
+    const c3Val = c3Cell && c3Cell.v ? sanitizeExcelText(c3Cell.v) : '';
+    const a1Val = a1Cell && a1Cell.v ? sanitizeExcelText(a1Cell.v) : '';
+    if (c3Val && !c3Val.includes('فتح محضر') && !c3Val.includes('يوم')) {
+      detectedFarmName = c3Val;
+    } else if (a1Val) {
+      const mFarm = a1Val.match(/مزرعة\s+([^(\n\r\-]+)/);
+      if (mFarm && mFarm[1]) {
+        const cand = sanitizeExcelText(mFarm[1]);
+        if (cand) detectedFarmName = cand;
+      }
+    }
+  }
+  appState.farmName = detectedFarmName;
 
-  // 2. Read Unified Merchants List from `تكويد التجار وكشف الحساب` (دمج وتثبيت الكود الموحد واسم التاجر الأساسي عبر جميع المزارع)
+  // 2. قراءة وتنظيف دليل التجار الموحد من شيت `تكويد التجار وكشف الحساب`
   const merchSheet = workbook.Sheets['تكويد التجار وكشف الحساب'];
   if (merchSheet) {
     const mRows = XLSX.utils.sheet_to_json(merchSheet, { header: 1, defval: '' });
     mRows.forEach(r => {
-      const code = Number(r[1]);
-      const name = String(r[2] || '').trim();
+      if (!Array.isArray(r)) return;
+      const code = Math.round(sanitizeExcelNum(r[1], 0));
+      const name = sanitizeExcelText(r[2]);
       if (code >= 101 && code <= 999 && name && !name.includes('اسم التاجر') && !name.includes('إجمالي')) {
-        const byName = appState.merchants.find(x => x.name === name);
+        unrecordDeletedItem('merchants', code);
         const byCode = appState.merchants.find(x => Number(x.code) === code);
-        if (!byName && !byCode) {
-          appState.merchants.push({ code, name });
+        const byName = appState.merchants.find(x => isSameMerchantIdentity(x.name, name));
+        if (byCode) {
+          byCode.name = name;
+          byCode.updatedAt = masterImportTs;
+        } else if (byName) {
+          byName.code = code;
+          byName.name = name;
+          byName.updatedAt = masterImportTs;
+        } else {
+          appState.merchants.push({ code, name, updatedAt: masterImportTs });
           importedMerchantsCount++;
         }
       }
@@ -6948,114 +7298,237 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
     unifyGlobalMerchantsRegistry();
   }
 
-  // 3. Read Daily Sheets (`يوم 1`..`يوم 10`) OR single-sheet uploaded file
-  const hasTenDaySheets = workbook.SheetNames.some(n => n.startsWith('يوم '));
-  const targetSheets = hasTenDaySheets
-    ? [1,2,3,4,5,6,7,8,9,10].map(d => ({ dayNum: d, name: `يوم ${d}` }))
-    : [{ dayNum: appState.currentDay, name: workbook.SheetNames[0] }];
+  // 3. قراءة شيتات الأيام (`يوم 1`..`يوم 10`) أو الشيت المنفرد مع التنظيف الشامل ومنع التكرار
+  const daySheetRegex = /^يوم\s*(\d+)$/;
+  const matchedDaySheets = [];
+  workbook.SheetNames.forEach(sName => {
+    const m = String(sName || '').trim().match(daySheetRegex);
+    if (m && Number(m[1]) >= 1 && Number(m[1]) <= 10) {
+      matchedDaySheets.push({ dayNum: Number(m[1]), name: sName });
+    }
+  });
+  const targetSheets = matchedDaySheets.length > 0
+    ? matchedDaySheets.sort((a, b) => a.dayNum - b.dayNum)
+    : [{ dayNum: appState.currentDay || 1, name: workbook.SheetNames[0] }];
 
   targetSheets.forEach(({ dayNum, name }) => {
     const ws = workbook.Sheets[name];
     if (!ws) return;
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (!appState.days[dayNum]) {
+      appState.days[dayNum] = {
+        dayNumber: dayNum,
+        dateLabel: `اليوم ${dayNum}`,
+        sales: [],
+        pendingSales: [],
+        expenses: [],
+        deliveredCash: 0,
+        clearedAt: 0,
+        addedAt: 0
+      };
+    }
 
-    const oldSales = (appState.days[dayNum] && appState.days[dayNum].sales) || [];
-    const oldPendingSales = (appState.days[dayNum] && appState.days[dayNum].pendingSales) || [];
-    const oldExpenses = (appState.days[dayNum] && appState.days[dayNum].expenses) || [];
+    const oldSales = Array.isArray(appState.days[dayNum].sales) ? [...appState.days[dayNum].sales] : [];
+    const oldPendingSales = Array.isArray(appState.days[dayNum].pendingSales) ? [...appState.days[dayNum].pendingSales] : [];
+    const oldExpenses = Array.isArray(appState.days[dayNum].expenses) ? [...appState.days[dayNum].expenses] : [];
+    const usedOldSaleIds = new Set();
+    const usedOldPendIds = new Set();
+    const usedOldExpIds = new Set();
 
-    // Extract Date from Row 2 Col C (rows[1][2])
-    if (rows[1] && rows[1][2] && String(rows[1][2]).trim()) {
-      appState.days[dayNum].dateLabel = String(rows[1][2]).trim();
+    // استخلاص تاريخ/عنوان اليوم من الصف الثاني العمود C (rows[1][2])
+    if (rows[1] && rows[1][2]) {
+      const cleanDateLbl = sanitizeExcelText(rows[1][2]);
+      if (cleanDateLbl && !cleanDateLbl.includes('إجمالي اليوم')) {
+        appState.days[dayNum].dateLabel = cleanDateLbl;
+        appState.days[dayNum].labelUpdatedAt = masterImportTs;
+      }
+    }
+
+    // اكتشاف تخطيط الأعمدة من صف الترويسة (Row 3 / Row 4)بدلاً من الاعتماد على r.length المتغير
+    let sheetLayoutMode = '25col'; // Default 25-column standard layout
+    for (let hIdx = 0; hIdx < Math.min(rows.length, 56); hIdx++) {
+      const hr = rows[hIdx];
+      if (!Array.isArray(hr)) continue;
+      const joined = hr.map(x => String(x || '')).join(' ');
+      if (joined.includes('اسم التاجر') && joined.includes('وزنة أولى')) {
+        const c2 = String(hr[2] || '');
+        if (!c2.includes('اسم التاجر') && String(hr[1] || '').includes('اسم التاجر')) {
+          sheetLayoutMode = 'legacy16col';
+        } else if (hr.length < 22 && !joined.includes('نوع تحويل المديونية')) {
+          sheetLayoutMode = '21col';
+        } else {
+          sheetLayoutMode = '25col';
+        }
+        break;
+      }
     }
 
     const newSales = [];
     const newPendingSales = [];
     const newExpenses = [];
     let inExpensesSection = false;
+    let inTrialBalanceSection = false;
 
     rows.forEach((r, rIdx) => {
-      const colA = String(r[0] || '').trim();
-      const colR = String(r[17] || '').trim();
-      const colP = String(r[15] || '').trim();
+      if (!Array.isArray(r)) return;
+      const colA = sanitizeExcelText(r[0]);
+      const colR = sanitizeExcelText(r[17]);
+      const colP = sanitizeExcelText(r[15]);
 
-      // Detect start of Daily Expenses section (`رابعاً: بيان المصروفات`)
-      if (colA.includes('رابعاً:') || colA.includes('بيان المصروفات والمكافآت')) {
+      if (colA.includes('ميزان مراجعة وتصفية اليوم') || colA.includes('أولاً: ميزان مراجعة')) {
+        inTrialBalanceSection = true;
+      }
+
+      // اكتشاف بداية قسم المصروفات اليومية (`رابعاً: بيان المصروفات`)
+      if (colA.includes('رابعاً:') || colA.includes('بيان المصروفات والمكافآت والمنصرف')) {
         inExpensesSection = true;
         return;
       }
 
-      // Detect Delivered Cash in Trial Balance
+      // قراءة النقدية المسلمة فعلياً للخزينة من ميزان المراجعة
       if (colR.includes('النقدية المسلمة فعلياً') || colP.includes('النقدية المسلمة فعلياً')) {
-        const delivVal = Number(r[23]) || Number(r[19]) || 0;
-        if (delivVal >= 0) appState.days[dayNum].deliveredCash = delivVal;
+        const delivVal = Math.max(0, sanitizeExcelNum(r[23] !== '' && r[23] !== undefined ? r[23] : r[19], 2));
+        appState.days[dayNum].deliveredCash = delivVal;
+        appState.days[dayNum].deliveredCashUpdatedAt = masterImportTs;
       }
 
-      if (!inExpensesSection) {
-        // Sales rows: sequence 1..45 in colA (and row index < 103)
-        const seq = Number(r[0]);
+      if (!inExpensesSection && !inTrialBalanceSection) {
+        // صفوف المبيعات: المسلسل 1..45 في العمود A (قبل صف الإجمالي 102)
+        const seq = Math.round(sanitizeExcelNum(r[0], 0));
         if (seq >= 1 && seq <= 45 && rIdx < 103) {
-          const is25Col = r.length >= 23;
-          const is21Col = !is25Col && r.length >= 20;
+          const is25Col = sheetLayoutMode === '25col';
+          const is21Col = sheetLayoutMode === '21col';
 
-          const merch = String(is25Col || is21Col ? r[2] : r[1] || '').trim();
-          if (!merch || merch.includes('اسم التاجر') || merch.includes('الإجمالي')) return;
+          let merch = sanitizeExcelText(is25Col || is21Col ? r[2] : r[1]);
+          if (!merch || merch.includes('اسم التاجر') || merch.includes('الإجمالي') || merch.includes('ملاحظات')) return;
 
-          const w1 = Number(is25Col || is21Col ? r[5] : r[4]) || 0;
-          const w2 = Number(is25Col || is21Col ? r[6] : r[5]) || 0;
-          const price = Number(is25Col || is21Col ? r[8] : r[7]) || 0;
-          const cashSales = Number(is25Col || is21Col ? r[11] : r[10]) || 0;
-          const creditSales = Number(is25Col || is21Col ? r[14] : r[12]) || 0;
-          const debtCash = Number(is25Col || is21Col ? r[15] : r[13]) || 0;
-          const prevCash = Number(is25Col ? r[18] : (is21Col ? r[16] : r[14])) || 0;
+          const explicitCode = Math.round(sanitizeExcelNum(is25Col || is21Col ? r[1] : 0, 0));
+          // إذا كان اسم التاجر في الشيت بدون رقم سيارة فرعية وله كود صريح في العمود B يطابق تاجراً مكوداً (مثل "مزرعه" -> كود 131 "المزرعه")، نستخدم الاسم الرسمي الموحد
+          const hasSubCarNumber = /\d/.test(merch);
+          if (!hasSubCarNumber && explicitCode >= 101) {
+            const officialMerch = appState.merchants.find(m => Number(m.code) === explicitCode);
+            if (officialMerch && isSameMerchantIdentity(officialMerch.name, merch)) {
+              merch = officialMerch.name;
+            }
+          }
 
-          if (w1 > 0 || w2 > 0 || price > 0 || cashSales > 0 || creditSales > 0 || debtCash > 0 || prevCash > 0) {
-            ensureMerchantExists(merch, is25Col || is21Col ? r[1] : null);
-            const scaleNoVal = Number(is25Col || is21Col ? r[3] : r[2]) || '';
-            const carNoVal = Number(is25Col || is21Col ? r[4] : r[3]) || '';
-            const isPendingRow = (w1 > 0 && w2 <= 0 && cashSales === 0 && creditSales === 0 && debtCash === 0 && prevCash === 0);
+          const scaleNoVal = sanitizeExcelPositiveIntOrEmpty(is25Col || is21Col ? r[3] : r[2]);
+          const carNoVal = sanitizeExcelPositiveIntOrEmpty(is25Col || is21Col ? r[4] : r[3]);
+          const w1 = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[5] : r[4], 2));
+          const w2 = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[6] : r[5], 2));
+          const price = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[8] : r[7], 2));
+          const tip = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[9] : r[8], 2));
+
+          // معالجة ذكية لنقدي المبيعات: في بعض شيتات الإكسيل توضع معادلة فروق التقريب (=O57-W57) في خلية النقدي فتعطي قيماً عشرية ضئيلة مثل 0.30 أو -0.20 ج.م
+          let rawCashSales = sanitizeExcelNum(is25Col || is21Col ? r[11] : r[10], 2);
+          const cashSales = (rawCashSales < 0 || (rawCashSales > 0 && rawCashSales < 1 && (w2 > 0 || w1 > 0)))
+            ? 0
+            : Math.max(0, rawCashSales);
+
+          const transferSales = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[12] : r[11], 2));
+          const transferSalesType = normalizeExcelTransferType(is25Col || is21Col ? r[13] : '', transferSales);
+          const creditSales = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[14] : r[12], 2));
+          const debtCash = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[15] : r[13], 2));
+          const debtTransfer = Math.max(0, sanitizeExcelNum(is25Col ? r[16] : 0, 2));
+          const debtTransferType = normalizeExcelTransferType(is25Col ? r[17] : '', debtTransfer);
+          const prevCash = Math.max(0, sanitizeExcelNum(is25Col ? r[18] : (is21Col ? r[16] : r[14]), 2));
+          const prevTransfer = Math.max(0, sanitizeExcelNum(is25Col ? r[19] : 0, 2));
+          const prevTransferType = normalizeExcelTransferType(is25Col ? r[20] : '', prevTransfer);
+
+          const rawNotesCell = is25Col ? r[21] : (is21Col ? r[17] : r[15]);
+          const { notes, custodyCash, custodyTransfer, custodyTransferType } = extractCustodyAndCleanNotesFromExcel(
+            rawNotesCell,
+            is25Col ? r[25] : '',
+            is25Col ? r[26] : ''
+          );
+
+          // قبول أي صف يحتوي على أوزان أو أسعار أو أي حركة مالية (نقدي، آجل، تحويل مبيعات، سداد مديونية، تحصيل مزرعة سابقة، أو عهدة)
+          const hasAnyRowActivity = (
+            w1 > 0 || w2 > 0 || price > 0 ||
+            cashSales > 0 || transferSales > 0 || creditSales > 0 ||
+            debtCash > 0 || debtTransfer > 0 ||
+            prevCash > 0 || prevTransfer > 0 ||
+            custodyCash > 0 || custodyTransfer > 0
+          );
+
+          if (hasAnyRowActivity) {
+            ensureMerchantExists(merch, explicitCode >= 101 ? explicitCode : null);
+
+            // الحركة تعتبر "مؤقتة (وزنة 1 فقط)" فقط إذا سُجلت الوزنة الأولى (w1 > 0) ولم تُسجل الوزنة الثانية ولا أي مبالغ تحصيل أو آجل أو تحويلات
+            const isPendingRow = (
+              w1 > 0 && w2 <= 0 &&
+              cashSales === 0 && transferSales === 0 && creditSales === 0 &&
+              debtCash === 0 && debtTransfer === 0 &&
+              prevCash === 0 && prevTransfer === 0
+            );
 
             const recObj = {
               id: '',
+              excelCompositeKey: '',
               merchant: merch,
               scaleNo: scaleNoVal,
               carNo: carNoVal,
               w1,
               w2,
               price,
-              tip: Number(is25Col || is21Col ? r[9] : r[8]) || 0,
+              tip,
+              custodyCash,
+              custodyTransfer,
+              custodyTransferType,
               cashSales,
-              transferSales: Number(is25Col || is21Col ? r[12] : r[11]) || 0,
-              transferSalesType: is25Col || is21Col ? String(r[13] || '') : '',
+              transferSales,
+              transferSalesType,
               creditSales,
               debtCash,
-              debtTransfer: is25Col ? (Number(r[16]) || 0) : 0,
-              debtTransferType: is25Col ? String(r[17] || '') : '',
+              debtTransfer,
+              debtTransferType,
               prevCash,
-              prevTransfer: is25Col ? (Number(r[19]) || 0) : 0,
-              prevTransferType: is25Col ? String(r[20] || '') : '',
-              notes: String(is25Col ? (r[21] || '') : (is21Col ? (r[17] || '') : (r[15] || ''))).trim()
+              prevTransfer,
+              prevTransferType,
+              notes
             };
+            recObj.excelCompositeKey = buildExcelSaleCompositeKey(dayNum, seq, recObj);
 
-            const rowImportTs = getSyncedNow();
             if (isPendingRow) {
-              // Match existing pending sale to reuse ID or generate a fresh collision-proof UUID
-              const matchedOldPend = oldPendingSales.find(op => arePendingSalesDuplicate(op, recObj));
-              if (matchedOldPend && isCollisionProofUUID(matchedOldPend.id)) {
-                recObj.id = matchedOldPend.id;
+              // البحث عن الحركة المؤقتة المطابقة في البيانات الحالية (بالمفتاح المركب أو رقم الميزان أو التطابق الموضوعي حتى لو اختلف الـ UUID)
+              const matchedOldPend = oldPendingSales.find(op =>
+                op && !usedOldPendIds.has(String(op.id)) && arePendingSalesDuplicate(op, recObj, true)
+              );
+              if (matchedOldPend) {
+                usedOldPendIds.add(String(matchedOldPend.id));
+                recObj.id = isCollisionProofUUID(matchedOldPend.id)
+                  ? String(matchedOldPend.id)
+                  : generateRecordUUID(`imp_pend_d${dayNum}`);
                 if (matchedOldPend.custodyCash && !recObj.custodyCash) recObj.custodyCash = matchedOldPend.custodyCash;
                 if (matchedOldPend.custodyTransfer && !recObj.custodyTransfer) recObj.custodyTransfer = matchedOldPend.custodyTransfer;
                 if (matchedOldPend.custodyTransferType && !recObj.custodyTransferType) recObj.custodyTransferType = matchedOldPend.custodyTransferType;
               } else {
                 recObj.id = generateRecordUUID(`imp_pend_d${dayNum}`);
               }
-              Object.assign(recObj, buildRecordAuditMeta(matchedOldPend || null, false), {
-                createdAt: rowImportTs,
-                updatedAt: rowImportTs,
-                importedAt: rowImportTs
-              });
+
+              const unchanged = matchedOldPend && isSaleRecordUnchanged(matchedOldPend, recObj);
+              if (unchanged) {
+                Object.assign(recObj, {
+                  createdAt: Number(matchedOldPend.createdAt) || masterImportTs,
+                  createdBy: matchedOldPend.createdBy || getActiveUserShortLabel(),
+                  createdTimeTxt: matchedOldPend.createdTimeTxt || formatAuditTimeArabic(masterImportTs),
+                  updatedAt: Number(matchedOldPend.updatedAt) || masterImportTs,
+                  updatedBy: matchedOldPend.updatedBy || getActiveUserShortLabel(),
+                  updatedTimeTxt: matchedOldPend.updatedTimeTxt || formatAuditTimeArabic(masterImportTs),
+                  importedAt: Number(matchedOldPend.importedAt) || masterImportTs,
+                  isEdited: Boolean(matchedOldPend.isEdited)
+                });
+                unchangedSalesCount++;
+              } else {
+                Object.assign(recObj, buildRecordAuditMeta(matchedOldPend || null, Boolean(matchedOldPend)), {
+                  updatedAt: masterImportTs,
+                  importedAt: masterImportTs
+                });
+                if (matchedOldPend) updatedExistingSalesCount++;
+              }
               unrecordDeletedItem('pendingSales', recObj.id);
 
-              const dupPendIdx = newPendingSales.findIndex(ep => arePendingSalesDuplicate(ep, recObj));
+              const dupPendIdx = newPendingSales.findIndex(ep => arePendingSalesDuplicate(ep, recObj, true));
               if (dupPendIdx === -1) {
                 newPendingSales.push(recObj);
                 importedSalesCount++;
@@ -7064,24 +7537,71 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                 newPendingSales[dupPendIdx] = recObj;
               }
             } else {
-              // Match existing completed sale to reuse ID or generate a fresh collision-proof UUID
-              const matchedOldSale = oldSales.find(os => areSalesRowsDuplicate(os, recObj));
-              if (matchedOldSale && isCollisionProofUUID(matchedOldSale.id)) {
-                recObj.id = matchedOldSale.id;
-                if (matchedOldSale.custodyCash && !recObj.custodyCash) recObj.custodyCash = matchedOldSale.custodyCash;
-                if (matchedOldSale.custodyTransfer && !recObj.custodyTransfer) recObj.custodyTransfer = matchedOldSale.custodyTransfer;
-                if (matchedOldSale.custodyTransferType && !recObj.custodyTransferType) recObj.custodyTransferType = matchedOldSale.custodyTransferType;
+              // البحث عن حركة البيع المكتملة المطابقة في البيانات الحالية (أو ترقية حركة مؤقتة تم استكمال وزنتها الثانية في الإكسيل!)
+              let matchedOldSale = oldSales.find(os =>
+                os && !usedOldSaleIds.has(String(os.id)) && areSalesRowsDuplicate(os, recObj, true)
+              );
+              // fallback: مطابقة بنفس رقم الميزان ونفس التاجر إذا تم تعديل الأوزان أو المبالغ داخل الإكسيل
+              if (!matchedOldSale && scaleNoVal) {
+                matchedOldSale = oldSales.find(os =>
+                  os && !usedOldSaleIds.has(String(os.id)) &&
+                  Number(os.scaleNo) === Number(scaleNoVal) &&
+                  isSameMerchantIdentity(os.merchant, recObj.merchant)
+                );
+              }
+              const upgradedFromPending = !matchedOldSale
+                ? oldPendingSales.find(op =>
+                    op && !usedOldPendIds.has(String(op.id)) &&
+                    isSameMerchantIdentity(op.merchant, recObj.merchant) &&
+                    ((scaleNoVal && Number(op.scaleNo) === Number(scaleNoVal)) ||
+                     (carNoVal && String(op.carNo) === String(carNoVal) && isSameNumVal(op.w1, recObj.w1)))
+                  )
+                : null;
+              if (upgradedFromPending) {
+                usedOldPendIds.add(String(upgradedFromPending.id));
+                recordDeletedItem('pendingSales', String(upgradedFromPending.id), masterImportTs);
+              }
+
+              const baseExistingRec = matchedOldSale || upgradedFromPending || null;
+              if (matchedOldSale) {
+                usedOldSaleIds.add(String(matchedOldSale.id));
+              }
+
+              if (baseExistingRec && isCollisionProofUUID(baseExistingRec.id) && !upgradedFromPending) {
+                recObj.id = String(baseExistingRec.id);
               } else {
                 recObj.id = generateRecordUUID(`imp_sale_d${dayNum}`);
               }
-              Object.assign(recObj, buildRecordAuditMeta(matchedOldSale || null, false), {
-                createdAt: rowImportTs,
-                updatedAt: rowImportTs,
-                importedAt: rowImportTs
-              });
+
+              if (baseExistingRec) {
+                if (baseExistingRec.custodyCash && !recObj.custodyCash) recObj.custodyCash = baseExistingRec.custodyCash;
+                if (baseExistingRec.custodyTransfer && !recObj.custodyTransfer) recObj.custodyTransfer = baseExistingRec.custodyTransfer;
+                if (baseExistingRec.custodyTransferType && !recObj.custodyTransferType) recObj.custodyTransferType = baseExistingRec.custodyTransferType;
+              }
+
+              const unchanged = matchedOldSale && isSaleRecordUnchanged(matchedOldSale, recObj);
+              if (unchanged) {
+                Object.assign(recObj, {
+                  createdAt: Number(matchedOldSale.createdAt) || masterImportTs,
+                  createdBy: matchedOldSale.createdBy || getActiveUserShortLabel(),
+                  createdTimeTxt: matchedOldSale.createdTimeTxt || formatAuditTimeArabic(masterImportTs),
+                  updatedAt: Number(matchedOldSale.updatedAt) || masterImportTs,
+                  updatedBy: matchedOldSale.updatedBy || getActiveUserShortLabel(),
+                  updatedTimeTxt: matchedOldSale.updatedTimeTxt || formatAuditTimeArabic(masterImportTs),
+                  importedAt: Number(matchedOldSale.importedAt) || masterImportTs,
+                  isEdited: Boolean(matchedOldSale.isEdited)
+                });
+                unchangedSalesCount++;
+              } else {
+                Object.assign(recObj, buildRecordAuditMeta(baseExistingRec, Boolean(baseExistingRec)), {
+                  updatedAt: masterImportTs,
+                  importedAt: masterImportTs
+                });
+                if (baseExistingRec) updatedExistingSalesCount++;
+              }
               unrecordDeletedItem('sales', recObj.id);
 
-              const dupSaleIdx = newSales.findIndex(es => areSalesRowsDuplicate(es, recObj));
+              const dupSaleIdx = newSales.findIndex(es => areSalesRowsDuplicate(es, recObj, true));
               if (dupSaleIdx === -1) {
                 newSales.push(recObj);
                 importedSalesCount++;
@@ -7093,34 +7613,55 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
           }
         }
       } else {
-        // Inside Daily Expenses Section (rows 116..125)
-        const expSeq = Number(r[0]);
+        // قسم المصروفات اليومية (الصفوف 116..125)
+        const expSeq = Math.round(sanitizeExcelNum(r[0], 0));
         if (expSeq >= 1 && expSeq <= 10) {
-          const cat = String(r[2] || '').trim() || 'مصاريف موقع وتشغيل';
-          const desc = String(r[7] || r[6] || '').trim();
-          const recip = String(r[15] || r[12] || '').trim();
-          const amt = Number(r[20]) || Number(r[16]) || 0;
+          const cat = normalizeExcelExpenseCategory(r[2]);
+          const desc = sanitizeExcelText(r[7] !== '' && r[7] !== undefined ? r[7] : r[6]);
+          const recip = sanitizeExcelText(r[15] !== '' && r[15] !== undefined ? r[15] : r[12]);
+          const amt = Math.max(0, sanitizeExcelNum(r[20] !== '' && r[20] !== undefined ? r[20] : r[16], 2));
+          const expNotes = sanitizeExcelText(r[23]);
           if (amt > 0) {
-            const expImportTs = getSyncedNow();
             const expObj = {
               id: '',
+              excelCompositeKey: '',
               category: cat,
               desc,
               recipient: recip,
-              amount: amt
+              amount: amt,
+              ...(expNotes ? { notes: expNotes } : {})
             };
-            const matchedOldExp = oldExpenses.find(oe => areExpensesDuplicate(oe, expObj));
-            expObj.id = (matchedOldExp && isCollisionProofUUID(matchedOldExp.id))
-              ? matchedOldExp.id
-              : generateRecordUUID(`imp_exp_d${dayNum}`);
-            Object.assign(expObj, buildRecordAuditMeta(matchedOldExp || null, false), {
-              createdAt: expImportTs,
-              updatedAt: expImportTs,
-              importedAt: expImportTs
-            });
+            expObj.excelCompositeKey = buildExcelExpenseCompositeKey(dayNum, expSeq, expObj);
+
+            const matchedOldExp = oldExpenses.find(oe =>
+              oe && !usedOldExpIds.has(String(oe.id)) && areExpensesDuplicate(oe, expObj, true)
+            );
+            if (matchedOldExp) {
+              usedOldExpIds.add(String(matchedOldExp.id));
+              expObj.id = isCollisionProofUUID(matchedOldExp.id)
+                ? String(matchedOldExp.id)
+                : generateRecordUUID(`imp_exp_d${dayNum}`);
+              Object.assign(expObj, {
+                createdAt: Number(matchedOldExp.createdAt) || masterImportTs,
+                createdBy: matchedOldExp.createdBy || getActiveUserShortLabel(),
+                createdTimeTxt: matchedOldExp.createdTimeTxt || formatAuditTimeArabic(masterImportTs),
+                updatedAt: Number(matchedOldExp.updatedAt) || masterImportTs,
+                updatedBy: matchedOldExp.updatedBy || getActiveUserShortLabel(),
+                updatedTimeTxt: matchedOldExp.updatedTimeTxt || formatAuditTimeArabic(masterImportTs),
+                importedAt: Number(matchedOldExp.importedAt) || masterImportTs,
+                isEdited: Boolean(matchedOldExp.isEdited)
+              });
+            } else {
+              expObj.id = generateRecordUUID(`imp_exp_d${dayNum}`);
+              Object.assign(expObj, buildRecordAuditMeta(null, false), {
+                createdAt: masterImportTs,
+                updatedAt: masterImportTs,
+                importedAt: masterImportTs
+              });
+            }
             unrecordDeletedItem('expenses', expObj.id);
 
-            if (!newExpenses.some(ee => areExpensesDuplicate(ee, expObj))) {
+            if (!newExpenses.some(ee => areExpensesDuplicate(ee, expObj, true))) {
               newExpenses.push(expObj);
               importedExpCount++;
             }
@@ -7129,65 +7670,68 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
       }
     });
 
-    // Record any previous day items that were removed/replaced by the Excel import as deleted so Cloud Sync never resurrects them
+    // تسجيل أي حركات قديمة أُزيلت من شيت الإكسيل في سجل المحذوفات بطابع زمني دقيق حتى لا ترتد من السحابة
     const keptSaleIds = new Set(newSales.map(s => String(s.id)));
     oldSales.forEach(os => {
       if (os && os.id !== undefined && !keptSaleIds.has(String(os.id))) {
-        recordDeletedItem('sales', String(os.id));
+        recordDeletedItem('sales', String(os.id), masterImportTs);
       }
     });
     const keptPendIds = new Set(newPendingSales.map(p => String(p.id)));
     oldPendingSales.forEach(op => {
       if (op && op.id !== undefined && !keptPendIds.has(String(op.id))) {
-        recordDeletedItem('pendingSales', String(op.id));
+        recordDeletedItem('pendingSales', String(op.id), masterImportTs);
       }
     });
     const keptExpIds = new Set(newExpenses.map(e => String(e.id)));
     oldExpenses.forEach(oe => {
       if (oe && oe.id !== undefined && !keptExpIds.has(String(oe.id))) {
-        recordDeletedItem('expenses', String(oe.id));
+        recordDeletedItem('expenses', String(oe.id), masterImportTs);
       }
     });
 
-    const importNowTs = getSyncedNow();
     appState.days[dayNum].sales = sortSalesListByScaleNo(newSales);
     appState.days[dayNum].pendingSales = sortSalesListByScaleNo(newPendingSales);
     appState.days[dayNum].expenses = newExpenses;
     appState.days[dayNum].clearedAt = 0;
-    if (newSales.length > 0 || newPendingSales.length > 0 || newExpenses.length > 0) {
-      appState.days[dayNum].addedAt = importNowTs;
+    if (newSales.length > 0 || newPendingSales.length > 0 || newExpenses.length > 0 || appState.days[dayNum].deliveredCash > 0) {
+      appState.days[dayNum].addedAt = masterImportTs;
       appState.days[dayNum].isHidden = false;
     }
     deduplicateDayRecords(appState.days[dayNum], appState.deletedIds);
   });
 
-  // Also check `بيان المصروفات والمكافآت` if daily expenses were stored in simple format
+  // 4. فحص شيت `بيان المصروفات والمكافآت` الاحتياطي إذا لم تكن المصروفات مسجلة في الشيتات اليومية
   const expSheet = workbook.Sheets['بيان المصروفات والمكافآت'];
   if (expSheet && importedExpCount === 0) {
     const eRows = XLSX.utils.sheet_to_json(expSheet, { header: 1, defval: '' });
     eRows.forEach((r, idx) => {
-      const dayTxt = String(r[0] || r[1] || '');
+      if (!Array.isArray(r)) return;
+      const dayTxt = sanitizeExcelText(r[1] || r[0]);
       const m = dayTxt.match(/يوم\s+(\d+)/);
       if (m) {
         const dNum = Number(m[1]);
-        const amt = Number(r[5]) || Number(r[11]) || 0;
-        const cat = String(r[2] || r[3] || '').trim();
-        if (dNum >= 1 && dNum <= 10 && amt > 0 && cat && !cat.includes('تصنيف')) {
-          const expSheetTs = getSyncedNow();
+        const amt = Math.max(0, sanitizeExcelNum(r[11] !== '' && r[11] !== undefined ? r[11] : r[5], 2));
+        const rawCat = sanitizeExcelText(r[3] !== '' && r[3] !== undefined ? r[3] : r[2]);
+        if (dNum >= 1 && dNum <= 10 && amt > 0 && !rawCat.includes('تصنيف')) {
+          const cat = normalizeExcelExpenseCategory(rawCat);
+          const desc = sanitizeExcelText(r[5] !== '' && r[5] !== undefined ? r[5] : r[3]);
+          const recip = sanitizeExcelText(r[9] !== '' && r[9] !== undefined ? r[9] : r[4]);
           const expObj = {
             id: generateRecordUUID(`imp_exp_d${dNum}`),
+            excelCompositeKey: buildExcelExpenseCompositeKey(dNum, idx + 1, { category: cat, desc, recipient: recip, amount: amt }),
             category: cat,
-            desc: String(r[3] || r[5] || '').trim(),
-            recipient: String(r[4] || r[9] || '').trim(),
+            desc,
+            recipient: recip,
             amount: amt,
-            createdAt: expSheetTs,
-            updatedAt: expSheetTs,
-            importedAt: expSheetTs,
+            createdAt: masterImportTs,
+            updatedAt: masterImportTs,
+            importedAt: masterImportTs,
             createdBy: getActiveUserShortLabel(),
             updatedBy: getActiveUserShortLabel()
           };
           unrecordDeletedItem('expenses', expObj.id);
-          if (!appState.days[dNum].expenses.some(ee => areExpensesDuplicate(ee, expObj))) {
+          if (!appState.days[dNum].expenses.some(ee => areExpensesDuplicate(ee, expObj, true))) {
             appState.days[dNum].expenses.push(expObj);
             importedExpCount++;
           }
@@ -7196,17 +7740,23 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
     });
   }
 
-  // Update visibleDays, sticky price/tip, and scale number for the active farm from imported sales
+  // 5. تحديث الأيام المفتوحة، السعر والإكرامية الافتراضية، وآخر مسلسل ميزان، وضبط طوابع المزامنة (`addedAt` / `clearedAt` / `lastBulkImportAt`)
   const importedVisDays = [1];
   let maxImportedScale = 0;
   let lastImportedPrice = Number(appState.defaultPrice) || 0;
   let lastImportedTip = Number(appState.defaultTip) || 0;
   for (let d = 1; d <= 10; d++) {
-    const dSales = (appState.days[d] && appState.days[d].sales) || [];
-    const dPend = (appState.days[d] && appState.days[d].pendingSales) || [];
-    const dExps = (appState.days[d] && appState.days[d].expenses) || [];
-    if (dSales.length > 0 || dPend.length > 0 || dExps.length > 0) {
+    const dm = appState.days[d];
+    if (!dm) continue;
+    const dSales = dm.sales || [];
+    const dPend = dm.pendingSales || [];
+    const dExps = dm.expenses || [];
+    const hasMov = (dSales.length > 0 || dPend.length > 0 || dExps.length > 0 || Number(dm.deliveredCash) > 0);
+    if (hasMov) {
       if (!importedVisDays.includes(d)) importedVisDays.push(d);
+      dm.addedAt = masterImportTs + 10;
+      dm.clearedAt = 0;
+      dm.isHidden = false;
     }
     [...dSales, ...dPend].forEach(s => {
       if (Number(s.scaleNo) > maxImportedScale) maxImportedScale = Number(s.scaleNo);
@@ -7214,30 +7764,27 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
       if (Number(s.tip) >= 0) lastImportedTip = Number(s.tip);
     });
   }
-  const finalImportTs = getSyncedNow();
-  for (let d = 1; d <= 10; d++) {
-    const dm = appState.days[d];
-    if (dm && ((dm.sales && dm.sales.length > 0) || (dm.pendingSales && dm.pendingSales.length > 0) || (dm.expenses && dm.expenses.length > 0))) {
-      dm.addedAt = finalImportTs + 10;
-      dm.clearedAt = 0;
-      dm.isHidden = false;
-    }
-  }
+
+  unifyGlobalMerchantsRegistry();
   appState.farmResetAt = 0;
-  appState.lastBulkImportAt = finalImportTs + 10;
+  appState.lastBulkImportAt = masterImportTs + 10;
   appState.visibleDays = importedVisDays.sort((a, b) => a - b);
+  if (!appState.visibleDays.includes(Number(appState.currentDay))) {
+    appState.currentDay = appState.visibleDays[0] || 1;
+  }
   appState.lastScaleNo = maxImportedScale;
   appState.defaultPrice = lastImportedPrice;
   appState.defaultTip = lastImportedTip;
-  appState.pendingChanges = 0;
   appState.lastExcelSync = `تم التحديث من (${sourceFileName || 'شيت الإكسيل'}) الساعة ${new Date().toLocaleTimeString('ar-EG')}`;
   syncActiveFarmIntoArchive();
-  saveState(true, true);
+  // نمرر skipCloudPreMerge = false حتى يندمج تحديث الإكسيل بأمان مع طابور المزامنة السحابية الذري (Atomic Pre-Fetch Merge) دون تضارب
+  saveState(true, false);
   renderAll();
   showToast(
     `تم تحديث الموقع بالكامل من الإكسيل: مزرعة (${appState.farmName}) | ${importedSalesCount} حركة بيع | ${appState.merchants.length} تاجر | ${importedExpCount} مصروف`,
     '📤'
   );
+  return true;
 }
 
 // =========================================================================
@@ -8726,6 +9273,27 @@ function initFarmSalesApp() {
     });
   }
 
+  const chkAuditMetaEl = document.getElementById('chkShowAuditMetadata');
+  if (chkAuditMetaEl) {
+    chkAuditMetaEl.addEventListener('change', (e) => {
+      setAuditMetadataVisibility(Boolean(e.target.checked), true);
+    });
+  }
+
+  const btnToggleAuditMetaEl = document.getElementById('btnToggleAuditMetadata');
+  if (btnToggleAuditMetaEl) {
+    btnToggleAuditMetaEl.addEventListener('click', () => {
+      setAuditMetadataVisibility(appState.showAuditMetadata === false, true);
+    });
+  }
+
+  const btnToggleAuditMetaHdrEl = document.getElementById('btnToggleAuditMetadataHeader');
+  if (btnToggleAuditMetaHdrEl) {
+    btnToggleAuditMetaHdrEl.addEventListener('click', () => {
+      setAuditMetadataVisibility(appState.showAuditMetadata === false, true);
+    });
+  }
+
   // تفعيل التنقل السريع بزر Enter بين حقول الميزان والبيع (وزنة 1 ⬅️ وزنة 2 ⬅️ نقدي مبيعات ⬅️ باقي الفاتورة آجل)
   function focusAndSelectField(fieldId) {
     const el = document.getElementById(fieldId);
@@ -10063,7 +10631,9 @@ function initFarmSalesApp() {
   document.getElementById('btnSyncNow').addEventListener('click', async () => {
     if (liveExcelFileHandle) {
       await exportFullWorkbookXlsx();
-      return;
+      if (!(appState.webhookUrl || getEmbeddedWebhookUrl()) || !navigator.onLine) {
+        return;
+      }
     }
     if (!navigator.onLine) {
       showToast('أنت الآن في وضع الأوفلاين — جميع بياناتك محفوظة بأمان على المتصفح.', '🟠');
@@ -10317,7 +10887,7 @@ function initFarmSalesApp() {
       cloneMerchModal.classList.add('hidden');
     }
     if (bodyEl) {
-      bodyEl.classList.remove('printing-merchant-modal', 'floating-bar-hidden');
+      bodyEl.classList.remove('printing-merchant-modal', 'floating-bar-hidden', 'audit-metadata-hidden');
     }
     const cloneFloatBar = cloneDoc.querySelector('#mobileWeighbridgeActionBar');
     if (cloneFloatBar) {
