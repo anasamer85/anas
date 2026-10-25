@@ -15,13 +15,15 @@
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <script id="embeddedWebhookConfigScript">
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=44" />
+  <link rel="stylesheet" href="./style.css?v=45" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -2169,6 +2171,18 @@
               <span>📋</span>
               <span>نسخ الكشف</span>
             </button>
+            <button type="button" id="btnExportMerchantImage" class="px-2.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs shadow transition flex items-center gap-1 border border-teal-300/50" title="حفظ وتنزيل كشف حساب التاجر كصورة عالية الدقة (.png)">
+              <span>🖼️</span>
+              <span>حفظ كصورة</span>
+            </button>
+            <button type="button" id="btnExportMerchantPdf" class="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow transition flex items-center gap-1 border border-indigo-300/50" title="حفظ وتنزيل كشف حساب التاجر كملف PDF منسق (.pdf)">
+              <span>📄</span>
+              <span>حفظ PDF</span>
+            </button>
+            <button type="button" id="btnExportMerchantExcel" class="px-2.5 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-amber-300 font-extrabold text-xs shadow transition flex items-center gap-1 border border-amber-400/60" title="تصدير وتنزيل جدول حركات التاجر في ملف إكسيل مستقل (.xlsx)">
+              <span>📊</span>
+              <span>تصدير Excel</span>
+            </button>
             <button type="button" id="btnPrintMerchantStatement" class="px-2.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition flex items-center gap-1" title="طباعة كشف حساب التاجر">
               <span>🖨️</span>
               <span class="hidden sm:inline">طباعة</span>
@@ -2273,6 +2287,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./app.js?v=44"></script>
+  <script src="./excel-template.js?v=45"></script>
+  <script src="./app.js?v=45"></script>
 </body>
 </html>

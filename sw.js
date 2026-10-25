@@ -1,5 +1,5 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v44-cross-farm-ref-and-smart-alerts";
+const CACHE_NAME = "farm-sales-committee-v45-modular-template-and-multi-export";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -13,6 +13,9 @@ const ASSETS_TO_CACHE = [
   "./style.css?v=42",
   "./style.css?v=43",
   "./style.css?v=44",
+  "./style.css?v=45",
+  "./excel-template.js",
+  "./excel-template.js?v=45",
   "./app.js",
   "./app.js?v=27",
   "./app.js?v=28",
@@ -23,12 +26,15 @@ const ASSETS_TO_CACHE = [
   "./app.js?v=42",
   "./app.js?v=43",
   "./app.js?v=44",
+  "./app.js?v=45",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
   "https://cdn.tailwindcss.com/3.4.17",
   "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
   "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+  "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+  "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
   "https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap"
 ];
 
@@ -86,6 +92,7 @@ self.addEventListener("fetch", (event) => {
   const isHtmlNav = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html") || url.endsWith("/") || url.includes("/index.html");
   if (
     isHtmlNav ||
+    url.includes("/excel-template.js") ||
     url.includes("/app.js") ||
     url.includes("/style.css") ||
     url.includes("/manifest.json")
