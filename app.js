@@ -81,7 +81,11 @@ function getDefaultState(customFarmName = 'أبوذكري') {
       sales: [],
       pendingSales: [],
       expenses: [],
-      deliveredCash: 0
+      deliveredCash: 0,
+      isLocked: false,
+      lockedBy: '',
+      lockedAtTxt: '',
+      lockUpdatedAt: 0
     };
   }
 
@@ -620,7 +624,66 @@ function formatAuditTimeArabic(tsInput) {
   }
 }
 
-function buildRecordAuditMeta(existingRec = null, isEdit = false) {
+function computeRecordFieldDiffText(oldRec, newRec, recordType = 'sale') {
+  if (!oldRec || !newRec || typeof oldRec !== 'object' || typeof newRec !== 'object') return '';
+  const diffs = [];
+  const checkStr = (label, oldVal, newVal) => {
+    const a = String(oldVal ?? '').replace(/\s+/g, ' ').trim();
+    const b = String(newVal ?? '').replace(/\s+/g, ' ').trim();
+    if (a !== b) {
+      diffs.push(`${label}: (${a || 'فارغ'} ⬅️ ${b || 'فارغ'})`);
+    }
+  };
+  const checkNum = (label, oldVal, newVal, unit = '') => {
+    const a = Number(oldVal) || 0;
+    const b = Number(newVal) || 0;
+    if (Math.abs(a - b) > 0.009) {
+      const u = unit ? ` ${unit}` : '';
+      diffs.push(`${label}: (${fmtMoney(a)}${u} ⬅️ ${fmtMoney(b)}${u})`);
+    }
+  };
+
+  if (recordType === 'expense') {
+    checkStr('البند', oldRec.category, newRec.category);
+    checkStr('البيان', oldRec.desc, newRec.desc);
+    checkStr('المستلم', oldRec.recipient, newRec.recipient);
+    checkNum('المبلغ', oldRec.amount, newRec.amount, 'ج.م');
+    checkStr('ملاحظات', oldRec.notes, newRec.notes);
+  } else {
+    checkStr('التاجر', oldRec.merchant, newRec.merchant);
+    checkStr('الميزان', oldRec.scaleNo, newRec.scaleNo);
+    checkStr('السيارة', oldRec.carNo, newRec.carNo);
+    checkNum('وزنة 1', oldRec.w1, newRec.w1, 'كجم');
+    checkNum('وزنة 2', oldRec.w2, newRec.w2, 'كجم');
+    checkNum('السعر', oldRec.price, newRec.price);
+    checkNum('الإكرامية', oldRec.tip, newRec.tip);
+    checkNum('نقدي المبيعات', oldRec.cashSales, newRec.cashSales);
+    checkNum('تحويل المبيعات', oldRec.transferSales, newRec.transferSales);
+    if ((Number(oldRec.transferSales) || 0) > 0 || (Number(newRec.transferSales) || 0) > 0) {
+      checkStr('نوع تحويل المبيعات', oldRec.transferSalesType, newRec.transferSalesType);
+    }
+    checkNum('آجل اليوم', oldRec.creditSales, newRec.creditSales);
+    checkNum('سداد مديونية نقدي', oldRec.debtCash, newRec.debtCash);
+    checkNum('سداد مديونية تحويل', oldRec.debtTransfer, newRec.debtTransfer);
+    if ((Number(oldRec.debtTransfer) || 0) > 0 || (Number(newRec.debtTransfer) || 0) > 0) {
+      checkStr('نوع تحويل المديونية', oldRec.debtTransferType, newRec.debtTransferType);
+    }
+    checkNum('نقدي مزرعة سابقة', oldRec.prevCash, newRec.prevCash);
+    checkNum('تحويل مزرعة سابقة', oldRec.prevTransfer, newRec.prevTransfer);
+    if ((Number(oldRec.prevTransfer) || 0) > 0 || (Number(newRec.prevTransfer) || 0) > 0) {
+      checkStr('نوع تحويل السابقة', oldRec.prevTransferType, newRec.prevTransferType);
+    }
+    checkNum('عهدة نقدية', oldRec.custodyCash, newRec.custodyCash);
+    checkNum('عهدة تحويل', oldRec.custodyTransfer, newRec.custodyTransfer);
+    if ((Number(oldRec.custodyTransfer) || 0) > 0 || (Number(newRec.custodyTransfer) || 0) > 0) {
+      checkStr('نوع تحويل العهدة', oldRec.custodyTransferType, newRec.custodyTransferType);
+    }
+    checkStr('الملاحظات', oldRec.notes, newRec.notes);
+  }
+  return diffs.join(' ، ');
+}
+
+function buildRecordAuditMeta(existingRec = null, isEdit = false, newCandidateRec = null, recordType = 'sale') {
   const actor = getActiveUserShortLabel();
   const prevMaxTs = existingRec
     ? Math.max(
@@ -634,6 +697,25 @@ function buildRecordAuditMeta(existingRec = null, isEdit = false) {
   const nowMs = Math.max(getSyncedNow(), prevMaxTs > 0 ? (prevMaxTs + 10) : 0);
   const nowTxt = formatAuditTimeArabic(nowMs);
   const prevEditVer = Number(existingRec && existingRec.editVersion) || 0;
+  const prevHistory = (existingRec && Array.isArray(existingRec.editHistory))
+    ? [...existingRec.editHistory]
+    : [];
+  let lastEditDiffText = String((existingRec && existingRec.lastEditDiffText) || '').trim();
+
+  if (existingRec && isEdit && newCandidateRec) {
+    const computedDiff = computeRecordFieldDiffText(existingRec, newCandidateRec, recordType);
+    if (computedDiff) {
+      lastEditDiffText = computedDiff;
+      prevHistory.push({
+        by: actor,
+        at: nowMs,
+        timeTxt: nowTxt,
+        diffText: computedDiff
+      });
+      if (prevHistory.length > 20) prevHistory.splice(0, prevHistory.length - 20);
+    }
+  }
+
   if (existingRec && (existingRec.createdBy || existingRec.createdAt || prevMaxTs > 0)) {
     const origCreatedAt = Number(existingRec.createdAt) || prevMaxTs || nowMs;
     const origCreatedBy = String(existingRec.createdBy || existingRec.updatedBy || actor).trim();
@@ -645,8 +727,10 @@ function buildRecordAuditMeta(existingRec = null, isEdit = false) {
       updatedAt: nowMs,
       updatedBy: actor,
       updatedTimeTxt: nowTxt,
-      isEdited: Boolean(isEdit || origCreatedBy !== actor || (nowMs - origCreatedAt > 2000)),
+      isEdited: Boolean(isEdit || origCreatedBy !== actor || (nowMs - origCreatedAt > 2000) || lastEditDiffText),
       editVersion: isEdit ? (prevEditVer + 1) : Math.max(1, prevEditVer),
+      lastEditDiffText,
+      editHistory: prevHistory,
       importedAt: 0,
       excelCompositeKey: ''
     };
@@ -660,6 +744,8 @@ function buildRecordAuditMeta(existingRec = null, isEdit = false) {
     updatedTimeTxt: nowTxt,
     isEdited: Boolean(isEdit),
     editVersion: isEdit ? 1 : 0,
+    lastEditDiffText: '',
+    editHistory: [],
     importedAt: 0,
     excelCompositeKey: ''
   };
@@ -674,9 +760,10 @@ function renderAuditTrailBadgeHtml(rec) {
   const timeTxt = String(rec.updatedTimeTxt || rec.createdTimeTxt || (ts > 0 ? formatAuditTimeArabic(ts) : '')).trim();
   if (!createdBy && !timeTxt) return '';
 
-  const wasEdited = Boolean(rec.isEdited || (createdBy && updatedBy && createdBy !== updatedBy));
+  const diffTxt = String(rec.lastEditDiffText || '').trim();
+  const wasEdited = Boolean(rec.isEdited || diffTxt || (createdBy && updatedBy && createdBy !== updatedBy));
   const titleTip = wasEdited
-    ? `سجل الرقابة — سجّله: ${createdBy} (${rec.createdTimeTxt || timeTxt}) | عدّله: ${updatedBy} (${rec.updatedTimeTxt || timeTxt})`
+    ? `سجل الرقابة — سجّله: ${createdBy} (${rec.createdTimeTxt || timeTxt}) | عدّله: ${updatedBy} (${rec.updatedTimeTxt || timeTxt})${diffTxt ? ` | التعديلات: ${diffTxt}` : ''}`
     : `سجل الرقابة — سجّله: ${createdBy || 'مدير الموقع'} | وقت الحركة: ${timeTxt || '-'}`;
 
   const labelHtml = wasEdited
@@ -685,7 +772,51 @@ function renderAuditTrailBadgeHtml(rec) {
         : `<span>👤 ${escXmlStr(updatedBy)}</span><span class="text-amber-700">(✏️ معدّل)</span>`)
     : `<span>👤 ${escXmlStr(createdBy || 'مدير الموقع')}</span>`;
 
-  return `<span class="audit-metadata-badge print-hide-col inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-300 text-slate-800 text-[10px] font-extrabold ml-1 whitespace-nowrap" title="${escXmlStr(titleTip)}">${labelHtml}${timeTxt ? `<span class="text-blue-900 font-bold">| 🕒 ${escXmlStr(timeTxt)}</span>` : ''}</span>`;
+  const diffSnippetHtml = (wasEdited && diffTxt)
+    ? `<span class="text-rose-800 font-bold max-w-[140px] truncate inline-block align-bottom" title="${escXmlStr(diffTxt)}">| 🔍 ${escXmlStr(diffTxt)}</span>`
+    : '';
+
+  return `<span class="audit-metadata-badge print-hide-col inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-300 text-slate-800 text-[10px] font-extrabold ml-1 whitespace-nowrap" title="${escXmlStr(titleTip)}">${labelHtml}${timeTxt ? `<span class="text-blue-900 font-bold">| 🕒 ${escXmlStr(timeTxt)}</span>` : ''}${diffSnippetHtml}</span>`;
+}
+
+function isDayLocked(dayNum = appState.currentDay) {
+  const dObj = appState.days && appState.days[Number(dayNum) || 1];
+  return Boolean(dObj && dObj.isLocked);
+}
+
+function toggleDayLockState(dayNum = appState.currentDay) {
+  if (!hasPermission('admin')) {
+    showToast('🔒 عفواً، إقفال واعتماد اليوم أو فك القفل متاح لمدير الموقع فقط!', '🔒');
+    return false;
+  }
+  const d = Number(dayNum) || appState.currentDay || 1;
+  if (!appState.days[d]) return false;
+  const dayObj = appState.days[d];
+  const nowMs = Math.max(getSyncedNow(), (Number(dayObj.lockUpdatedAt) || 0) + 10);
+  const nowTxt = formatAuditTimeArabic(nowMs);
+  const actor = getActiveUserShortLabel();
+
+  if (dayObj.isLocked) {
+    dayObj.isLocked = false;
+    dayObj.lockUpdatedAt = nowMs;
+    saveState(true, false);
+    renderAll();
+    showToast(`🔓 تم فك قفل (يوم ${d} — ${dayObj.dateLabel}) بواسطة (${actor}) وإعادة فتحه للتعديل!`, '🔓');
+  } else {
+    dayObj.isLocked = true;
+    dayObj.lockedBy = actor;
+    dayObj.lockedAtTxt = nowTxt;
+    dayObj.lockUpdatedAt = nowMs;
+    activeRecalledPendingId = '';
+    const saleForm = document.getElementById('saleEntryForm');
+    if (saleForm) saleForm.reset();
+    const editIdEl = document.getElementById('editSaleId');
+    if (editIdEl) editIdEl.value = '';
+    saveState(true, false);
+    renderAll();
+    showToast(`🔒 تم إقفال واعتماد (يوم ${d} — ${dayObj.dateLabel}) محاسبياً وتشميعه ضد أي تعديل أو حذف!`, '🔒');
+  }
+  return true;
 }
 
 function getVisibleDays() {
@@ -763,6 +894,10 @@ function editSpecificDayInCycle(targetDayNum, newLabel) {
     return false;
   }
   const dNum = Number(targetDayNum) || appState.currentDay || 1;
+  if (isDayLocked(dNum)) {
+    showToast(`🔒 عفواً، (يوم ${dNum}) مقفل ومعتمد محاسبياً! يجب فك القفل أولاً بواسطة مدير الموقع قبل تعديل اسم/تاريخ اليوم.`, '🔒');
+    return false;
+  }
   if (dNum < 1 || dNum > 10) return false;
   const trimmedLbl = String(newLabel || '').trim() || `اليوم ${dNum}`;
   if (!appState.days[dNum]) {
@@ -930,6 +1065,10 @@ function deleteSpecificDayFromCycle(targetDayNum) {
     return false;
   }
   const cur = Number(targetDayNum) || appState.currentDay || 1;
+  if (isDayLocked(cur)) {
+    showToast(`🔒 عفواً، (يوم ${cur}) مقفل ومعتمد محاسبياً! لا يمكن حذف أو تصفير يوم مقفل إلا بعد فك القفل بواسطة مدير الموقع.`, '🔒');
+    return false;
+  }
   const vis = getVisibleDays();
   const nowTs = getSyncedNow();
   const currentFarm = appState.farmName || 'أبوذكري';
@@ -1343,6 +1482,28 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
     if (origCreatedBy) mergedObj.createdBy = origCreatedBy;
     if (earliestCreatedAt) mergedObj.createdAt = earliestCreatedAt;
     if (origCreatedTimeTxt) mergedObj.createdTimeTxt = origCreatedTimeTxt;
+
+    // دمج وتوحيد سجل التعديلات التفصيلي (editHistory & lastEditDiffText) من النسختين دون ضياع أي تعديل سابق
+    const lHist = Array.isArray(localItem.editHistory) ? localItem.editHistory : [];
+    const cHist = Array.isArray(cloudItem.editHistory) ? cloudItem.editHistory : [];
+    if (lHist.length > 0 || cHist.length > 0) {
+      const seenKeys = new Set();
+      const combinedHist = [...cHist, ...lHist].filter(h => {
+        if (!h || !h.diffText) return false;
+        const k = `${h.at || 0}_${h.by || ''}_${h.diffText}`;
+        if (seenKeys.has(k)) return false;
+        seenKeys.add(k);
+        return true;
+      }).sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
+      mergedObj.editHistory = combinedHist.slice(-20);
+      if (!mergedObj.lastEditDiffText && mergedObj.editHistory.length > 0) {
+        mergedObj.lastEditDiffText = mergedObj.editHistory[mergedObj.editHistory.length - 1].diffText;
+      }
+    }
+    if (!mergedObj.lastEditDiffText) {
+      const fallbackDiff = (localWins ? (localItem.lastEditDiffText || cloudItem.lastEditDiffText) : (cloudItem.lastEditDiffText || localItem.lastEditDiffText)) || '';
+      if (fallbackDiff) mergedObj.lastEditDiffText = fallbackDiff;
+    }
     return mergedObj;
   };
 
@@ -1479,6 +1640,25 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
         ? false
         : (preferCloud ? Boolean(cDay.isHidden) : Boolean(lDay.isHidden)));
 
+    // دمج حالة إقفال واعتماد اليوم المحاسبي (Day Lock / Audit Seal) بناءً على أحدث طابع زمني للقفل (lockUpdatedAt)
+    const lLockTs = Number(lDay.lockUpdatedAt) || 0;
+    const cLockTs = Number(cDay.lockUpdatedAt) || 0;
+    let chosenIsLocked = false;
+    let chosenLockedBy = '';
+    let chosenLockedAtTxt = '';
+    if (lLockTs > 0 || cLockTs > 0) {
+      const lLockWins = (lLockTs > cLockTs) || (lLockTs === cLockTs && !preferCloud);
+      const winningLockDay = lLockWins ? lDay : cDay;
+      chosenIsLocked = Boolean(winningLockDay.isLocked);
+      chosenLockedBy = String(winningLockDay.lockedBy || '').trim();
+      chosenLockedAtTxt = String(winningLockDay.lockedAtTxt || '').trim();
+    } else {
+      const winningLockDay = preferCloud ? cDay : lDay;
+      chosenIsLocked = Boolean(winningLockDay.isLocked);
+      chosenLockedBy = String(winningLockDay.lockedBy || '').trim();
+      chosenLockedAtTxt = String(winningLockDay.lockedAtTxt || '').trim();
+    }
+
     const mergedDayObj = {
       dayNumber: d,
       dateLabel: chosenLabel,
@@ -1488,6 +1668,10 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
       expenses: mergedExpenses,
       deliveredCash: chosenDeliveredCash,
       deliveredCashUpdatedAt: Math.max(lDelivTs, cDelivTs),
+      isLocked: chosenIsLocked,
+      lockedBy: chosenLockedBy,
+      lockedAtTxt: chosenLockedAtTxt,
+      lockUpdatedAt: Math.max(lLockTs, cLockTs),
       clearedAt: hasAnyMovement ? 0 : maxClear,
       addedAt: hasAnyMovement ? Math.max(maxAdded, maxClear + 1) : maxAdded,
       isHidden: mergedIsHidden
@@ -2653,17 +2837,19 @@ function renderDaySelector() {
 
   visDays.forEach(d => {
     const summary = computeDaySummary(d);
+    const locked = isDayLocked(d);
     const btn = document.createElement('button');
     btn.type = 'button';
     const isActive = d === appState.currentDay;
     btn.className = `p-2 rounded-xl border text-center transition flex flex-col items-center justify-center ${
       isActive
         ? 'day-pill-active shadow-md'
-        : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300 font-bold'
+        : (locked ? 'bg-amber-50 hover:bg-amber-100 text-slate-900 border-amber-400 font-extrabold' : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300 font-bold')
     }`;
+    btn.title = locked ? `يوم ${d} مقفل ومعتمد محاسبياً 🔒` : `فتح محضر يوم ${d}`;
     btn.innerHTML = `
-      <span class="text-xs font-extrabold">يوم ${d}</span>
-      <span class="text-[10px] ${isActive ? 'text-amber-300' : 'text-slate-500'}">${summary.countCars} حركة</span>
+      <span class="text-xs font-extrabold">${locked ? '🔒 ' : ''}يوم ${d}</span>
+      <span class="text-[10px] ${isActive ? 'text-amber-300' : (locked ? 'text-amber-900 font-bold' : 'text-slate-500')}">${summary.countCars} حركة${locked ? ' (معتمد)' : ''}</span>
     `;
     btn.addEventListener('click', () => {
       appState.currentDay = d;
@@ -2697,12 +2883,62 @@ function renderDaySelector() {
 function renderDailyView() {
   const d = appState.currentDay;
   const summary = computeDaySummary(d);
+  const dayObj = appState.days[d] || {};
+  const dayLocked = Boolean(dayObj.isLocked);
+  const isAdminUser = hasPermission('admin');
+  const canEditSalesToday = hasPermission('sales') && !dayLocked;
+  const canEditExpensesToday = hasPermission('expenses') && !dayLocked;
 
   document.getElementById('currentDayDateInput').value = summary.dateLabel;
+  document.getElementById('currentDayDateInput').disabled = !canEditSalesToday;
   document.getElementById('saleFormDayLabel').textContent = `يوم ${d} - مزرعة ${appState.farmName}`;
-  document.getElementById('tblDayTitle').textContent = `يوم ${d} (${summary.dateLabel}) - مزرعة ${appState.farmName}`;
-  document.getElementById('expDayTitle').textContent = `يوم ${d}`;
-  document.getElementById('tbDayTitle').textContent = `يوم ${d} - مزرعة ${appState.farmName}`;
+  document.getElementById('tblDayTitle').textContent = `يوم ${d} (${summary.dateLabel})${dayLocked ? ' 🔒 [معتمد ومقفل]' : ''} - مزرعة ${appState.farmName}`;
+  document.getElementById('expDayTitle').textContent = `يوم ${d}${dayLocked ? ' 🔒' : ''}`;
+  document.getElementById('tbDayTitle').textContent = `يوم ${d}${dayLocked ? ' 🔒 [معتمد]' : ''} - مزرعة ${appState.farmName}`;
+
+  const btnLock = document.getElementById('btnToggleDayLock');
+  const btnLockIcon = document.getElementById('btnToggleDayLockIcon');
+  const btnLockText = document.getElementById('btnToggleDayLockText');
+  if (btnLock) {
+    btnLock.classList.toggle('hidden', !isAdminUser);
+    if (dayLocked) {
+      btnLock.className = 'px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 border-2 border-amber-700 text-xs font-extrabold shadow-sm flex items-center gap-1 transition';
+      if (btnLockIcon) btnLockIcon.textContent = '🔓';
+      if (btnLockText) btnLockText.textContent = `فك قفل اليوم (يوم ${d})`;
+    } else {
+      btnLock.className = 'px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-400 text-xs font-extrabold shadow-sm flex items-center gap-1 transition';
+      if (btnLockIcon) btnLockIcon.textContent = '🔒';
+      if (btnLockText) btnLockText.textContent = `إقفال واعتماد اليوم (يوم ${d})`;
+    }
+  }
+
+  const lockBanner = document.getElementById('dayLockedNoticeBanner');
+  const lockNoticeTxt = document.getElementById('dayLockedNoticeText');
+  const lockMetaBadge = document.getElementById('dayLockedMetaBadge');
+  if (lockBanner) {
+    lockBanner.classList.toggle('hidden', !dayLocked);
+    if (dayLocked) {
+      if (lockNoticeTxt) {
+        lockNoticeTxt.textContent = `🔒 محضر (يوم ${d} — ${summary.dateLabel}) مقفل ومعتمد محاسبياً بعد المراجعة — جميع الحركات والأوزان والخزينة محمية ضد الإضافة أو التعديل أو الحذف.${isAdminUser ? ' (يمكنك فك القفل من الزر العلوي عند الضرورة).' : ''}`;
+      }
+      if (lockMetaBadge) {
+        const byWho = dayObj.lockedBy || 'مدير الموقع';
+        const atWhen = dayObj.lockedAtTxt ? ` | 🕒 ${dayObj.lockedAtTxt}` : '';
+        lockMetaBadge.textContent = `اعتمد بواسطة: ${byWho}${atWhen}`;
+      }
+    }
+  }
+
+  const saleCardEl = document.getElementById('saleFormCard');
+  if (saleCardEl) saleCardEl.classList.toggle('hidden', !canEditSalesToday);
+  const expFormEl = document.getElementById('expenseEntryForm');
+  if (expFormEl) expFormEl.classList.toggle('hidden', !canEditExpensesToday);
+  const delivInpEl = document.getElementById('inpDeliveredCash');
+  if (delivInpEl) delivInpEl.disabled = !canEditSalesToday;
+  const jumpSaleBtn = document.getElementById('btnJumpSaleForm');
+  if (jumpSaleBtn) jumpSaleBtn.classList.toggle('hidden', !canEditSalesToday);
+  const jumpExpBtn = document.getElementById('btnJumpExpenseForm');
+  if (jumpExpBtn) jumpExpBtn.classList.toggle('hidden', !canEditExpensesToday);
 
   document.getElementById('dayKpiCount').textContent = fmtInt(summary.countCars);
   document.getElementById('dayKpiNetWeight').textContent = fmtInt(summary.sumNetW);
@@ -2754,8 +2990,8 @@ function renderDailyView() {
         ? `<button type="button" data-print-receipt="${safeId}" data-receipt-day="${d}" class="px-2 py-1 rounded bg-indigo-800 text-white font-extrabold hover:bg-indigo-700 ml-1 shadow-sm" title="طباعة كارتة/بون ميزان (3 نسخ في ورقة واحدة) للتاجر والسائق والأرشيف">🖨️ طباعة بون ميزان</button>`
         : '';
       const auditBadgeHtml = renderAuditTrailBadgeHtml(r);
-      const actionCellHtml = !hasPermission('sales')
-        ? `${auditBadgeHtml}${receiptBtnHtml}<span class="text-slate-400 text-[11px]">🔒 عرض فقط</span>`
+      const actionCellHtml = !canEditSalesToday
+        ? `${auditBadgeHtml}${receiptBtnHtml}<span class="text-slate-500 text-[11px] font-bold">${dayLocked ? '🔒 يوم معتمد ومقفل' : '🔒 عرض فقط'}</span>`
         : (r.isPending
           ? `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-recall-pending="${safeId}" class="px-2 py-1 rounded bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 ml-1 shadow-sm" title="استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية">🔄 استكمال</button>
              <button type="button" data-del-pending="${safeId}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`
@@ -2829,10 +3065,10 @@ function renderDailyView() {
         <td class="p-2 border font-extrabold text-rose-800 text-left">${fmtInt(exp.amount)} ج.م</td>
         <td class="p-1.5 border text-center whitespace-nowrap">
           ${renderAuditTrailBadgeHtml(exp)}
-          ${hasPermission('expenses') ? `
+          ${canEditExpensesToday ? `
             <button type="button" data-edit-exp="${safeExpId}" class="px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">✏️ تعديل</button>
             <button type="button" data-del-exp="${safeExpId}" class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">🗑️ حذف</button>
-          ` : '<span class="text-slate-400 text-[11px]">🔒 عرض فقط</span>'}
+          ` : `<span class="text-slate-500 text-[11px] font-bold">${dayLocked ? '🔒 يوم معتمد ومقفل' : '🔒 عرض فقط'}</span>`}
         </td>
       `;
       expTbody.appendChild(tr);
@@ -2895,7 +3131,7 @@ function renderDailyView() {
   const pendBadge = document.getElementById('pendingWeighInsCountBadge');
   if (pendSec && pendTbody && pendBadge) {
     pendBadge.textContent = `${pendingList.length} سيارة`;
-    if (pendingList.length === 0 || !hasPermission('sales')) {
+    if (pendingList.length === 0 || !canEditSalesToday) {
       pendSec.classList.add('hidden');
     } else {
       pendSec.classList.remove('hidden');
@@ -2991,9 +3227,11 @@ const MERCH_COLUMNS = [
 
 function enrichDashSummaryRow(s) {
   const statusOk = s.weightAuditDiff === 0 && s.invoiceAuditDiff === 0;
-  const statusText = s.countCars === 0 && s.sumExpenses === 0 && s.deliveredCash === 0
+  const locked = isDayLocked(s.dayNum);
+  const baseStatus = s.countCars === 0 && s.sumExpenses === 0 && s.deliveredCash === 0
     ? 'مفتوح (بدون حركات)'
     : (statusOk ? 'مطابق ومتزن ✓' : 'راجع الميزان!');
+  const statusText = locked ? `🔒 معتمد ومقفل (${baseStatus})` : baseStatus;
   const netRemDebt = s.sumCreditSales - s.sumDebtCash - s.sumDebtTransfer;
   return { ...s, statusOk, statusText, netRemDebt };
 }
@@ -4794,9 +5032,9 @@ function renderOfficialDaySettlementReportPrintView(dayNumInput) {
             إنه في <strong>يوم ${d} (${escXmlStr(s.dateLabel)})</strong>، اجتمعت لجنة البيع والوزن والتحصيل لتصفية ومطابقة أوزان ومبيعات ونقدية خزينة اليوم، وأسفرت المراجعة عما يلي:
           </div>
         </div>
-        <div style="text-align:left; font-size:8.5px; font-weight:800; color:#1e293b; background:#f1f5f9; padding:3px 8px; border-radius:4px; border:1px solid #cbd5e1;">
-          <div>محضر رسمي معتمد — يوم ${d}</div>
-          <div>تاريخ الطباعة: ${printDateStr} (${printTimeStr})</div>
+        <div style="text-align:left; font-size:8.5px; font-weight:800; color:#1e293b; background:${isDayLocked(d) ? '#ecfdf5' : '#f1f5f9'}; padding:3px 8px; border-radius:4px; border:1.5px solid ${isDayLocked(d) ? '#047857' : '#cbd5e1'};">
+          <div>${isDayLocked(d) ? `🔒 محضر مقفل ومعتمد محاسبياً (${escXmlStr((appState.days[d] && appState.days[d].lockedBy) || 'مدير الموقع')})` : `محضر قيد المراجعة — يوم ${d}`}</div>
+          <div>${isDayLocked(d) && appState.days[d] && appState.days[d].lockedAtTxt ? `وقت الاعتماد: ${escXmlStr(appState.days[d].lockedAtTxt)} | ` : ''}تاريخ الطباعة: ${printDateStr} (${printTimeStr})</div>
         </div>
       </div>
 
@@ -5893,11 +6131,12 @@ function renderUsersAndPermissionsUI(renderTable = true) {
   const usersModalCard = document.getElementById('usersPermissionsModal');
   if (usersModalCard) usersModalCard.classList.toggle('hidden', !isAdm);
 
-  // Toggle Forms based on granular permissions
+  // Toggle Forms based on granular permissions & active day lock status
+  const curDayLocked = isDayLocked(appState.currentDay);
   const saleCard = document.getElementById('saleFormCard');
-  if (saleCard) saleCard.classList.toggle('hidden', !hasPermission('sales'));
+  if (saleCard) saleCard.classList.toggle('hidden', !(hasPermission('sales') && !curDayLocked));
   const expForm = document.getElementById('expenseEntryForm');
-  if (expForm) expForm.classList.toggle('hidden', !hasPermission('expenses'));
+  if (expForm) expForm.classList.toggle('hidden', !(hasPermission('expenses') && !curDayLocked));
   const merchForm = document.getElementById('addMerchantForm');
   if (merchForm) merchForm.classList.toggle('hidden', !hasPermission('merchants'));
   const usrForm = document.getElementById('addUserForm');
@@ -5907,9 +6146,9 @@ function renderUsersAndPermissionsUI(renderTable = true) {
   const setFarmInp = document.getElementById('inpSettingsFarmName');
   if (setFarmInp) setFarmInp.disabled = !hasPermission('farms');
   const delivCashInp = document.getElementById('inpDeliveredCash');
-  if (delivCashInp) delivCashInp.disabled = !hasPermission('sales');
+  if (delivCashInp) delivCashInp.disabled = !(hasPermission('sales') && !curDayLocked);
   const dayDateInp = document.getElementById('currentDayDateInput');
-  if (dayDateInp) dayDateInp.disabled = !hasPermission('sales');
+  if (dayDateInp) dayDateInp.disabled = !(hasPermission('sales') && !curDayLocked);
   ['btnAddDayTop', 'btnSaveDayLabel', 'btnDeleteDayTop'].forEach(bid => {
     const b = document.getElementById(bid);
     if (b) b.classList.toggle('hidden', !hasPermission('sales'));
@@ -6143,6 +6382,8 @@ function renderBackupAndAuditCenterUI() {
       const uBy = String(s.updatedBy || cBy).trim();
       const cTxt = String(s.createdTimeTxt || (ts > 0 ? formatAuditTimeArabic(Number(s.createdAt) || ts) : '-')).trim();
       const uTxt = String(s.updatedTimeTxt || cTxt).trim();
+      const diffTxt = String(s.lastEditDiffText || '').trim();
+      const editHist = Array.isArray(s.editHistory) ? s.editHistory : [];
       auditEntries.push({
         type: 'sale',
         typeLabel: '🚛 وزنة بيع مكتملة',
@@ -6155,7 +6396,9 @@ function renderBackupAndAuditCenterUI() {
         updatedBy: uBy,
         createdTimeTxt: cTxt,
         updatedTimeTxt: uTxt,
-        isEdited: Boolean(s.isEdited || cBy !== uBy),
+        lastEditDiffText: diffTxt,
+        editHistory: editHist,
+        isEdited: Boolean(s.isEdited || diffTxt || cBy !== uBy),
         sortTs: ts
       });
     });
@@ -6166,6 +6409,8 @@ function renderBackupAndAuditCenterUI() {
       const uBy = String(p.updatedBy || cBy).trim();
       const cTxt = String(p.createdTimeTxt || (ts > 0 ? formatAuditTimeArabic(Number(p.createdAt) || ts) : '-')).trim();
       const uTxt = String(p.updatedTimeTxt || cTxt).trim();
+      const diffTxt = String(p.lastEditDiffText || '').trim();
+      const editHist = Array.isArray(p.editHistory) ? p.editHistory : [];
       auditEntries.push({
         type: 'pending',
         typeLabel: '⏳ وزنة أولى مؤقتة',
@@ -6178,7 +6423,9 @@ function renderBackupAndAuditCenterUI() {
         updatedBy: uBy,
         createdTimeTxt: cTxt,
         updatedTimeTxt: uTxt,
-        isEdited: Boolean(p.isEdited || cBy !== uBy),
+        lastEditDiffText: diffTxt,
+        editHistory: editHist,
+        isEdited: Boolean(p.isEdited || diffTxt || cBy !== uBy),
         sortTs: ts
       });
     });
@@ -6189,6 +6436,8 @@ function renderBackupAndAuditCenterUI() {
       const uBy = String(ex.updatedBy || cBy).trim();
       const cTxt = String(ex.createdTimeTxt || (ts > 0 ? formatAuditTimeArabic(Number(ex.createdAt) || ts) : '-')).trim();
       const uTxt = String(ex.updatedTimeTxt || cTxt).trim();
+      const diffTxt = String(ex.lastEditDiffText || '').trim();
+      const editHist = Array.isArray(ex.editHistory) ? ex.editHistory : [];
       auditEntries.push({
         type: 'expense',
         typeLabel: '💸 مصروف / مكافأة',
@@ -6201,7 +6450,9 @@ function renderBackupAndAuditCenterUI() {
         updatedBy: uBy,
         createdTimeTxt: cTxt,
         updatedTimeTxt: uTxt,
-        isEdited: Boolean(ex.isEdited || cBy !== uBy),
+        lastEditDiffText: diffTxt,
+        editHistory: editHist,
+        isEdited: Boolean(ex.isEdited || diffTxt || cBy !== uBy),
         sortTs: ts
       });
     });
@@ -6218,11 +6469,14 @@ function renderBackupAndAuditCenterUI() {
   const filteredAudit = auditEntries.filter(item => {
     if (typeFilter !== 'all' && item.type !== typeFilter) return false;
     if (!q) return true;
+    const histConcat = (item.editHistory || []).map(h => `${h.by || ''} ${h.diffText || ''}`).join(' ').toLowerCase();
     return (
       item.title.toLowerCase().includes(q) ||
       item.detail.toLowerCase().includes(q) ||
       item.createdBy.toLowerCase().includes(q) ||
       item.updatedBy.toLowerCase().includes(q) ||
+      (item.lastEditDiffText || '').toLowerCase().includes(q) ||
+      histConcat.includes(q) ||
       `يوم ${item.dayNum}`.includes(q) ||
       item.dateLabel.toLowerCase().includes(q) ||
       item.typeLabel.toLowerCase().includes(q)
@@ -6242,7 +6496,7 @@ function renderBackupAndAuditCenterUI() {
     tbody.innerHTML = `
       <tr>
         <td colspan="8" class="p-5 text-center text-slate-500 font-bold">
-          لا توجد حركات مسجلة في سجل الرقابة حتى الآن — عند إضافة أو تعديل أي وزنة أو مصروف سيظهر هنا اسم المندوب ووقت الحركة تلقائياً.
+          لا توجد حركات مسجلة في سجل الرقابة حتى الآن — عند إضافة أو تعديل أي وزنة أو مصروف سيظهر هنا اسم المندوب ووقت الحركة وتفاصيل التعديل (قبل ⬅️ بعد) تلقائياً.
         </td>
       </tr>
     `;
@@ -6253,6 +6507,16 @@ function renderBackupAndAuditCenterUI() {
     const timeCellHtml = item.isEdited
       ? `<span class="text-slate-600">إنشاء: ${escXmlStr(item.createdTimeTxt)}</span> <span class="text-blue-900 font-extrabold">| آخر تعديل: ${escXmlStr(item.updatedTimeTxt)}</span>`
       : `<span class="text-emerald-900 font-extrabold">🕒 ${escXmlStr(item.createdTimeTxt)}</span>`;
+
+    let diffBlockHtml = '';
+    if (item.lastEditDiffText) {
+      const prevHistCount = (item.editHistory || []).length;
+      const fullHistTooltip = prevHistCount > 1
+        ? item.editHistory.map((h, i) => `(${i + 1}) [${h.by || '-'} - ${h.timeTxt || ''}]: ${h.diffText || ''}`).join(' | ')
+        : item.lastEditDiffText;
+      diffBlockHtml = `<div class="mt-1 px-2 py-1 rounded-lg bg-rose-50 border border-rose-300 text-rose-950 text-[10px] font-bold text-right leading-relaxed" title="${escXmlStr(fullHistTooltip)}">🔍 <strong>قبل ⬅️ بعد:</strong> ${escXmlStr(item.lastEditDiffText)}${prevHistCount > 1 ? ` <span class="text-blue-900">(${prevHistCount} تعديلات)</span>` : ''}</div>`;
+    }
+
     return `
       <tr class="hover:bg-slate-50">
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
@@ -6264,7 +6528,8 @@ function renderBackupAndAuditCenterUI() {
         <td class="p-2 border text-center font-extrabold text-blue-900">${escXmlStr(item.detail)}</td>
         <td class="p-2 border text-center font-extrabold bg-emerald-50/50 text-emerald-950">👤 ${escXmlStr(item.createdBy)}</td>
         <td class="p-2 border text-center font-extrabold ${item.isEdited ? 'bg-amber-50 text-amber-950' : 'text-slate-600'}">
-          ${item.isEdited ? `✏️ ${escXmlStr(item.updatedBy)}` : `✓ نفس المسجل (${escXmlStr(item.updatedBy)})`}
+          <div>${item.isEdited ? `✏️ ${escXmlStr(item.updatedBy)}` : `✓ نفس المسجل (${escXmlStr(item.updatedBy)})`}</div>
+          ${diffBlockHtml}
         </td>
         <td class="p-2 border text-center text-[11px] font-bold">${timeCellHtml}</td>
       </tr>
@@ -6285,7 +6550,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V42',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V43',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -8249,7 +8514,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v42-fortified-sync-and-smart-reset') {
+          if (k !== 'farm-sales-committee-v43-audit-diff-and-day-lock') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -8996,12 +9261,24 @@ function initFarmSalesApp() {
   // Date / Label change for current day + Interactive Add / Edit / Delete Day Boxes
   document.getElementById('currentDayDateInput').addEventListener('change', (e) => {
     if (!hasPermission('sales')) return;
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل اسم أو تاريخ اليوم إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+      renderDailyView();
+      return;
+    }
     const curD = appState.days[appState.currentDay];
     curD.dateLabel = e.target.value.trim() || `اليوم ${appState.currentDay}`;
     curD.labelUpdatedAt = Math.max(getSyncedNow(), (Number(curD.labelUpdatedAt) || 0) + 10);
     saveState(true);
     renderAll();
   });
+
+  const btnToggleLockEl = document.getElementById('btnToggleDayLock');
+  if (btnToggleLockEl) {
+    btnToggleLockEl.addEventListener('click', () => {
+      toggleDayLockState(appState.currentDay);
+    });
+  }
 
   // Helper to populate and refresh all Day Management selectors & pills
   function refreshDayManagementBoxesUI() {
@@ -9334,6 +9611,11 @@ function initFarmSalesApp() {
 
   // Delivered Cash Input in Trial Balance
   document.getElementById('inpDeliveredCash').addEventListener('input', (e) => {
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل النقدية المسلمة إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+      renderDailyView();
+      return;
+    }
     const curD = appState.days[appState.currentDay];
     curD.deliveredCash = parseNum(e.target.value) || 0;
     curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
@@ -9619,6 +9901,10 @@ function initFarmSalesApp() {
 
   function recallPendingSaleById(pid) {
     if (!hasPermission('sales')) return;
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل أو استرجاع حركات إلا بعد فك القفل!', '🔒');
+      return;
+    }
     const dayObj = appState.days[appState.currentDay];
     const item = (dayObj.pendingSales || []).find(x => x.id === pid);
     if (!item) return;
@@ -9656,6 +9942,10 @@ function initFarmSalesApp() {
 
   function deletePendingSaleById(pid) {
     if (!hasPermission('sales')) return;
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن حذف حركات إلا بعد فك القفل!', '🔒');
+      return;
+    }
     recordDeletedItem('pendingSales', pid);
     const dayObj = appState.days[appState.currentDay];
     dayObj.pendingSales = (dayObj.pendingSales || []).filter(x => x.id !== pid);
@@ -9673,6 +9963,14 @@ function initFarmSalesApp() {
   document.getElementById('btnSavePendingW1').addEventListener('click', () => {
     if (!hasPermission('sales')) {
       showToast('عفواً، هذه الصلاحية غير متاحة لحسابك الحالي.', '🔒');
+      return;
+    }
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن إضافة أو تعديل حركات بيع إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+      return;
+    }
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن إضافة أو تعديل وزنات مؤقتة إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
       return;
     }
     const mName = document.getElementById('inpMerchantName').value.trim();
@@ -9712,10 +10010,7 @@ function initFarmSalesApp() {
     const existingPendingForAudit = activeRecalledPendingId
       ? dayObj.pendingSales.find(x => x.id === activeRecalledPendingId)
       : null;
-    const pendingAuditMeta = buildRecordAuditMeta(existingPendingForAudit, Boolean(existingPendingForAudit));
-    const pendingObj = {
-      id: activeRecalledPendingId || generateRecordUUID(`pend_d${appState.currentDay}`),
-      ...pendingAuditMeta,
+    const candidatePendingFields = {
       merchant: mName,
       scaleNo: enteredScale,
       carNo: Number(document.getElementById('inpCarNo').value) || '',
@@ -9737,6 +10032,17 @@ function initFarmSalesApp() {
       prevTransfer: parseNum(document.getElementById('inpPrevTransfer').value) || 0,
       prevTransferType: document.getElementById('selPrevTransferType').value,
       notes: document.getElementById('inpNotes').value.trim()
+    };
+    const pendingAuditMeta = buildRecordAuditMeta(
+      existingPendingForAudit,
+      Boolean(existingPendingForAudit),
+      candidatePendingFields,
+      'pending'
+    );
+    const pendingObj = {
+      id: activeRecalledPendingId || generateRecordUUID(`pend_d${appState.currentDay}`),
+      ...pendingAuditMeta,
+      ...candidatePendingFields
     };
 
     const dupPending = dayObj.pendingSales.find(x =>
@@ -9798,6 +10104,10 @@ function initFarmSalesApp() {
       showToast('عفواً، هذه الصلاحية غير متاحة لحسابك الحالي.', '🔒');
       return;
     }
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن إضافة أو تعديل حركات بيع إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+      return;
+    }
     const checkW1 = parseNum(document.getElementById('inpW1').value) || 0;
     const checkW2 = parseNum(document.getElementById('inpW2').value) || 0;
     if (checkW2 <= 0) {
@@ -9841,13 +10151,7 @@ function initFarmSalesApp() {
           (String(pItem.merchant || '').trim() === mName && Number(pItem.scaleNo) > 0 && Number(pItem.scaleNo) === enteredScale)
         )
       : null;
-    const saleAuditMeta = buildRecordAuditMeta(
-      existingSaleForAudit || recalledPendForAudit || null,
-      Boolean(existingSaleForAudit || (recalledPendForAudit && recalledPendForAudit.createdBy))
-    );
-    const rowObj = {
-      id: editId || generateRecordUUID(`d${appState.currentDay}`),
-      ...saleAuditMeta,
+    const candidateSaleFields = {
       merchant: mName,
       scaleNo: enteredScale,
       carNo: Number(document.getElementById('inpCarNo').value) || '',
@@ -9869,6 +10173,17 @@ function initFarmSalesApp() {
       prevTransfer: parseNum(document.getElementById('inpPrevTransfer').value) || 0,
       prevTransferType: document.getElementById('selPrevTransferType').value,
       notes: document.getElementById('inpNotes').value.trim()
+    };
+    const saleAuditMeta = buildRecordAuditMeta(
+      existingSaleForAudit || recalledPendForAudit || null,
+      Boolean(existingSaleForAudit || (recalledPendForAudit && recalledPendForAudit.createdBy)),
+      candidateSaleFields,
+      'sale'
+    );
+    const rowObj = {
+      id: editId || generateRecordUUID(`d${appState.currentDay}`),
+      ...saleAuditMeta,
+      ...candidateSaleFields
     };
 
     const isDuplicateSale = daySales.some(r => {
@@ -9960,6 +10275,10 @@ function initFarmSalesApp() {
       showToast('عفواً، التعديل والحذف غير متاح للزائر (عرض فقط).', '🔒');
       return;
     }
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل أو حذف الحركات إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+      return;
+    }
     const recPendingBtn = e.target.closest('[data-recall-pending]');
     if (recPendingBtn) {
       recallPendingSaleById(recPendingBtn.getAttribute('data-recall-pending'));
@@ -10044,6 +10363,10 @@ function initFarmSalesApp() {
       showToast('عفواً، هذه الصلاحية غير متاحة لحسابك الحالي.', '🔒');
       return;
     }
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن إضافة أو تعديل المصروفات إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+      return;
+    }
     const category = document.getElementById('selExpCategory').value;
     const desc = document.getElementById('inpExpDesc').value.trim();
     const recipient = document.getElementById('inpExpRecipient').value.trim();
@@ -10057,14 +10380,12 @@ function initFarmSalesApp() {
     if (editExpId) {
       const idx = dayExps.findIndex(x => x.id === editExpId);
       if (idx !== -1) {
-        const expAuditMeta = buildRecordAuditMeta(dayExps[idx], true);
+        const candidateExpFields = { category, desc, recipient, amount };
+        const expAuditMeta = buildRecordAuditMeta(dayExps[idx], true, candidateExpFields, 'expense');
         dayExps[idx] = {
           ...dayExps[idx],
           ...expAuditMeta,
-          category,
-          desc,
-          recipient,
-          amount
+          ...candidateExpFields
         };
       }
       if (expDayObj) {
@@ -10105,6 +10426,10 @@ function initFarmSalesApp() {
   document.getElementById('dailyExpensesTbody').addEventListener('click', (e) => {
     if (!hasPermission('expenses')) {
       showToast('عفواً، التعديل والحذف غير متاح للزائر (عرض فقط).', '🔒');
+      return;
+    }
+    if (isDayLocked(appState.currentDay)) {
+      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل أو حذف المصروفات إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
       return;
     }
     const editBtn = e.target.closest('[data-edit-exp]');

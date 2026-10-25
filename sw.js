@@ -1,5 +1,5 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v42-fortified-sync-and-smart-reset";
+const CACHE_NAME = "farm-sales-committee-v43-audit-diff-and-day-lock";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -11,6 +11,8 @@ const ASSETS_TO_CACHE = [
   "./style.css?v=40",
   "./style.css?v=41",
   "./style.css?v=42",
+  "./style.css?v=43",
+  "./style.css?v=42",
   "./app.js",
   "./app.js?v=27",
   "./app.js?v=28",
@@ -18,6 +20,8 @@ const ASSETS_TO_CACHE = [
   "./app.js?v=38",
   "./app.js?v=40",
   "./app.js?v=41",
+  "./app.js?v=42",
+  "./app.js?v=43",
   "./app.js?v=42",
   "./manifest.json",
   "./icon-192.png",
