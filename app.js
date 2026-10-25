@@ -498,13 +498,19 @@ function unifyGlobalMerchantsRegistry() {
   const delSet = new Set(((appState.deletedIds && appState.deletedIds.merchants) || []).map(Number));
   const baseDefaults = getDefaultState().merchants || [];
   if (!Array.isArray(appState.merchants)) appState.merchants = [];
-  if (appState.merchants.length === 0) {
-    baseDefaults.forEach(dm => {
-      if (!delSet.has(Number(dm.code))) {
-        appState.merchants.push({ code: Number(dm.code), name: dm.name });
+
+  // 1. ضمان وجود جميع التجار الأساسيين (101..118) دائماً حتى لو كانت المصفوفة تحتوي على عنصر واحد فقط
+  baseDefaults.forEach(dm => {
+    const c = Number(dm.code);
+    const n = String(dm.name || '').trim();
+    if (c >= 100 && n && !delSet.has(c)) {
+      if (!appState.merchants.some(m => m && (Number(m.code) === c || isSameMerchantIdentity(m.name, n)))) {
+        appState.merchants.push({ code: c, name: n });
       }
-    });
-  }
+    }
+  });
+
+  // 2. دمج أي تجار مكودين في أرشيف المزارع (farmsArchive)
   if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
     Object.values(appState.farmsArchive).forEach(fObj => {
       if (fObj && Array.isArray(fObj.merchants)) {
@@ -512,7 +518,7 @@ function unifyGlobalMerchantsRegistry() {
           const c = Number(fm && fm.code);
           const n = String((fm && fm.name) || '').trim();
           if (c >= 100 && n && !delSet.has(c)) {
-            if (!appState.merchants.some(m => Number(m.code) === c || m.name === n)) {
+            if (!appState.merchants.some(m => m && (Number(m.code) === c || isSameMerchantIdentity(m.name, n)))) {
               appState.merchants.push({ code: c, name: n });
             }
           }
@@ -520,10 +526,50 @@ function unifyGlobalMerchantsRegistry() {
       }
     });
   }
+
+  // 3. إذا تم بالخطأ حذف جميع التجار، نعيد التجار الأساسيين الـ 18 تلقائياً لضمان عدم بقاء الدليل فارغاً أبداً
+  const validNow = appState.merchants.filter(m => m && m.code && m.name && !delSet.has(Number(m.code)));
+  if (validNow.length === 0) {
+    if (appState.deletedIds) appState.deletedIds.merchants = [];
+    if (appState.deletedTimestamps) appState.deletedTimestamps.merchants = {};
+    delSet.clear();
+    baseDefaults.forEach(dm => {
+      appState.merchants.push({ code: Number(dm.code), name: String(dm.name).trim() });
+    });
+  }
+
+  // 4. استخراج وتكويد أي تاجر موجود في حركات البيع أو الوزنات المؤقتة في الأيام الحالية أو الأرشيف غير موجود في الدليل
+  const scanDaysForMissingMerchants = (daysMap) => {
+    if (!daysMap || typeof daysMap !== 'object') return;
+    for (let d = 1; d <= 10; d++) {
+      const dayObj = daysMap[d];
+      if (!dayObj) continue;
+      [...(dayObj.sales || []), ...(dayObj.pendingSales || [])].forEach(row => {
+        if (!row || !row.merchant) return;
+        const baseName = cleanMerchantBaseName(row.merchant);
+        if (!baseName) return;
+        const existingCode = resolveMerchantCode(baseName);
+        if (existingCode <= 0) {
+          const nextCode = appState.merchants.length > 0
+            ? Math.max(100, ...appState.merchants.map(m => Number(m.code) || 100)) + 1
+            : 101;
+          appState.merchants.push({ code: nextCode, name: baseName });
+        }
+      });
+    }
+  };
+  scanDaysForMissingMerchants(appState.days);
+  if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
+    Object.values(appState.farmsArchive).forEach(fObj => {
+      if (fObj && fObj.days) scanDaysForMissingMerchants(fObj.days);
+    });
+  }
+
   appState.merchants = appState.merchants
     .filter(m => m && m.code && m.name && !delSet.has(Number(m.code)))
     .map(m => ({ code: Number(m.code), name: String(m.name).trim(), ...(m.updatedAt ? { updatedAt: Number(m.updatedAt) } : {}) }))
     .sort((a, b) => Number(a.code) - Number(b.code));
+
   if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
     Object.values(appState.farmsArchive).forEach(fObj => {
       if (fObj && typeof fObj === 'object') {
@@ -6882,7 +6928,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V45',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V46',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -7049,7 +7095,7 @@ function renderAll(forceAllTabs = false, preserveInputs = false) {
 // 5. TWO-WAY EXCEL (.XLSX) ENGINE: FULL STYLED 15-SHEET EXPORT & IMPORT
 // =========================================================================
 // تم فصل STYLED_XLSX_TEMPLATE_B64 ودالة tinyInflateRaw في ملف مستقل (excel-template.js) لتخفيف حجم app.js وتسريع الأداء (v45)
-let _cachedStyledXlsxTemplate = null;
+var _cachedStyledXlsxTemplate = window._cachedStyledXlsxTemplate || null;
 
 const _CRC32_TABLE = (() => {
   const tbl = new Uint32Array(256);
@@ -8662,7 +8708,7 @@ function updateLiveFormCalculation() {
       text: `تنبيه نوع التحويل: تم إدخال تحويل مزارع سابقة بقيمة (${fmtInt(prevTrVal)} ج.م) بدون تحديد (نوع تحويل السابقة).`
     });
   }
-  if (custTr > 0 && !custTrTypeVal) {
+  if (custTr > 0 && !custTrType) {
     alerts.push({
       level: 'warn',
       icon: '💼',
@@ -8720,7 +8766,8 @@ function initFarmSalesApp() {
   if (window.__farmAppInitialized) return;
   window.__farmAppInitialized = true;
   const loadedFromLocal = loadState();
-  renderAll();
+  unifyGlobalMerchantsRegistry();
+  renderAll(true);
   if (!loadedFromLocal) {
     loadFromIndexedDBAsync().then((idbState) => {
       const wasLoggedInNow = Boolean(appState.isLoggedIn);
@@ -8883,7 +8930,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v45-modular-template-and-multi-export') {
+          if (k !== 'farm-sales-committee-v46-login-and-merchants-fix') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -9068,9 +9115,10 @@ function initFarmSalesApp() {
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
       loginOverlay.classList.add('hidden');
+      unifyGlobalMerchantsRegistry();
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
-      renderAll();
+      renderAll(true);
       if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
         pullDatabaseFromCloud(true, true);
       }
@@ -9090,9 +9138,10 @@ function initFarmSalesApp() {
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
       loginOverlay.classList.add('hidden');
+      unifyGlobalMerchantsRegistry();
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
-      renderAll();
+      renderAll(true);
       if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
         pullDatabaseFromCloud(true, true);
       }
@@ -10016,7 +10065,7 @@ function initFarmSalesApp() {
     ];
     const filtered = val
       ? candidates.filter(c => c.label.includes(val) || String(c.code).includes(val))
-      : candidates.slice(0, 10);
+      : candidates;
 
     if (filtered.length === 0) {
       suggestBox.classList.add('hidden');
