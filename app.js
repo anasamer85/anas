@@ -124,6 +124,7 @@ let appState = getDefaultState();
 let dashChartInstance = null;
 let activeRecalledPendingId = '';
 let localMutationEpoch = 0;
+let lastLocalMutationAt = 0;
 
 // هامش تسامح اختلاف توقيت الساعات بين الأجهزة (Clock Skew Tolerance Buffer = 60 دقيقة)
 // يحمي حركات المندوبين من الحذف أو الرفض الخاطئ حتى لو كانت ساعة هاتف المندوب متأخرة 15 دقيقة أو أكثر (حتى ساعة كاملة)
@@ -255,11 +256,14 @@ function isSameMerchantIdentity(maRaw, mbRaw) {
 
 function areSalesRowsDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
-  if (a.id !== undefined && b.id !== undefined && String(a.id) !== '' && String(a.id) === String(b.id)) return true;
-  if (a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
-  // حماية مطلقة للتعديلات المتزامنة (Simultaneous Offline Edits):
-  // إذا كان كلا السجلين يحملان معرّفين فريدين مختلفين (UUIDs)، فهما حركتان مستقلتان تماماً إلا عند المطابقة الموضوعية أثناء تحديث الإكسيل (ignoreDifferentUUIDs = true)
-  if (!ignoreDifferentUUIDs && isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
+  const hasIdA = a.id !== undefined && a.id !== null && String(a.id).trim() !== '';
+  const hasIdB = b.id !== undefined && b.id !== null && String(b.id).trim() !== '';
+  if (hasIdA && hasIdB) {
+    if (String(a.id).trim() === String(b.id).trim()) return true;
+    // إذا كان كلا السجلين يحملان معرّفين مختلفين، لا نعتبرهما مكررين أبداً أثناء المزامنة العادية حتى لا يبتلع سجلٌ قديمٌ سجلاً معدلاً
+    if (!ignoreDifferentUUIDs) return false;
+  }
+  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
   if (!isSameMerchantIdentity(a.merchant, b.merchant)) return false;
 
   const sa = Number(a.scaleNo) || 0;
@@ -269,14 +273,6 @@ function areSalesRowsDuplicate(a, b, ignoreDifferentUUIDs = false) {
   const w1a = Number(a.w1) || 0, w1b = Number(b.w1) || 0;
   const w2a = Number(a.w2) || 0, w2b = Number(b.w2) || 0;
 
-  // 1. نفس التاجر ونفس رقم مسلسل الميزان مع تطابق الأوزان (أو عند تحديث نفس رقم الميزان من الإكسيل)
-  if (sa > 0 && sb > 0 && sa === sb && (ignoreDifferentUUIDs || (isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b)))) return true;
-
-  // 2. نفس التاجر ونفس رقم السيارة ونفس الأوزان الفعلية (وزنة 1 ووزنة 2)
-  if ((w1a > 0 || w2a > 0) && isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b) && ca === cb) return true;
-
-  // 3. تطابق كامل في الأوزان والمبالغ المالية لنفس التاجر
-  const sameWeights = isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b);
   const sameFinancials =
     isSameNumVal(a.price, b.price) &&
     isSameNumVal(a.tip, b.tip) &&
@@ -288,14 +284,26 @@ function areSalesRowsDuplicate(a, b, ignoreDifferentUUIDs = false) {
     isSameNumVal(a.prevCash, b.prevCash, 0.5) &&
     isSameNumVal(a.prevTransfer, b.prevTransfer, 0.5);
 
+  // 1. نفس التاجر ونفس رقم مسلسل الميزان مع تطابق الأوزان والمبالغ المالية (أو عند تحديث نفس رقم الميزان من الإكسيل)
+  if (sa > 0 && sb > 0 && sa === sb && (ignoreDifferentUUIDs || (isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b) && sameFinancials))) return true;
+
+  // 2. نفس التاجر ونفس رقم السيارة ونفس الأوزان الفعلية والمبالغ المالية
+  if ((w1a > 0 || w2a > 0) && isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b) && ca === cb && (ignoreDifferentUUIDs || sameFinancials)) return true;
+
+  // 3. تطابق كامل في الأوزان والمبالغ المالية لنفس التاجر
+  const sameWeights = isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b);
   return sameWeights && sameFinancials;
 }
 
 function arePendingSalesDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
-  if (a.id !== undefined && b.id !== undefined && String(a.id) !== '' && String(a.id) === String(b.id)) return true;
-  if (a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
-  if (!ignoreDifferentUUIDs && isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
+  const hasIdA = a.id !== undefined && a.id !== null && String(a.id).trim() !== '';
+  const hasIdB = b.id !== undefined && b.id !== null && String(b.id).trim() !== '';
+  if (hasIdA && hasIdB) {
+    if (String(a.id).trim() === String(b.id).trim()) return true;
+    if (!ignoreDifferentUUIDs) return false;
+  }
+  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
   if (!isSameMerchantIdentity(a.merchant, b.merchant)) return false;
   const sa = Number(a.scaleNo) || 0;
   const sb = Number(b.scaleNo) || 0;
@@ -308,9 +316,13 @@ function arePendingSalesDuplicate(a, b, ignoreDifferentUUIDs = false) {
 
 function areExpensesDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
-  if (a.id !== undefined && b.id !== undefined && String(a.id) !== '' && String(a.id) === String(b.id)) return true;
-  if (a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
-  if (!ignoreDifferentUUIDs && isCollisionProofUUID(a.id) && isCollisionProofUUID(b.id) && String(a.id) !== String(b.id)) return false;
+  const hasIdA = a.id !== undefined && a.id !== null && String(a.id).trim() !== '';
+  const hasIdB = b.id !== undefined && b.id !== null && String(b.id).trim() !== '';
+  if (hasIdA && hasIdB) {
+    if (String(a.id).trim() === String(b.id).trim()) return true;
+    if (!ignoreDifferentUUIDs) return false;
+  }
+  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
   return (
     String(a.category || '').replace(/\s+/g, ' ').trim() === String(b.category || '').replace(/\s+/g, ' ').trim() &&
     String(a.desc || '').replace(/\s+/g, ' ').trim() === String(b.desc || '').replace(/\s+/g, ' ').trim() &&
@@ -610,10 +622,20 @@ function formatAuditTimeArabic(tsInput) {
 
 function buildRecordAuditMeta(existingRec = null, isEdit = false) {
   const actor = getActiveUserShortLabel();
-  const nowMs = getSyncedNow();
+  const prevMaxTs = existingRec
+    ? Math.max(
+        Number(existingRec.updatedAt) || 0,
+        Number(existingRec.createdAt) || 0,
+        Number(existingRec.importedAt) || 0,
+        extractTimestampFromRecord(existingRec) || 0
+      )
+    : 0;
+  // ضمان أن الطابع الزمني للتعديل الجديد أكبر دائماً من أي طابع سابق للسجل (بما فيه importedAt) لمنع ارتداد التعديلات
+  const nowMs = Math.max(getSyncedNow(), prevMaxTs > 0 ? (prevMaxTs + 10) : 0);
   const nowTxt = formatAuditTimeArabic(nowMs);
-  if (existingRec && (existingRec.createdBy || existingRec.createdAt)) {
-    const origCreatedAt = Number(existingRec.createdAt) || extractTimestampFromRecord(existingRec) || nowMs;
+  const prevEditVer = Number(existingRec && existingRec.editVersion) || 0;
+  if (existingRec && (existingRec.createdBy || existingRec.createdAt || prevMaxTs > 0)) {
+    const origCreatedAt = Number(existingRec.createdAt) || prevMaxTs || nowMs;
     const origCreatedBy = String(existingRec.createdBy || existingRec.updatedBy || actor).trim();
     const origCreatedTxt = String(existingRec.createdTimeTxt || formatAuditTimeArabic(origCreatedAt)).trim();
     return {
@@ -623,7 +645,10 @@ function buildRecordAuditMeta(existingRec = null, isEdit = false) {
       updatedAt: nowMs,
       updatedBy: actor,
       updatedTimeTxt: nowTxt,
-      isEdited: Boolean(isEdit || origCreatedBy !== actor || (nowMs - origCreatedAt > 2000))
+      isEdited: Boolean(isEdit || origCreatedBy !== actor || (nowMs - origCreatedAt > 2000)),
+      editVersion: isEdit ? (prevEditVer + 1) : Math.max(1, prevEditVer),
+      importedAt: 0,
+      excelCompositeKey: ''
     };
   }
   return {
@@ -633,7 +658,10 @@ function buildRecordAuditMeta(existingRec = null, isEdit = false) {
     updatedAt: nowMs,
     updatedBy: actor,
     updatedTimeTxt: nowTxt,
-    isEdited: false
+    isEdited: Boolean(isEdit),
+    editVersion: isEdit ? 1 : 0,
+    importedAt: 0,
+    excelCompositeKey: ''
   };
 }
 
@@ -787,10 +815,10 @@ function recordDayItemsAsDeleted(dayObj) {
 function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '🗑️') {
   if (!hasPermission('farms') && !hasPermission('sales')) {
     showToast('عفواً، تصفير حركات المزرعة متاح لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
-    return;
+    return false;
   }
   const currentFarm = appState.farmName || 'أبوذكري';
-  const nowTs = getSyncedNow();
+  const nowTs = getSyncedNow() + 100;
   for (let d = 1; d <= 10; d++) {
     if (appState.days && appState.days[d]) {
       recordDayItemsAsDeleted(appState.days[d]);
@@ -805,6 +833,7 @@ function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '�
       pendingSales: [],
       expenses: [],
       deliveredCash: 0,
+      deliveredCashUpdatedAt: nowTs,
       clearedAt: nowTs
     };
   }
@@ -815,15 +844,84 @@ function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '�
   appState.defaultTip = 0;
   appState.lastScaleNo = 0;
   appState.farmResetAt = nowTs;
+  appState.lastBulkImportAt = 0;
   appState.hasLocalEdits = true;
   unifyGlobalMerchantsRegistry();
   syncActiveFarmIntoArchive();
-  saveState(true, false);
+  // رفع التصفير فوراً للسحابة مع تخطي الجلب المسبق (skipCloudPreMerge = true) لمنع عودة البيانات المصفرّة من السحابة
+  saveState(true, true);
   renderAll();
   showToast(
-    customMsg || `تم تصفير جميع حركات مزرعة (${currentFarm}) نهائياً وحفظ التصفير في السحابة مع بقاء التجار المكودين!`,
+    customMsg || `تم تصفير جميع حركات مزرعة (${currentFarm}) نهائياً وإعادتها إلى (يوم 1) دون المساس بباقي المزارع في الأرشيف!`,
     customIcon
   );
+  return true;
+}
+
+function clearAllSiteMovementsAndArchiveKeepMerchants(customMsg = '', customIcon = '🧨') {
+  if (!hasPermission('farms') && !hasPermission('admin')) {
+    showToast('عفواً، التصفير الشامل للموقع متاح لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
+    return false;
+  }
+  const currentFarm = appState.farmName || 'أبوذكري';
+  const nowTs = getSyncedNow() + 100;
+
+  // 1. تسجيل جميع حركات المزرعة النشطة في deletedIds
+  for (let d = 1; d <= 10; d++) {
+    if (appState.days && appState.days[d]) {
+      recordDayItemsAsDeleted(appState.days[d]);
+    }
+  }
+
+  // 2. تسجيل جميع حركات المزارع المحفوظة في الأرشيف (farmsArchive) في deletedIds وتسجيل أسماء المزارع الأخرى كمحذوفة
+  if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
+    Object.keys(appState.farmsArchive).forEach(fKey => {
+      const fObj = appState.farmsArchive[fKey];
+      if (fObj && fObj.days && typeof fObj.days === 'object') {
+        for (let d = 1; d <= 10; d++) {
+          if (fObj.days[d]) recordDayItemsAsDeleted(fObj.days[d]);
+        }
+      }
+      if (fKey !== currentFarm) {
+        recordDeletedItem('farms', fKey, nowTs);
+      }
+    });
+  }
+
+  // 3. تصفير أيام المزرعة النشطة وإعادتها لـ (يوم 1) ومسح أرشيف المزارع الأخرى بالكامل
+  for (let d = 1; d <= 10; d++) {
+    appState.days[d] = {
+      dayNumber: d,
+      dateLabel: `اليوم ${d}`,
+      sales: [],
+      pendingSales: [],
+      expenses: [],
+      deliveredCash: 0,
+      deliveredCashUpdatedAt: nowTs,
+      clearedAt: nowTs
+    };
+  }
+  activeRecalledPendingId = '';
+  appState.currentDay = 1;
+  appState.visibleDays = [1];
+  appState.defaultPrice = 0;
+  appState.defaultTip = 0;
+  appState.lastScaleNo = 0;
+  appState.farmResetAt = nowTs;
+  appState.lastBulkImportAt = 0;
+  appState.farmsArchive = {};
+  appState.hasLocalEdits = true;
+  unifyGlobalMerchantsRegistry();
+  unrecordDeletedItem('farms', currentFarm);
+  syncActiveFarmIntoArchive();
+  // رفع التصفير الشامل فوراً للسحابة مع تخطي الجلب المسبق (skipCloudPreMerge = true) لمنع ارتداد أي مزرعة أو حركة قديمة
+  saveState(true, true);
+  renderAll();
+  showToast(
+    customMsg || `🧨 تم التصفير الشامل للموقع بالكامل (مسح حركات المزرعة النشطة + مسح أرشيف المزارع) مع بقاء دليل التجار والمستخدمين وإعدادات السحابة!`,
+    customIcon
+  );
+  return true;
 }
 
 function deleteSpecificDayFromCycle(targetDayNum) {
@@ -1201,12 +1299,16 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
   const safeCloud = Array.isArray(cloudArr) ? cloudArr : [];
   const result = [];
 
-  // دمج نسختين لنفس السجل عند تعديله من جهازين مع مراعاة الطابع الزمني للسجل (updatedAt) وهامش اختلاف التوقيت
+  // دمج نسختين لنفس السجل (نفس الـ id) مع الاعتماد المباشر والحاسم على رقم إصدار التعديل (editVersion) ثم أحدث طابع زمني (updatedAt) بدون تعطيله بهامش CLOCK_SKEW_BUFFER_MS
   const mergeSameRecordVersions = (localItem, cloudItem) => {
     if (!localItem) return { ...cloudItem };
     if (!cloudItem) return { ...localItem };
     const lUpdated = extractTimestampFromRecord(localItem);
     const cUpdated = extractTimestampFromRecord(cloudItem);
+    const lVer = Number(localItem.editVersion) || 0;
+    const cVer = Number(cloudItem.editVersion) || 0;
+    const lEdited = Boolean(localItem.isEdited);
+    const cEdited = Boolean(cloudItem.isEdited);
     const lCreated = Number(localItem.createdAt) || lUpdated || 0;
     const cCreated = Number(cloudItem.createdAt) || cUpdated || 0;
     const earliestCreatedAt = (lCreated > 0 && cCreated > 0) ? Math.min(lCreated, cCreated) : (lCreated || cCreated || undefined);
@@ -1217,27 +1319,27 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
       ? (localItem.createdTimeTxt || cloudItem.createdTimeTxt)
       : (cloudItem.createdTimeTxt || localItem.createdTimeTxt);
 
-    let mergedObj;
-    if (lUpdated > 0 && cUpdated > 0 && lUpdated !== cUpdated) {
-      if (isTimestampSignificantlyNewer(lUpdated, cUpdated, CLOCK_SKEW_BUFFER_MS)) {
-        mergedObj = { ...cloudItem, ...localItem, updatedAt: lUpdated };
-      } else if (isTimestampSignificantlyNewer(cUpdated, lUpdated, CLOCK_SKEW_BUFFER_MS)) {
-        mergedObj = { ...localItem, ...cloudItem, updatedAt: cUpdated };
-      } else {
-        const localWins = (lUpdated > cUpdated) || (lUpdated === cUpdated && !preferCloudItem);
-        mergedObj = localWins
-          ? { ...cloudItem, ...localItem, updatedAt: Math.max(lUpdated, cUpdated) }
-          : { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) };
-      }
+    let localWins;
+    if (lVer !== cVer) {
+      localWins = lVer > cVer;
+    } else if (lUpdated > 0 && cUpdated > 0 && lUpdated !== cUpdated) {
+      localWins = lUpdated > cUpdated;
+    } else if (lEdited !== cEdited) {
+      localWins = lEdited;
     } else if (lUpdated > 0 && cUpdated === 0) {
-      mergedObj = { ...cloudItem, ...localItem, updatedAt: lUpdated };
+      localWins = true;
     } else if (cUpdated > 0 && lUpdated === 0) {
-      mergedObj = { ...localItem, ...cloudItem, updatedAt: cUpdated };
+      localWins = false;
     } else {
-      mergedObj = preferCloudItem
-        ? { ...localItem, ...cloudItem, updatedAt: Math.max(lUpdated, cUpdated) || undefined }
-        : { ...cloudItem, ...localItem, updatedAt: Math.max(lUpdated, cUpdated) || undefined };
+      localWins = !preferCloudItem;
     }
+
+    const maxUpdated = Math.max(lUpdated, cUpdated);
+    const maxVer = Math.max(lVer, cVer);
+    const mergedObj = localWins
+      ? { ...cloudItem, ...localItem, ...(maxUpdated > 0 ? { updatedAt: maxUpdated } : {}), ...(maxVer > 0 ? { editVersion: maxVer } : {}) }
+      : { ...localItem, ...cloudItem, ...(maxUpdated > 0 ? { updatedAt: maxUpdated } : {}), ...(maxVer > 0 ? { editVersion: maxVer } : {}) };
+
     if (origCreatedBy) mergedObj.createdBy = origCreatedBy;
     if (earliestCreatedAt) mergedObj.createdAt = earliestCreatedAt;
     if (origCreatedTimeTxt) mergedObj.createdTimeTxt = origCreatedTimeTxt;
@@ -1264,6 +1366,7 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
       result.push({ ...item });
     } else {
       const existingItem = result[existingIdx];
+      // استدعاء mergeSameRecordVersions دائماً بترتيب (localItem, cloudItem) الصحيح لضمان عدم انقلاب أولوية التعديل المحلي
       result[existingIdx] = isFromCloud
         ? mergeSameRecordVersions(existingItem, item)
         : mergeSameRecordVersions(item, existingItem);
@@ -1849,8 +1952,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
   try {
     const baseEndpoint = isFirebase ? (url.replace(/\/$/, '') + '/abouzekry_cloud_db.json') : url;
 
-    // سحب ودمج آخر تحديثات الأجهزة الأخرى قبل الرفع (قفل أمان ذري Atomic Read-Modify-Write):
-    // إذا فشل الجلب المسبق (Pre-fetch GET) بسبب تذبذب الشبكة، يتم إيقاف الرفع فوراً والاحتفاظ بالتعديلات في الطابور المحلي لمنع الكتابة الفوقية العمياء على بيانات مندوب آخر!
+    // سحب ودمج آخر تحديثات الأجهزة الأخرى قبل الرفع (قفل أمان ذري Atomic Read-Modify-Write) مع إعطاء الأولوية الصارمة للتعديلات المحلية (preferCloud = false):
     if (!skipPreFetchMerge) {
       try {
         const sep = baseEndpoint.includes('?') ? '&' : '?';
@@ -1863,10 +1965,8 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
         if (preText && preText.trim() !== '{}' && preText.trim() !== 'null') {
           const remoteData = JSON.parse(preText);
           if (remoteData && remoteData.days && remoteData.merchants) {
-            const remoteMovCnt = countMovementsInDays(remoteData.days);
-            const currLocalMovCnt = countMovementsInDays(appState.days);
-            const preferCloudOnEmptyLocal = (currLocalMovCnt === 0 && remoteMovCnt > 0 && !hasRecordedDeletions && Number(appState.farmResetAt) <= (Number(remoteData.farmResetAt) || 0));
-            mergeCloudDataIntoLocal(remoteData, preferCloudOnEmptyLocal);
+            // نعطي الأولوية دائماً للتعديلات المحلية أثناء خطوة الجلب المسبق داخل الرفع (preferCloud = false) لمنع ارتداد التعديلات
+            mergeCloudDataIntoLocal(remoteData, false);
             renderAllPreservingActiveInputs();
           }
         }
@@ -1949,7 +2049,12 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
 }
 
 async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, isLiveBackgroundTick = false) {
-  if (isCloudSyncInProgress && isLiveBackgroundTick) return false;
+  // منع التداخل (Race Condition) بين الرفع/التعديل المحلي والنبض الخلفي: إيقاف السحب الخلفي أثناء الرفع أو لمدة 10 ثوانٍ بعد أي تعديل محلي أو عند وجود تعديلات معلقة
+  if (isLiveBackgroundTick) {
+    if (isCloudSyncInProgress) return false;
+    if (Number(appState.pendingChanges) > 0) return false;
+    if (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000)) return false;
+  }
   const url = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
   if (!url) {
     if (!silent) showToast('⚠️ الصق رابط السحابة (Google Apps Script URL) أولاً ثم اضغط حفظ وسحب من السحابة!', 'ℹ️');
@@ -1969,8 +2074,8 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
     const endpoint = `${baseEndpoint}${sep}_t=${Date.now()}`;
     const res = await fetch(endpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
     const text = await res.text();
-    // إذا قام المستخدم بتصفير المزرعة أو استيراد إكسيل أو تعديل محلي أثناء انتظار رد الشبكة، نتجاهل الرد القديم فوراً
-    if (isLiveBackgroundTick && (localMutationEpoch !== pullStartEpoch || isCloudSyncInProgress)) {
+    // إذا قام المستخدم بتصفير المزرعة أو استيراد إكسيل أو تعديل محلي أثناء انتظار رد الشبكة (أو خلال 10 ثوانٍ)، نتجاهل الرد القديم فوراً
+    if (isLiveBackgroundTick && (localMutationEpoch !== pullStartEpoch || isCloudSyncInProgress || Number(appState.pendingChanges) > 0 || (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000)))) {
       return false;
     }
     if (!text || text.trim() === '{}' || text.trim() === 'null') {
@@ -2080,9 +2185,12 @@ function startLiveRealtimeSyncEngine() {
       firebaseEventSource = new EventSource(sseUrl);
       firebaseEventSource.addEventListener('put', (evt) => {
         try {
+          if (isCloudSyncInProgress || Number(appState.pendingChanges) > 0 || (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000))) {
+            return;
+          }
           const packet = JSON.parse(evt.data);
           if (packet && packet.data && packet.data.days) {
-            mergeCloudDataIntoLocal(packet.data, true);
+            mergeCloudDataIntoLocal(packet.data, false);
             saveState(false);
             if (verifyActiveUserSession()) {
               renderAllPreservingActiveInputs();
@@ -2093,11 +2201,13 @@ function startLiveRealtimeSyncEngine() {
     } catch (err) {}
   }
 
-  // 2. مؤقت النبض اللحظي الذكي (يعمل مع Google Apps Script ومع Firebase)
+  // 2. مؤقت النبض اللحظي الذكي (يعمل مع Google Apps Script ومع Firebase) مع التوقف المؤقت لمدة 10 ثوانٍ بعد أي تعديل محلي أو أثناء الرفع
   liveSyncTimerId = setInterval(() => {
     if (!appState.liveSyncEnabled || !navigator.onLine || document.hidden) return;
+    if (isCloudSyncInProgress || Number(appState.pendingChanges) > 0) return;
+    if (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000)) return;
     const activeUrl = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
-    if (activeUrl && !isCloudSyncInProgress) {
+    if (activeUrl) {
       pullDatabaseFromCloud(true, true, true);
     }
   }, intervalMs);
@@ -2195,6 +2305,7 @@ function renderCloudDatabaseHub() {
 function saveState(incrementPending = true, skipCloudPreMerge = false) {
   if (incrementPending) {
     localMutationEpoch++;
+    lastLocalMutationAt = Date.now();
     appState.pendingChanges = (appState.pendingChanges || 0) + 1;
     appState.hasLocalEdits = true;
     appState.updatedAt = new Date(getSyncedNow()).toISOString();
@@ -6174,7 +6285,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V38',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V42',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -8054,7 +8165,7 @@ function initFarmSalesApp() {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (raw) {
             const parsed = JSON.parse(raw);
-            mergeCloudDataIntoLocal(parsed, true);
+            mergeCloudDataIntoLocal(parsed, !(Number(appState.pendingChanges) > 0));
             if (verifyActiveUserSession()) {
               renderAllPreservingActiveInputs();
             }
@@ -8068,7 +8179,7 @@ function initFarmSalesApp() {
     if (evt.key === STORAGE_KEY && evt.newValue) {
       try {
         const parsed = JSON.parse(evt.newValue);
-        mergeCloudDataIntoLocal(parsed, true);
+        mergeCloudDataIntoLocal(parsed, !(Number(appState.pendingChanges) > 0));
         if (verifyActiveUserSession()) {
           renderAllPreservingActiveInputs();
         }
@@ -8138,7 +8249,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v41-bulletproof-sync-engine') {
+          if (k !== 'farm-sales-committee-v42-fortified-sync-and-smart-reset') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -8885,8 +8996,9 @@ function initFarmSalesApp() {
   // Date / Label change for current day + Interactive Add / Edit / Delete Day Boxes
   document.getElementById('currentDayDateInput').addEventListener('change', (e) => {
     if (!hasPermission('sales')) return;
-    appState.days[appState.currentDay].dateLabel = e.target.value.trim() || `اليوم ${appState.currentDay}`;
-    appState.days[appState.currentDay].labelUpdatedAt = getSyncedNow();
+    const curD = appState.days[appState.currentDay];
+    curD.dateLabel = e.target.value.trim() || `اليوم ${appState.currentDay}`;
+    curD.labelUpdatedAt = Math.max(getSyncedNow(), (Number(curD.labelUpdatedAt) || 0) + 10);
     saveState(true);
     renderAll();
   });
@@ -9222,8 +9334,9 @@ function initFarmSalesApp() {
 
   // Delivered Cash Input in Trial Balance
   document.getElementById('inpDeliveredCash').addEventListener('input', (e) => {
-    appState.days[appState.currentDay].deliveredCash = parseNum(e.target.value) || 0;
-    appState.days[appState.currentDay].deliveredCashUpdatedAt = getSyncedNow();
+    const curD = appState.days[appState.currentDay];
+    curD.deliveredCash = parseNum(e.target.value) || 0;
+    curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
     saveState(true);
     renderDailyView();
   });
@@ -10985,6 +11098,10 @@ function initFarmSalesApp() {
     if (cloneFloatBar) {
       cloneFloatBar.classList.remove('hidden');
     }
+    const cloneSmartReset = cloneDoc.querySelector('#smartResetInlineBox');
+    if (cloneSmartReset) {
+      cloneSmartReset.classList.add('hidden');
+    }
     ['daily', 'dashboard', 'merchants', 'transfers', 'expenses', 'sync'].forEach(v => {
       const sec = cloneDoc.querySelector(`#view-${v}`);
       if (sec) sec.classList.toggle('hidden', v !== 'daily');
@@ -11087,13 +11204,93 @@ function initFarmSalesApp() {
     showToast('✅ تم تحميل ملف index.html الشامل مدمجاً به رابط السحابة! يعمل مباشرة على GitHub Pages و Google Sites وكل الأجهزة.', '📥');
   });
 
-  // Reset / Clear Current Farm Movements while keeping Merchants & Cloud Sync
+  // Smart Dual-Mode Reset Inline Box Handlers (#btnResetDemoData & #smartResetInlineBox)
+  const smartResetBox = document.getElementById('smartResetInlineBox');
+  const radResetActive = document.getElementById('radResetModeActiveFarm');
+  const radResetFull = document.getElementById('radResetModeFullSite');
+  const lblResetActive = document.getElementById('lblResetModeActiveFarm');
+  const lblResetFull = document.getElementById('lblResetModeFullSite');
+  const badgeResetActive = document.getElementById('smartResetActiveFarmBadge');
+  const badgeResetAll = document.getElementById('smartResetAllFarmsCountBadge');
+  const summaryResetWarn = document.getElementById('smartResetWarningSummary');
+  const btnConfirmSmartReset = document.getElementById('btnConfirmExecuteSmartReset');
+  const btnConfirmSmartResetTxt = document.getElementById('btnConfirmExecuteSmartResetTxt');
+
+  function updateSmartResetModeSelectionUI() {
+    const fName = appState.farmName || 'أبوذكري';
+    syncActiveFarmIntoArchive();
+    const farmsCount = Object.keys(appState.farmsArchive || {}).length;
+    if (badgeResetActive) badgeResetActive.textContent = `مزرعة ${fName}`;
+    if (badgeResetAll) badgeResetAll.textContent = `${farmsCount} مزرعة بالأرشيف`;
+
+    const isFullMode = Boolean(radResetFull && radResetFull.checked);
+    if (lblResetActive && lblResetFull) {
+      if (isFullMode) {
+        lblResetActive.className = 'cursor-pointer rounded-xl border-2 border-slate-300 bg-white hover:bg-amber-50/50 p-3 flex items-start gap-2.5 transition shadow-sm';
+        lblResetFull.className = 'cursor-pointer rounded-xl border-2 border-rose-600 bg-rose-100/80 p-3 flex items-start gap-2.5 transition shadow-md';
+      } else {
+        lblResetActive.className = 'cursor-pointer rounded-xl border-2 border-amber-500 bg-amber-50/90 p-3 flex items-start gap-2.5 transition shadow-md';
+        lblResetFull.className = 'cursor-pointer rounded-xl border-2 border-slate-300 bg-white hover:bg-rose-50/60 p-3 flex items-start gap-2.5 transition shadow-sm';
+      }
+    }
+    if (summaryResetWarn) {
+      if (isFullMode) {
+        summaryResetWarn.textContent = `🚨 تحذير: سيتم مسح حركات (${fName}) + مسح جميع المزارع الـ (${farmsCount}) من الأرشيف والسحابة نهائياً (مع بقاء التجار والمستخدمين)!`;
+        summaryResetWarn.className = 'text-[11px] font-extrabold text-rose-950 bg-rose-200 border border-rose-400 px-3 py-1 rounded-lg';
+      } else {
+        summaryResetWarn.textContent = `📌 محدد حالياً: تصفير حركات مزرعة (${fName}) فقط وإعادتها لـ (يوم 1) دون المساس بباقي المزارع في الأرشيف`;
+        summaryResetWarn.className = 'text-[11px] font-extrabold text-amber-950 bg-amber-100 border border-amber-300 px-3 py-1 rounded-lg';
+      }
+    }
+    if (btnConfirmSmartResetTxt) {
+      btnConfirmSmartResetTxt.textContent = isFullMode
+        ? `تأكيد التصفير الشامل للموقع بالكامل (${farmsCount} مزرعة)`
+        : `تأكيد تصفير حركات مزرعة (${fName}) فقط`;
+    }
+  }
+
   document.getElementById('btnResetDemoData').addEventListener('click', () => {
-    clearActiveFarmMovementsKeepMerchants(
-      `تم تصفير جميع حركات مزرعة (${appState.farmName || 'أبوذكري'}) نهائياً مع الحفاظ على الكود الموحد وأسماء التجار الأساسيين`,
-      '🗑️'
-    );
+    if (!hasPermission('farms') && !hasPermission('sales')) {
+      showToast('عفواً، تصفير الحركات متاح لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
+      return;
+    }
+    if (!smartResetBox) {
+      clearActiveFarmMovementsKeepMerchants();
+      return;
+    }
+    if (radResetActive) radResetActive.checked = true;
+    if (radResetFull) radResetFull.checked = false;
+    updateSmartResetModeSelectionUI();
+    smartResetBox.classList.remove('hidden');
+    smartResetBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
+
+  if (radResetActive) radResetActive.addEventListener('change', updateSmartResetModeSelectionUI);
+  if (radResetFull) radResetFull.addEventListener('change', updateSmartResetModeSelectionUI);
+
+  ['btnCancelSmartResetBox', 'btnCancelSmartResetBox2'].forEach(cid => {
+    const cancelEl = document.getElementById(cid);
+    if (cancelEl && smartResetBox) {
+      cancelEl.addEventListener('click', () => {
+        smartResetBox.classList.add('hidden');
+      });
+    }
+  });
+
+  if (btnConfirmSmartReset) {
+    btnConfirmSmartReset.addEventListener('click', () => {
+      const isFullMode = Boolean(radResetFull && radResetFull.checked);
+      if (isFullMode) {
+        if (clearAllSiteMovementsAndArchiveKeepMerchants()) {
+          if (smartResetBox) smartResetBox.classList.add('hidden');
+        }
+      } else {
+        if (clearActiveFarmMovementsKeepMerchants()) {
+          if (smartResetBox) smartResetBox.classList.add('hidden');
+        }
+      }
+    });
+  }
 
   // Import Excel (.xlsx) or JSON Backup file (Full Two-Way Parser)
   document.getElementById('fileImportXlsx').addEventListener('change', (e) => {
