@@ -818,7 +818,7 @@ function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '�
   appState.hasLocalEdits = true;
   unifyGlobalMerchantsRegistry();
   syncActiveFarmIntoArchive();
-  saveState(true, true);
+  saveState(true, false);
   renderAll();
   showToast(
     customMsg || `تم تصفير جميع حركات مزرعة (${currentFarm}) نهائياً وحفظ التصفير في السحابة مع بقاء التجار المكودين!`,
@@ -861,7 +861,7 @@ function deleteSpecificDayFromCycle(targetDayNum) {
   if (isOnlyDayLeft) {
     appState.visibleDays = [cur];
     appState.currentDay = cur;
-    saveState(true, true);
+    saveState(true, false);
     renderAll();
     showToast(`تم تصفير ومسح جميع بيانات (يوم ${cur}) نهائياً مع بقائه مفتوحاً كاليوم الأساسي الوحيد`, '🗑️');
     return true;
@@ -872,7 +872,7 @@ function deleteSpecificDayFromCycle(targetDayNum) {
   if (!remaining.includes(appState.currentDay)) {
     appState.currentDay = remaining[remaining.length - 1] || remaining[0] || 1;
   }
-  saveState(true, true);
+  saveState(true, false);
   renderAll();
   showToast(`تم حذف وتصفير (يوم ${cur}) نهائياً والانتقال إلى (يوم ${appState.currentDay}) وتحديث الحسابات التراكمية`, '🗑️');
   return true;
@@ -1007,7 +1007,7 @@ function syncActiveFarmIntoArchive() {
   const fName = appState.farmName || 'أبوذكري';
   appState.farmsArchive[fName] = {
     farmName: fName,
-    updatedAt: new Date().toLocaleTimeString('ar-EG'),
+    updatedAt: new Date(getSyncedNow()).toISOString(),
     farmResetAt: Number(appState.farmResetAt) || 0,
     lastBulkImportAt: Number(appState.lastBulkImportAt) || 0,
     visibleDays: getVisibleDays(),
@@ -1052,20 +1052,82 @@ try {
   }
 } catch (e) {}
 
+function findExistingItemTimestampForDeletion(category, normId) {
+  let maxTs = 0;
+  const strId = String(normId);
+  try {
+    if (category === 'sales' || category === 'pendingSales' || category === 'expenses') {
+      const scanDays = (dMap) => {
+        if (!dMap || typeof dMap !== 'object') return;
+        for (let d = 1; d <= 10; d++) {
+          const arr = dMap[d] && dMap[d][category];
+          if (!Array.isArray(arr)) continue;
+          arr.forEach(r => {
+            if (r && String(r.id) === strId) {
+              const t = Math.max(extractTimestampFromRecord(r), Number(r.importedAt) || 0);
+              if (t > maxTs) maxTs = t;
+            }
+          });
+        }
+      };
+      scanDays(appState.days);
+      if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
+        Object.values(appState.farmsArchive).forEach(arch => { if (arch && arch.days) scanDays(arch.days); });
+      }
+    } else if (category === 'merchants') {
+      const m = (appState.merchants || []).find(x => x && Number(x.code) === Number(normId));
+      if (m && Number(m.updatedAt) > maxTs) maxTs = Number(m.updatedAt);
+    } else if (category === 'users') {
+      const u = (appState.users || []).find(x => x && String(x.id) === strId);
+      if (u && Number(u.updatedAt) > maxTs) maxTs = Number(u.updatedAt);
+    }
+  } catch (e) {}
+  return maxTs;
+}
+
+function pruneDeletedTombstones(deletedIds, deletedTimestamps, maxPerCategory = 2000) {
+  if (!deletedIds || typeof deletedIds !== 'object') return;
+  const cats = ['sales', 'pendingSales', 'expenses', 'merchants', 'users', 'farms'];
+  cats.forEach(cat => {
+    if (!Array.isArray(deletedIds[cat])) deletedIds[cat] = [];
+    const tsMap = (deletedTimestamps && deletedTimestamps[cat] && typeof deletedTimestamps[cat] === 'object')
+      ? deletedTimestamps[cat]
+      : {};
+    if (deletedIds[cat].length > maxPerCategory) {
+      const sorted = [...deletedIds[cat]].sort((a, b) => {
+        const ta = Number(tsMap[String(a)]) || 0;
+        const tb = Number(tsMap[String(b)]) || 0;
+        return ta - tb;
+      });
+      const toKeep = sorted.slice(sorted.length - maxPerCategory);
+      deletedIds[cat] = toKeep;
+    }
+    const activeSet = new Set(deletedIds[cat].map(String));
+    Object.keys(tsMap).forEach(k => {
+      if (!activeSet.has(String(k))) {
+        delete tsMap[k];
+      }
+    });
+  });
+}
+
 function recordDeletedItem(category, itemId, customTs = 0) {
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
   appState.deletedTimestamps = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
   const list = appState.deletedIds[category];
   if (Array.isArray(list) && itemId !== undefined && itemId !== null && itemId !== '') {
     const normId = category === 'merchants' ? Number(itemId) : String(itemId);
+    const existingItemTs = findExistingItemTimestampForDeletion(category, normId);
+    const baseTs = Number(customTs) > 0 ? Number(customTs) : getSyncedNow();
+    const monotonicDelTs = Math.max(baseTs, existingItemTs > 0 ? (existingItemTs + 1) : 0);
     if (!list.includes(normId)) {
       list.push(normId);
-      if (list.length > 5000) list.shift();
     }
     const tsMap = appState.deletedTimestamps[category];
     if (tsMap && typeof tsMap === 'object') {
-      tsMap[String(normId)] = Number(customTs) > 0 ? Number(customTs) : getSyncedNow();
+      tsMap[String(normId)] = Math.max(Number(tsMap[String(normId)]) || 0, monotonicDelTs);
     }
+    pruneDeletedTombstones(appState.deletedIds, appState.deletedTimestamps, 2000);
   }
 }
 
@@ -1369,13 +1431,9 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
           (dayObj[cat] || []).forEach(rec => {
             if (!rec || rec.id === undefined || rec.id === null) return;
             const idStr = String(rec.id);
-            const recTs = Math.max(
-              extractTimestampFromRecord(rec),
-              Number(rec.importedAt) || 0,
-              fBulkTs || 0,
-              dayAdded || 0
-            );
-            const isImported = Boolean(Number(rec.importedAt) > 0 || fBulkTs > 0);
+            const ownRecTs = Math.max(extractTimestampFromRecord(rec), Number(rec.importedAt) || 0);
+            const recTs = ownRecTs > 0 ? ownRecTs : Math.max(fBulkTs || 0, dayAdded || 0);
+            const isImported = Boolean(Number(rec.importedAt) > 0 || (ownRecTs === 0 && fBulkTs > 0));
             if (!meta[cat][idStr] || recTs > meta[cat][idStr].ts) {
               meta[cat][idStr] = { ts: recTs, isImported };
             }
@@ -1508,8 +1566,9 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     farms: Array.from(new Set([...localDel.farms, ...cloudDel.farms].map(String)))
   };
 
-  // تشغيل فلتر الحماية ضد الارتداد العكسي للحذف (Anti-Ghost Tombstone Sanitizer) قبل أي دمج
+  // تشغيل فلتر الحماية ضد الارتداد العكسي للحذف (Anti-Ghost Tombstone Sanitizer) وتقليم شواهد القبور القديمة قبل أي دمج
   sanitizeMergedTombstonesAgainstLiveData(appState, cloudData, mergedDeletedIds, mergedDeletedTimestamps);
+  pruneDeletedTombstones(mergedDeletedIds, mergedDeletedTimestamps, 2000);
 
   appState.deletedIds = mergedDeletedIds;
   appState.deletedTimestamps = mergedDeletedTimestamps;
@@ -1572,27 +1631,59 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     ? 0
     : rawCloudResetAt;
 
-  // 4. دمج أرشيف المزارع المتعددة مع فصل قاعدة بيانات كل مزرعة على حدة ودمج أيامها جزئياً بالمعرفات
+  // 4. دمج أرشيف المزارع المتعددة ذرياً (mergeFarmSnapshots) مع فصل قاعدة بيانات كل مزرعة على حدة ودمج أيامها بالمعرفات
+  const mergeFarmSnapshots = (lArch, cArch, fKey) => {
+    if (!lArch || !lArch.days) return cArch;
+    if (!cArch || !cArch.days) return lArch;
+    const lArchBulk = Number(lArch.lastBulkImportAt) || 0;
+    const cArchBulk = Number(cArch.lastBulkImportAt) || 0;
+    const rawLArchReset = Number(lArch.farmResetAt) || 0;
+    const rawCArchReset = Number(cArch.farmResetAt) || 0;
+    const lArchMovCnt = countMovements(lArch.days);
+    const cArchMovCnt = countMovements(cArch.days);
+    const lArchMaxAdded = Math.max(getMaxAddedAcrossDays(lArch.days, rawLArchReset), lArchBulk);
+    const cArchMaxAdded = Math.max(getMaxAddedAcrossDays(cArch.days, rawCArchReset), cArchBulk);
+    const lArchReset = (rawLArchReset > 0 && cArchMovCnt > 0 && (cArchBulk >= rawLArchReset || cArchMaxAdded >= rawLArchReset)) ? 0 : rawLArchReset;
+    const cArchReset = (rawCArchReset > 0 && lArchMovCnt > 0 && (lArchBulk >= rawCArchReset || lArchMaxAdded >= rawCArchReset)) ? 0 : rawCArchReset;
+    const lUpdMs = Date.parse(String(lArch.updatedAt || '')) || lArchMaxAdded || 0;
+    const cUpdMs = Date.parse(String(cArch.updatedAt || '')) || cArchMaxAdded || 0;
+    const cWinsMeta = (cUpdMs > lUpdMs) || (cUpdMs === lUpdMs && preferCloud);
+    const mergedArchDays = mergeDaysObjects(lArch.days, cArch.days, mergedDeletedIds, preferCloud, lArchReset, cArchReset);
+    const archMovAfterMerge = countMovements(mergedArchDays);
+    const visSet = new Set([
+      ...(Array.isArray(lArch.visibleDays) ? lArch.visibleDays : [1]),
+      ...(Array.isArray(cArch.visibleDays) ? cArch.visibleDays : [1])
+    ]);
+    for (let d = 1; d <= 10; d++) {
+      const dm = mergedArchDays[d];
+      if (dm && ((dm.sales && dm.sales.length > 0) || (dm.pendingSales && dm.pendingSales.length > 0) || (dm.expenses && dm.expenses.length > 0))) {
+        visSet.add(d);
+      }
+    }
+    const mergedVisDays = Array.from(visSet).filter(d => d >= 1 && d <= 10 && !(mergedArchDays[d] && mergedArchDays[d].isHidden)).sort((a, b) => a - b);
+    return {
+      ...lArch,
+      ...cArch,
+      farmName: fKey,
+      updatedAt: new Date(Math.max(lUpdMs, cUpdMs, getSyncedNow())).toISOString(),
+      farmResetAt: archMovAfterMerge > 0 ? 0 : Math.max(lArchReset, cArchReset),
+      lastBulkImportAt: Math.max(lArchBulk, cArchBulk),
+      visibleDays: mergedVisDays.length > 0 ? mergedVisDays : [1],
+      defaultPrice: cWinsMeta ? (Number(cArch.defaultPrice) || Number(lArch.defaultPrice) || 0) : (Number(lArch.defaultPrice) || Number(cArch.defaultPrice) || 0),
+      defaultTip: cWinsMeta ? (Number(cArch.defaultTip) || Number(lArch.defaultTip) || 0) : (Number(lArch.defaultTip) || Number(cArch.defaultTip) || 0),
+      lastScaleNo: Math.max(Number(lArch.lastScaleNo) || 0, Number(cArch.lastScaleNo) || 0),
+      merchants: mergeArraysById(lArch.merchants || [], cArch.merchants || [], mergedDeletedIds.merchants, 'code', preferCloud),
+      days: mergedArchDays
+    };
+  };
+
   const mergedArchive = { ...(appState.farmsArchive || {}) };
   if (cloudData.farmsArchive && typeof cloudData.farmsArchive === 'object') {
     Object.keys(cloudData.farmsArchive).forEach(fKey => {
       const cArch = cloudData.farmsArchive[fKey];
       const lArch = mergedArchive[fKey];
       if (lArch && lArch.days && cArch && cArch.days) {
-        const lArchBulk = Number(lArch.lastBulkImportAt) || 0;
-        const cArchBulk = Number(cArch.lastBulkImportAt) || 0;
-        const rawLArchReset = Number(lArch.farmResetAt) || 0;
-        const rawCArchReset = Number(cArch.farmResetAt) || 0;
-        const lArchReset = (rawLArchReset > 0 && cArchBulk >= rawLArchReset) ? 0 : rawLArchReset;
-        const cArchReset = (rawCArchReset > 0 && lArchBulk >= rawCArchReset) ? 0 : rawCArchReset;
-        mergedArchive[fKey] = {
-          ...lArch,
-          ...cArch,
-          farmResetAt: Math.max(lArchReset, cArchReset),
-          lastBulkImportAt: Math.max(lArchBulk, cArchBulk),
-          merchants: mergeArraysById(lArch.merchants || [], cArch.merchants || [], mergedDeletedIds.merchants, 'code', preferCloud),
-          days: mergeDaysObjects(lArch.days, cArch.days, mergedDeletedIds, preferCloud, lArchReset, cArchReset)
-        };
+        mergedArchive[fKey] = mergeFarmSnapshots(lArch, cArch, fKey);
       } else if (cArch) {
         mergedArchive[fKey] = cArch;
       }
@@ -1686,21 +1777,22 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     // السحابة تشير لمزرعة مختلفة: ندمج قائمة التجار الموحدة عالمياً لجميع المزارع، وندمج حركات مزرعة السحابة جزئياً بالمعرفات في أرشيفها المستقل
     appState.merchants = mergeArraysById(appState.merchants, cloudData.merchants, mergedDeletedIds.merchants, 'code', preferCloud)
       .sort((a, b) => Number(a.code) - Number(b.code));
-    const existingCloudArch = (appState.farmsArchive && appState.farmsArchive[cloudFarmName]) || {};
-    const rawArchResetAt = Number(existingCloudArch.farmResetAt) || 0;
-    const archResetAt = (rawArchResetAt > 0 && cloudBulkImportAt >= rawArchResetAt) ? 0 : rawArchResetAt;
-    appState.farmsArchive[cloudFarmName] = {
+    const existingCloudArch = (appState.farmsArchive && appState.farmsArchive[cloudFarmName]) || null;
+    const incomingCloudArch = {
       farmName: cloudFarmName,
-      updatedAt: new Date().toLocaleTimeString('ar-EG'),
-      farmResetAt: Math.max(archResetAt, cloudResetAt),
-      lastBulkImportAt: Math.max(Number(existingCloudArch.lastBulkImportAt) || 0, cloudBulkImportAt),
+      updatedAt: cloudData.updatedAt || new Date(getSyncedNow()).toISOString(),
+      farmResetAt: cloudResetAt,
+      lastBulkImportAt: cloudBulkImportAt,
       visibleDays: Array.isArray(cloudData.visibleDays) ? cloudData.visibleDays : [1],
       defaultPrice: cloudData.defaultPrice !== undefined ? Number(cloudData.defaultPrice) : 0,
       defaultTip: cloudData.defaultTip !== undefined ? Number(cloudData.defaultTip) : 0,
       lastScaleNo: cloudData.lastScaleNo !== undefined ? Number(cloudData.lastScaleNo) : 0,
       merchants: JSON.parse(JSON.stringify(appState.merchants)),
-      days: mergeDaysObjects(existingCloudArch.days || {}, cloudData.days, mergedDeletedIds, true, archResetAt, cloudResetAt)
+      days: cloudData.days
     };
+    appState.farmsArchive[cloudFarmName] = existingCloudArch
+      ? mergeFarmSnapshots(existingCloudArch, incomingCloudArch, cloudFarmName)
+      : incomingCloudArch;
     if (preferCloud && !mergedDeletedIds.farms.includes(cloudFarmName)) {
       activateFarmFromArchive(cloudFarmName);
     }
@@ -2105,7 +2197,7 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
     localMutationEpoch++;
     appState.pendingChanges = (appState.pendingChanges || 0) + 1;
     appState.hasLocalEdits = true;
-    appState.updatedAt = new Date().toISOString();
+    appState.updatedAt = new Date(getSyncedNow()).toISOString();
   }
   deduplicateAllDaysInState(appState);
   syncActiveFarmIntoArchive();
@@ -8046,7 +8138,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v38-bulletproof-sync-engine') {
+          if (k !== 'farm-sales-committee-v41-bulletproof-sync-engine') {
             caches.delete(k).catch(() => {});
           }
         });
