@@ -1183,6 +1183,61 @@ function computeMerchantCurrentDebtExcluding(merchantCode, excludeSaleId = '') {
   return netDebt;
 }
 
+// حساب المديونية المرجعية الاسترشادية للتاجر في مزارع الأرشيف السابقة (Cross-Farm Debt Reference — استرشادي فقط ولا يمس معادلات المزرعة الحالية نهائياً)
+function computeMerchantCrossFarmDebtReference(merchantCode, rawNotesOrFarmQuery = '') {
+  const result = {
+    matchedFarmName: '',
+    matchedFarmDebt: 0,
+    otherFarmsDebts: [],
+    totalOtherFarmsDebt: 0
+  };
+  if (!merchantCode || !appState.farmsArchive || typeof appState.farmsArchive !== 'object') {
+    return result;
+  }
+  const currentFarm = String(appState.farmName || 'أبوذكري').trim();
+  const normQuery = normalizeArabicMerchantCompareKey(String(rawNotesOrFarmQuery || '').trim());
+
+  Object.keys(appState.farmsArchive).forEach(fName => {
+    const cleanFName = String(fName || '').trim();
+    if (!cleanFName || cleanFName === currentFarm) return;
+    const fObj = appState.farmsArchive[fName];
+    if (!fObj || !fObj.days || typeof fObj.days !== 'object') return;
+
+    let fDebt = 0;
+    for (let d = 1; d <= 10; d++) {
+      const dSales = (fObj.days[d] && fObj.days[d].sales) || [];
+      dSales.forEach(rawRow => {
+        const r = computeSaleRow(rawRow);
+        if (Number(r.code) === Number(merchantCode)) {
+          fDebt += (r.creditSales - r.debtCash - r.debtTransfer);
+        }
+      });
+    }
+    const roundedDebt = Math.round(fDebt * 100) / 100;
+    if (Math.abs(roundedDebt) > 0.01) {
+      result.otherFarmsDebts.push({ farmName: cleanFName, debt: roundedDebt });
+      result.totalOtherFarmsDebt += roundedDebt;
+    }
+
+    const normFarm = normalizeArabicMerchantCompareKey(cleanFName);
+    if (normQuery && normFarm && (normQuery.includes(normFarm) || normFarm.includes(normQuery))) {
+      result.matchedFarmName = cleanFName;
+      result.matchedFarmDebt = roundedDebt;
+    }
+  });
+
+  return result;
+}
+
+function updatePrevFarmsArchiveDatalistUI() {
+  const dl = document.getElementById('prevFarmsArchiveDatalist');
+  if (!dl) return;
+  const currentFarm = String(appState.farmName || 'أبوذكري').trim();
+  const archive = appState.farmsArchive || {};
+  const otherFarms = Object.keys(archive).filter(fn => fn && fn.trim() && fn.trim() !== currentFarm);
+  dl.innerHTML = otherFarms.map(fn => `<option value="${escXmlStr(fn)}"></option>`).join('');
+}
+
 // =========================================================================
 // CLOUD DATABASE ENGINE (IndexedDB + Multi-Farm Archive + Cloud REST Sync)
 // =========================================================================
@@ -2399,6 +2454,7 @@ function startLiveRealtimeSyncEngine() {
 
 function updateTopCloudFarmDropdownUI() {
   syncActiveFarmIntoArchive();
+  if (typeof updatePrevFarmsArchiveDatalistUI === 'function') updatePrevFarmsArchiveDatalistUI();
   const archive = appState.farmsArchive || {};
   const farmNames = Object.keys(archive);
   const selTop = document.getElementById('selTopCloudFarm');
@@ -6550,7 +6606,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V43',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V44',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -8345,6 +8401,154 @@ function updateLiveFormCalculation() {
     balEl.textContent = `${fmtInt(remainingCustody)} ج.م`;
     subEl.textContent = `إجمالي العهدة (${fmtInt(totalCustody)}${custTr > 0 && custTrType ? ' - ' + custTrType : ''}) - تحصيل مديونيات (${fmtInt(deductedDebtNow)})`;
   }
+
+  // 3. الربط المرجعي الذكي لتحصيلات المزارع السابقة (Cross-Farm Debt Reference — استرشادي فقط دون المساس بمعادلات المزرعة الحالية)
+  const prevCashVal = parseNum(document.getElementById('inpPrevCash') ? document.getElementById('inpPrevCash').value : 0) || 0;
+  const prevTrVal = parseNum(document.getElementById('inpPrevTransfer') ? document.getElementById('inpPrevTransfer').value : 0) || 0;
+  const prevTrTypeVal = document.getElementById('selPrevTransferType') ? document.getElementById('selPrevTransferType').value : '';
+  const notesVal = (document.getElementById('inpNotes') ? document.getElementById('inpNotes').value : '').trim();
+  const totalPrevEntered = prevCashVal + prevTrVal;
+
+  const crossRef = computeMerchantCrossFarmDebtReference(mCode, notesVal);
+  const refBox = document.getElementById('crossFarmDebtRefBox');
+  const refLbl = document.getElementById('crossFarmDebtRefLabel');
+  const refVal = document.getElementById('crossFarmDebtRefValue');
+  if (refBox && refLbl && refVal) {
+    if (!mName || mCode <= 0) {
+      refBox.className = 'mt-1 px-2.5 py-1.5 rounded-lg bg-purple-100/90 border border-purple-300 text-[11px] font-extrabold text-purple-950 flex items-center justify-between gap-1.5 flex-wrap';
+      refLbl.textContent = '🔎 مرجع أرشيف المزارع السابقة: اختر التاجر واسم المزرعة السابقة لعرض رصيده المرجعي';
+      refVal.textContent = 'مرجع استرشادي فقط';
+    } else if (crossRef.matchedFarmName) {
+      const remRef = crossRef.matchedFarmDebt - totalPrevEntered;
+      refBox.className = 'mt-1 px-2.5 py-1.5 rounded-lg bg-purple-200/90 border-2 border-purple-500 text-[11px] font-extrabold text-purple-950 flex items-center justify-between gap-1.5 flex-wrap';
+      refLbl.textContent = `📌 المديونية المرجعية للتاجر (${mName}) في مزرعة [${crossRef.matchedFarmName}]: ${fmtInt(crossRef.matchedFarmDebt)} ج.م`;
+      refVal.textContent = totalPrevEntered > 0
+        ? `المحصل الآن: ${fmtInt(totalPrevEntered)} | المتبقي مرجعياً: ${fmtInt(remRef)} ج.م`
+        : `الرصيد بالأرشيف: ${fmtInt(crossRef.matchedFarmDebt)} ج.م`;
+    } else if (crossRef.otherFarmsDebts.length > 0) {
+      const breakdownStr = crossRef.otherFarmsDebts.map(x => `${x.farmName}: ${fmtInt(x.debt)}`).join(' | ');
+      refBox.className = 'mt-1 px-2.5 py-1.5 rounded-lg bg-amber-100/90 border border-amber-400 text-[11px] font-extrabold text-amber-950 flex items-center justify-between gap-1.5 flex-wrap';
+      refLbl.textContent = `📌 مديونيات مرجعية للتاجر (${mName}) في الأرشيف: (${breakdownStr}) ج.م`;
+      refVal.textContent = `إجمالي أرشيف سابق: ${fmtInt(crossRef.totalOtherFarmsDebt)} ج.م`;
+    } else {
+      refBox.className = 'mt-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-300 text-[11px] font-extrabold text-emerald-950 flex items-center justify-between gap-1.5 flex-wrap';
+      refLbl.textContent = `✅ لا توجد مديونية مسجلة للتاجر (${mName}) في أرشيف المزارع الأخرى المحفوظة`;
+      refVal.textContent = 'رصيد الأرشيف: 0 ج.م';
+    }
+  }
+
+  // 4. تنبيهات الرقابة الذكية والقيود الاسترشادية الفورية غير المانعة (Smart Non-Blocking Audit Alerts)
+  const alerts = [];
+  const trSalesTypeVal = document.getElementById('selTransferSalesType') ? document.getElementById('selTransferSalesType').value : '';
+  const debtTrTypeVal = document.getElementById('selDebtTransferType') ? document.getElementById('selDebtTransferType').value : '';
+
+  // أ) تنبيه فرق مطابقة فاتورة اليوم
+  if (w2 > 0 && !hasInvalidWeight && totalWithTip > 0 && (cashS > 0 || trS > 0 || credS > 0) && Math.abs(diff) > 1) {
+    alerts.push({
+      level: 'warn',
+      icon: '⚖️',
+      text: `تنبيه مطابقة الفاتورة: مجموع (نقدي المبيعات + التحويل + الآجل = ${fmtDec(cashS + trS + credS)} ج.م) يختلف عن إجمالي الفاتورة بالإكرامية (${fmtDec(totalWithTip)} ج.م) بفرق (${fmtDec(diff)} ج.م). اضغط "⚡ باقي الفاتورة آجل" للمطابقة التلقائية.`
+    });
+  } else if (w2 > 0 && !hasInvalidWeight && totalWithTip > 0 && cashS === 0 && trS === 0 && credS === 0) {
+    alerts.push({
+      level: 'info',
+      icon: '💡',
+      text: `تذكير استرشادي: لم يتم توزيع طريقة سداد الفاتورة (${fmtDec(totalWithTip)} ج.م) بعد بين (نقدي مبيعات / تحويل / آجل اليوم).`
+    });
+  }
+
+  // ب) تنبيه تجاوز سداد المديونية لرصيد مديونية المزرعة الحالية
+  if (mName && deductedDebtNow > 0 && deductedDebtNow > (prevDebt + 1)) {
+    alerts.push({
+      level: 'warn',
+      icon: '⚠️',
+      text: `تنبيه سداد المديونية: المبلغ المدخل في تحصيل مديونيات المزرعة الحالية (${fmtInt(deductedDebtNow)} ج.م) أكبر من رصيد مديونية التاجر المسجل حالياً بالمزرعة (${fmtInt(prevDebt)} ج.م)! إذا كان المبلغ يخص مزرعة أخرى ضعه في قسم (3. تحصيلات مزارع سابقة).`
+    });
+  }
+
+  // ج) تنبيه تجاوز سداد المديونية لإجمالي العهدة المستقلة
+  if (totalCustody > 0 && deductedDebtNow > totalCustody) {
+    alerts.push({
+      level: 'warn',
+      icon: '💼',
+      text: `تنبيه رصيد العهدة: تحصيل المديونيات المسجل (${fmtInt(deductedDebtNow)} ج.م) يتجاوز إجمالي العهدة المدفوعة من التاجر (${fmtInt(totalCustody)} ج.م) بمقدار (${fmtInt(deductedDebtNow - totalCustody)} ج.م).`
+    });
+  }
+
+  // د) تنبيهات عدم اختيار نوع التحويل عند إدخال مبلغ تحويل
+  if (trS > 0 && !trSalesTypeVal) {
+    alerts.push({
+      level: 'warn',
+      icon: '💳',
+      text: `تنبيه نوع التحويل: تم إدخال تحويل مبيعات بقيمة (${fmtInt(trS)} ج.م) بدون تحديد (نوع تحويل المبيعات: كاش / بنكي / إنستا / شيك).`
+    });
+  }
+  if (debtTr > 0 && !debtTrTypeVal) {
+    alerts.push({
+      level: 'warn',
+      icon: '💳',
+      text: `تنبيه نوع التحويل: تم إدخال تحويل سداد مديونية بقيمة (${fmtInt(debtTr)} ج.م) بدون تحديد (نوع تحويل المديونية).`
+    });
+  }
+  if (prevTrVal > 0 && !prevTrTypeVal) {
+    alerts.push({
+      level: 'warn',
+      icon: '💳',
+      text: `تنبيه نوع التحويل: تم إدخال تحويل مزارع سابقة بقيمة (${fmtInt(prevTrVal)} ج.م) بدون تحديد (نوع تحويل السابقة).`
+    });
+  }
+  if (custTr > 0 && !custTrTypeVal) {
+    alerts.push({
+      level: 'warn',
+      icon: '💼',
+      text: `تنبيه نوع تحويل العهدة: تم إدخال عهدة تحويل بقيمة (${fmtInt(custTr)} ج.م) بدون تحديد (نوع تحويل العهدة).`
+    });
+  }
+
+  // هـ) تنبيهات المزارع السابقة (عدم كتابة اسم المزرعة السابقة أو تجاوز المديونية المرجعية بالأرشيف)
+  if (totalPrevEntered > 0 && !notesVal) {
+    alerts.push({
+      level: 'warn',
+      icon: '🏦',
+      text: `تنبيه المزارع السابقة: تم إدخال تحصيل مزارع سابقة (${fmtInt(totalPrevEntered)} ج.م) — يُرجى كتابة أو اختيار (اسم المزرعة السابقة) في حقل الملاحظات لتوثيقها في بيان المزارع السابقة.`
+    });
+  }
+  if (totalPrevEntered > 0 && crossRef.matchedFarmName && totalPrevEntered > (crossRef.matchedFarmDebt + 1)) {
+    alerts.push({
+      level: 'warn',
+      icon: '🔎',
+      text: `ملاحظة رقابية مرجعية: المبلغ المحصل للمزرعة السابقة [${crossRef.matchedFarmName}] (${fmtInt(totalPrevEntered)} ج.م) أكبر من المديونية المرجعية المسجلة للتاجر في أرشيف تلك المزرعة (${fmtInt(crossRef.matchedFarmDebt)} ج.م).`
+    });
+  }
+
+  // و) تنبيه انحراف السعر عن السعر الافتراضي لليوم بأكثر من 15%
+  const defP = Number(appState.defaultPrice) || 0;
+  if (price > 0 && defP > 0 && Math.abs(price - defP) / defP > 0.15) {
+    alerts.push({
+      level: 'info',
+      icon: '📊',
+      text: `ملاحظة سعرية: السعر المدخل (${fmtDec(price)} ج.م) يختلف بأكثر من 15% عن آخر سعر افتراضي مسجل باليوم (${fmtDec(defP)} ج.م).`
+    });
+  }
+
+  const alertsBox = document.getElementById('smartAuditAlertsBox');
+  const alertsList = document.getElementById('smartAuditAlertsList');
+  const alertsBadge = document.getElementById('smartAuditAlertsCountBadge');
+  if (alertsBox && alertsList && alertsBadge) {
+    if (alerts.length === 0) {
+      alertsBox.classList.add('hidden');
+      alertsList.innerHTML = '';
+    } else {
+      alertsBox.classList.remove('hidden');
+      alertsBadge.textContent = `${alerts.length} تنبيه استرشادي`;
+      alertsList.innerHTML = alerts.map(a => `
+        <div class="px-2.5 py-1.5 rounded-lg border flex items-start gap-1.5 ${a.level === 'warn' ? 'bg-amber-100/90 border-amber-400 text-amber-950' : 'bg-blue-50 border-blue-300 text-blue-950'}">
+          <span>${a.icon}</span>
+          <span>${escXmlStr(a.text)}</span>
+        </div>
+      `).join('');
+    }
+  }
 }
 
 function initFarmSalesApp() {
@@ -8514,7 +8718,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v43-audit-diff-and-day-lock') {
+          if (k !== 'farm-sales-committee-v44-cross-farm-ref-and-smart-alerts') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -9684,9 +9888,12 @@ function initFarmSalesApp() {
     }
   });
 
-  ['inpW1', 'inpW2', 'inpPrice', 'inpTip', 'inpCashSales', 'inpTransferSales', 'inpCreditSales', 'inpCustodyCash', 'inpCustodyTransfer', 'selCustodyTransferType', 'inpDebtCash', 'inpDebtTransfer', 'inpMerchantName'].forEach(id => {
+  ['inpW1', 'inpW2', 'inpPrice', 'inpTip', 'inpCashSales', 'inpTransferSales', 'selTransferSalesType', 'inpCreditSales', 'inpCustodyCash', 'inpCustodyTransfer', 'selCustodyTransferType', 'inpDebtCash', 'inpDebtTransfer', 'selDebtTransferType', 'inpPrevCash', 'inpPrevTransfer', 'selPrevTransferType', 'inpNotes', 'inpMerchantName'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('input', updateLiveFormCalculation);
+    if (el) {
+      el.addEventListener('input', updateLiveFormCalculation);
+      el.addEventListener('change', updateLiveFormCalculation);
+    }
   });
 
   // Persist Sticky Price and Tip whenever edited by user
