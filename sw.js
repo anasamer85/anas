@@ -1,5 +1,5 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v47-cancel-entry-and-clean-ui";
+const CACHE_NAME = "farm-sales-committee-v48-smart-custody-waterfall";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -16,10 +16,12 @@ const ASSETS_TO_CACHE = [
   "./style.css?v=45",
   "./style.css?v=46",
   "./style.css?v=47",
+  "./style.css?v=48",
   "./excel-template.js",
   "./excel-template.js?v=45",
   "./excel-template.js?v=46",
   "./excel-template.js?v=47",
+  "./excel-template.js?v=48",
   "./app.js",
   "./app.js?v=27",
   "./app.js?v=28",
@@ -33,6 +35,7 @@ const ASSETS_TO_CACHE = [
   "./app.js?v=45",
   "./app.js?v=46",
   "./app.js?v=47",
+  "./app.js?v=48",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",

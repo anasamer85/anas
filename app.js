@@ -2735,8 +2735,14 @@ function computeSaleRow(row) {
   const prevCash = Number(row.prevCash) || 0;
   const prevTransfer = Number(row.prevTransfer) || 0;
 
-  // Remaining Custody after deducting Current-Farm Debt Collection
-  const netCustodyRemaining = totalCustody - (debtCash + debtTransfer);
+  // صافي متبقي العهدة بعد خصم سداد المديونيات وسداد فاتورة اليوم (مع التوافق التام مع السجلات القديمة)
+  const custodyUsedForDebt = debtCash + debtTransfer;
+  const custodyUsedForInvoice = cashSales + transferSales;
+  const totalSettledFromCustody = custodyUsedForDebt + custodyUsedForInvoice;
+  const netCustodyAfterDebt = totalCustody - custodyUsedForDebt;
+  const netCustodyRemaining = totalCustody > 0
+    ? (totalCustody >= totalSettledFromCustody ? (totalCustody - totalSettledFromCustody) : netCustodyAfterDebt)
+    : 0;
 
   const totalPaidAndCredit = cashSales + transferSales + creditSales;
   const invoiceDiff = totalPaidAndCredit - totalWithTip;
@@ -6928,7 +6934,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V47',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V48',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -8592,25 +8598,62 @@ function updateLiveFormCalculation() {
     }
   }
 
-  // 2. Standalone Custody Statement:
-  //    Custody Total = custodyCash (e.g. 200,000) + custodyTransfer (e.g. 50,000) = 250,000
-  //    Deduct Current-Farm Debt Collection (e.g. 100,000 in نقدي تحصيل مديونيات) -> Remaining Custody = 150,000
+  // 2. Smart Custody Waterfall & Unified Collection Statement:
+  //    التوزيع التلقائي المتدرج للعهدة: (1) سداد المديونية السابقة أولاً ⬅️ (2) سداد فاتورة اليوم ⬅️ (3) حساب الآجل أو فائض العهدة
   const custCash = parseNum(document.getElementById('inpCustodyCash') ? document.getElementById('inpCustodyCash').value : 0) || 0;
   const custTr = parseNum(document.getElementById('inpCustodyTransfer') ? document.getElementById('inpCustodyTransfer').value : 0) || 0;
   const custTrType = document.getElementById('selCustodyTransferType') ? document.getElementById('selCustodyTransferType').value : '';
   const totalCustody = custCash + custTr;
-  const remainingCustody = totalCustody - deductedDebtNow;
+  const paidToInvoiceNow = cashS + trS;
+  const totalUsedFromCustody = deductedDebtNow + paidToInvoiceNow;
+  const custodyAfterDebt = Math.max(0, totalCustody - deductedDebtNow);
+  const remainingCustody = totalCustody > 0 ? (totalCustody - totalUsedFromCustody) : 0;
 
   const lblTotCust = document.getElementById('lblTotalCustodyEntered');
+  const lblToDebt = document.getElementById('lblCustodyToDebt');
+  const lblAfterDebt = document.getElementById('lblCustodyAfterDebt');
+  const lblToInv = document.getElementById('lblCustodyToInvoice');
   const lblNetCust = document.getElementById('lblNetCustodyRemaining');
+  const lblNetCustTitle = document.getElementById('lblNetCustodyRemainingTitle');
+  const btnDepositSurplus = document.getElementById('btnDepositCustodySurplusToAccount');
+  const btnStickyDistCust = document.getElementById('btnStickyDistributeCustody');
+
   if (lblTotCust) lblTotCust.textContent = fmtInt(totalCustody);
-  if (lblNetCust) lblNetCust.textContent = fmtInt(remainingCustody);
+  if (lblToDebt) lblToDebt.textContent = fmtInt(deductedDebtNow);
+  if (lblAfterDebt) lblAfterDebt.textContent = fmtInt(custodyAfterDebt);
+  if (lblToInv) lblToInv.textContent = fmtInt(paidToInvoiceNow);
+  if (lblNetCust) {
+    lblNetCust.textContent = fmtInt(Math.max(0, remainingCustody));
+  }
+  if (lblNetCustTitle) {
+    if (totalCustody > 0 && w2 > 0 && remainingCustody > 0) {
+      lblNetCustTitle.textContent = '3️⃣ فائض العهدة المتبقي:';
+    } else if (totalCustody > 0 && w2 === 0) {
+      lblNetCustTitle.textContent = '3️⃣ متاح لوزنة 2:';
+    } else {
+      lblNetCustTitle.textContent = '3️⃣ متبقي العهدة:';
+    }
+  }
+  if (btnDepositSurplus) {
+    const hasPositiveSurplusAfterInvoice = (totalCustody > 0 && w2 >= w1 && w2 > 0 && remainingCustody >= 1);
+    btnDepositSurplus.classList.toggle('hidden', !hasPositiveSurplusAfterInvoice);
+    btnDepositSurplus.classList.toggle('inline-flex', hasPositiveSurplusAfterInvoice);
+  }
+  if (btnStickyDistCust) {
+    btnStickyDistCust.classList.toggle('hidden', totalCustody <= 0);
+    btnStickyDistCust.classList.toggle('inline-flex', totalCustody > 0);
+  }
 
   const balEl = document.getElementById('calcMerchantBalance');
   const subEl = document.getElementById('calcMerchantBalanceSub');
   if (balEl && subEl) {
-    balEl.textContent = `${fmtInt(remainingCustody)} ج.م`;
-    subEl.textContent = `إجمالي العهدة (${fmtInt(totalCustody)}${custTr > 0 && custTrType ? ' - ' + custTrType : ''}) - تحصيل مديونيات (${fmtInt(deductedDebtNow)})`;
+    if (totalCustody > 0) {
+      balEl.textContent = remainingCustody > 0 ? `فائض: ${fmtInt(remainingCustody)} ج.م` : `موزعة بالكامل ✓`;
+      subEl.textContent = `عهدة (${fmtInt(totalCustody)}) ⬅️ مديونية (${fmtInt(deductedDebtNow)}) + فاتورة (${fmtInt(paidToInvoiceNow)})`;
+    } else {
+      balEl.textContent = `0 ج.م`;
+      subEl.textContent = `أدخل العهدة للتوزيع التلقائي على المديونية والفاتورة`;
+    }
   }
 
   // 3. الربط المرجعي الذكي لتحصيلات المزارع السابقة (Cross-Farm Debt Reference — استرشادي فقط دون المساس بمعادلات المزرعة الحالية)
@@ -8677,12 +8720,18 @@ function updateLiveFormCalculation() {
     });
   }
 
-  // ج) تنبيه تجاوز سداد المديونية لإجمالي العهدة المستقلة
-  if (totalCustody > 0 && deductedDebtNow > totalCustody) {
+  // ج) تنبيه فائض العهدة أو تجاوز الموزع لإجمالي العهدة
+  if (totalCustody > 0 && (deductedDebtNow + cashS + trS) > (totalCustody + 1)) {
     alerts.push({
       level: 'warn',
       icon: '💼',
-      text: `تنبيه رصيد العهدة: تحصيل المديونيات المسجل (${fmtInt(deductedDebtNow)} ج.م) يتجاوز إجمالي العهدة المدفوعة من التاجر (${fmtInt(totalCustody)} ج.م) بمقدار (${fmtInt(deductedDebtNow - totalCustody)} ج.م).`
+      text: `تنبيه رصيد العهدة: إجمالي المبالغ المسددة بالأسفل (مديونية ${fmtInt(deductedDebtNow)} + مبيعات ${fmtInt(cashS + trS)} = ${fmtInt(deductedDebtNow + cashS + trS)} ج.م) أكبر من إجمالي العهدة المدخلة (${fmtInt(totalCustody)} ج.م). اضغط "⚡ توزيع العهدة تلقائياً" لضبط التوزيع.`
+    });
+  } else if (totalCustody > 0 && w2 >= w1 && w2 > 0 && remainingCustody >= 1) {
+    alerts.push({
+      level: 'info',
+      icon: '💼',
+      text: `فائض عهدة للتاجر (${fmtInt(remainingCustody)} ج.م) بعد سداد المديونية السابقة (${fmtInt(deductedDebtNow)} ج.م) وفاتورة اليوم (${fmtInt(cashS + trS)} ج.م): إذا ترك السائق الفائض بالخزنة تحت الحساب اضغط زر (📥 إيداع الفائض بالخزنة)، أو اتركه كما هو إذا استرد السائق الفائض نقداً.`
     });
   }
 
@@ -8930,7 +8979,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v47-cancel-entry-and-clean-ui') {
+          if (k !== 'farm-sales-committee-v48-smart-custody-waterfall') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -10090,6 +10139,12 @@ function initFarmSalesApp() {
       inpMerch.value = item.getAttribute('data-pick-merchant');
       suggestBox.classList.add('hidden');
       updateMerchantSuggestions();
+      const autoChk = document.getElementById('chkAutoDistributeCustody');
+      const cCash = parseNum(document.getElementById('inpCustodyCash')?.value) || 0;
+      const cTr = parseNum(document.getElementById('inpCustodyTransfer')?.value) || 0;
+      if ((!autoChk || autoChk.checked) && (cCash > 0 || cTr > 0)) {
+        distributeCustodyWaterfall({ silent: true, focusTarget: false });
+      }
       updateLiveFormCalculation();
       const carVal = (document.getElementById('inpCarNo').value || '').trim();
       focusAndSelectField(carVal ? 'inpW1' : 'inpCarNo');
@@ -10148,6 +10203,220 @@ function initFarmSalesApp() {
 
   document.getElementById('btnAutoFillCredit').addEventListener('click', () => {
     calculateAndFillRemainingCredit(true);
+  });
+
+  // =========================================================================
+  // SMART CUSTODY WATERFALL ENGINE (التوزيع المحاسبي التلقائي المتدرج للعهدة)
+  // 1. سداد المديونية السابقة أولاً ⬅️ 2. سداد فاتورة اليوم ⬅️ 3. حساب الآجل تلقائياً
+  // =========================================================================
+  function distributeCustodyWaterfall(options = {}) {
+    const { silent = false, focusTarget = false } = options;
+    const custCashEl = document.getElementById('inpCustodyCash');
+    const custTrEl = document.getElementById('inpCustodyTransfer');
+    const custTrTypeEl = document.getElementById('selCustodyTransferType');
+
+    const custCash = Math.max(0, parseNum(custCashEl ? custCashEl.value : 0) || 0);
+    const custTr = Math.max(0, parseNum(custTrEl ? custTrEl.value : 0) || 0);
+    const custTrType = custTrTypeEl ? custTrTypeEl.value : '';
+    const totalCustody = custCash + custTr;
+
+    const w1 = Math.max(0, parseNum(document.getElementById('inpW1')?.value) || 0);
+    const w2 = Math.max(0, parseNum(document.getElementById('inpW2')?.value) || 0);
+    const hasValidW2 = (w2 >= w1 && w2 > 0);
+    const netW = hasValidW2 ? (w2 - w1) : 0;
+    const price = Math.max(0, parseNum(document.getElementById('inpPrice')?.value) || 0);
+    const tip = Math.max(0, parseNum(document.getElementById('inpTip')?.value) || 0);
+    const totalWithTip = hasValidW2 ? Math.round(((netW * price) + tip) * 100) / 100 : 0;
+
+    const mName = (document.getElementById('inpMerchantName')?.value || '').trim();
+    const editId = document.getElementById('editSaleId')?.value || '';
+    const mCode = resolveMerchantCode(mName);
+    const rawPrevDebt = mCode > 0 ? computeMerchantCurrentDebtExcluding(mCode, editId) : 0;
+    const positivePrevDebt = Math.max(0, Math.round(rawPrevDebt));
+
+    const inpDebtCashEl = document.getElementById('inpDebtCash');
+    const inpDebtTrEl = document.getElementById('inpDebtTransfer');
+    const selDebtTrTypeEl = document.getElementById('selDebtTransferType');
+    const inpCashSalesEl = document.getElementById('inpCashSales');
+    const inpTrSalesEl = document.getElementById('inpTransferSales');
+    const selTrSalesTypeEl = document.getElementById('selTransferSalesType');
+    const inpCreditSalesEl = document.getElementById('inpCreditSales');
+
+    if (totalCustody <= 0) {
+      if (inpDebtCashEl) inpDebtCashEl.value = '';
+      if (inpDebtTrEl) inpDebtTrEl.value = '';
+      if (inpCashSalesEl) inpCashSalesEl.value = '';
+      if (inpTrSalesEl) inpTrSalesEl.value = '';
+      if (inpCreditSalesEl) {
+        inpCreditSalesEl.value = hasValidW2 && totalWithTip > 0 ? fmtMoney(Math.round(totalWithTip)) : '';
+      }
+      updateLiveFormCalculation();
+      if (!silent) {
+        showToast('💡 أدخل مبلغ العهدة (نقدية أو تحويل) أولاً ليتم توزيعه تلقائياً على المديونية والفاتورة!', 'ℹ️');
+      }
+      return false;
+    }
+
+    // الخطوة 1: سداد المديونية السابقة للمزرعة الحالية أولاً
+    const allocDebtCash = Math.min(custCash, positivePrevDebt);
+    const remCashAfterDebt = Math.max(0, custCash - allocDebtCash);
+    const remDebtNeeded = Math.max(0, positivePrevDebt - allocDebtCash);
+    const allocDebtTr = Math.min(custTr, remDebtNeeded);
+    const remTrAfterDebt = Math.max(0, custTr - allocDebtTr);
+
+    if (inpDebtCashEl) inpDebtCashEl.value = allocDebtCash > 0 ? fmtMoney(allocDebtCash) : '';
+    if (inpDebtTrEl) inpDebtTrEl.value = allocDebtTr > 0 ? fmtMoney(allocDebtTr) : '';
+    if (allocDebtTr > 0 && custTrType && selDebtTrTypeEl) {
+      selDebtTrTypeEl.value = custTrType;
+    }
+
+    // الخطوة 2: توجيه المتبقي من العهدة لسداد فاتورة الوزنة الحالية (إذا تم إدخال الوزنة الثانية)
+    let allocSalesCash = 0;
+    let allocSalesTr = 0;
+    let remCredit = 0;
+
+    if (hasValidW2 && totalWithTip > 0) {
+      allocSalesCash = Math.min(remCashAfterDebt, Math.round(totalWithTip));
+      const remInvoiceAfterCash = Math.max(0, Math.round(totalWithTip) - allocSalesCash);
+      allocSalesTr = Math.min(remTrAfterDebt, remInvoiceAfterCash);
+      remCredit = Math.max(0, Math.round(totalWithTip - allocSalesCash - allocSalesTr));
+
+      if (inpCashSalesEl) inpCashSalesEl.value = allocSalesCash > 0 ? fmtMoney(allocSalesCash) : '';
+      if (inpTrSalesEl) inpTrSalesEl.value = allocSalesTr > 0 ? fmtMoney(allocSalesTr) : '';
+      if (allocSalesTr > 0 && custTrType && selTrSalesTypeEl) {
+        selTrSalesTypeEl.value = custTrType;
+      }
+      if (inpCreditSalesEl) inpCreditSalesEl.value = remCredit > 0 ? fmtMoney(remCredit) : '0';
+    } else {
+      // لم تُدخل الوزنة الثانية بعد (السيارة تحت التحميل - وزنة 1)
+      if (inpCashSalesEl) inpCashSalesEl.value = '';
+      if (inpTrSalesEl) inpTrSalesEl.value = '';
+      if (inpCreditSalesEl) inpCreditSalesEl.value = '';
+    }
+
+    updateLiveFormCalculation();
+
+    if (focusTarget) {
+      if (hasValidW2) {
+        focusAndSelectField('inpCreditSales');
+      } else if (w1 <= 0) {
+        focusAndSelectField('inpW1');
+      } else {
+        focusAndSelectField('inpW2');
+      }
+    }
+
+    if (!silent) {
+      const totalDebtPaid = allocDebtCash + allocDebtTr;
+      const totalInvPaid = allocSalesCash + allocSalesTr;
+      const surplus = Math.max(0, totalCustody - totalDebtPaid - totalInvPaid);
+      if (hasValidW2) {
+        showToast(
+          `⚡ تم توزيع العهدة (${fmtInt(totalCustody)}): سداد مديونية (${fmtInt(totalDebtPaid)}) + سداد فاتورة اليوم (${fmtInt(totalInvPaid)}) + آجل (${fmtInt(remCredit)})${surplus > 0 ? ` | فائض عهدة: ${fmtInt(surplus)} ج.م` : ''}`,
+          '✅'
+        );
+      } else {
+        showToast(
+          `⚡ تم خصم المديونية السابقة (${fmtInt(totalDebtPaid)} ج.م) من العهدة، والمتبقي (${fmtInt(surplus)} ج.م) سيُخصم من الفاتورة تلقائياً فور إدخال الوزنة الثانية!`,
+          '⏳'
+        );
+      }
+    }
+    return true;
+  }
+
+  function depositCustodySurplusToMerchantAccount() {
+    const custCash = Math.max(0, parseNum(document.getElementById('inpCustodyCash')?.value) || 0);
+    const custTr = Math.max(0, parseNum(document.getElementById('inpCustodyTransfer')?.value) || 0);
+    const custTrType = document.getElementById('selCustodyTransferType')?.value || '';
+    const cashS = Math.max(0, parseNum(document.getElementById('inpCashSales')?.value) || 0);
+    const trS = Math.max(0, parseNum(document.getElementById('inpTransferSales')?.value) || 0);
+    const debtCash = Math.max(0, parseNum(document.getElementById('inpDebtCash')?.value) || 0);
+    const debtTr = Math.max(0, parseNum(document.getElementById('inpDebtTransfer')?.value) || 0);
+
+    const surplusCash = Math.max(0, custCash - debtCash - cashS);
+    const surplusTr = Math.max(0, custTr - debtTr - trS);
+    if ((surplusCash + surplusTr) <= 0) {
+      showToast('لا يوجد فائض عهدة غير موزع حالياً.', 'ℹ️');
+      return;
+    }
+    const inpDebtCashEl = document.getElementById('inpDebtCash');
+    const inpDebtTrEl = document.getElementById('inpDebtTransfer');
+    const selDebtTrTypeEl = document.getElementById('selDebtTransferType');
+    if (surplusCash > 0 && inpDebtCashEl) {
+      inpDebtCashEl.value = fmtMoney(debtCash + surplusCash);
+    }
+    if (surplusTr > 0 && inpDebtTrEl) {
+      inpDebtTrEl.value = fmtMoney(debtTr + surplusTr);
+      if (custTrType && selDebtTrTypeEl) selDebtTrTypeEl.value = custTrType;
+    }
+    updateLiveFormCalculation();
+    showToast(
+      `📥 تم إيداع فائض العهدة (${fmtInt(surplusCash + surplusTr)} ج.م) بالكامل في الخزنة/التحويلات وتسجيله كرصيد دائن تحت حساب التاجر!`,
+      '✅'
+    );
+  }
+
+  const btnDistCustEl = document.getElementById('btnDistributeCustodyWaterfall');
+  if (btnDistCustEl) {
+    btnDistCustEl.addEventListener('click', () => {
+      distributeCustodyWaterfall({ silent: false, focusTarget: false });
+    });
+  }
+
+  const btnStickyDistCustEl = document.getElementById('btnStickyDistributeCustody');
+  if (btnStickyDistCustEl) {
+    btnStickyDistCustEl.addEventListener('click', () => {
+      distributeCustodyWaterfall({ silent: false, focusTarget: true });
+    });
+  }
+
+  const btnDepSurplusEl = document.getElementById('btnDepositCustodySurplusToAccount');
+  if (btnDepSurplusEl) {
+    btnDepSurplusEl.addEventListener('click', () => {
+      depositCustodySurplusToMerchantAccount();
+    });
+  }
+
+  // Trigger automatic waterfall distribution when Custody fields or Weight/Price/Merchant change (if chkAutoDistributeCustody is checked)
+  ['inpCustodyCash', 'inpCustodyTransfer', 'selCustodyTransferType'].forEach(cid => {
+    const cel = document.getElementById(cid);
+    if (!cel) return;
+    const handler = () => {
+      const autoChk = document.getElementById('chkAutoDistributeCustody');
+      if (!autoChk || autoChk.checked) {
+        const cCash = parseNum(document.getElementById('inpCustodyCash')?.value) || 0;
+        const cTr = parseNum(document.getElementById('inpCustodyTransfer')?.value) || 0;
+        if (cCash > 0 || cTr > 0 || cid !== 'selCustodyTransferType') {
+          distributeCustodyWaterfall({ silent: true, focusTarget: false });
+        }
+      }
+    };
+    cel.addEventListener('input', handler);
+    cel.addEventListener('change', handler);
+    if (cid === 'inpCustodyCash' || cid === 'inpCustodyTransfer') {
+      cel.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          distributeCustodyWaterfall({ silent: false, focusTarget: true });
+        }
+      });
+    }
+  });
+
+  ['inpW1', 'inpW2', 'inpPrice', 'inpTip', 'inpMerchantName'].forEach(wid => {
+    const wel = document.getElementById(wid);
+    if (!wel) return;
+    const wHandler = () => {
+      const autoChk = document.getElementById('chkAutoDistributeCustody');
+      const cCash = parseNum(document.getElementById('inpCustodyCash')?.value) || 0;
+      const cTr = parseNum(document.getElementById('inpCustodyTransfer')?.value) || 0;
+      if ((!autoChk || autoChk.checked) && (cCash > 0 || cTr > 0)) {
+        distributeCustodyWaterfall({ silent: true, focusTarget: false });
+      }
+    };
+    wel.addEventListener('input', wHandler);
+    wel.addEventListener('change', wHandler);
   });
 
   function setSaleFormActionLabels(saveText = 'حفظ نهائي', isEditingOrRecalling = false) {
@@ -10307,13 +10576,19 @@ function initFarmSalesApp() {
         return;
       }
 
-      // 2) وزنة 2 ⬅️ نقدي مبيعات
+      // 2) وزنة 2 ⬅️ توزيع العهدة تلقائياً (إن وجدت) أو الانتقال لنقدي المبيعات
       if (fieldId === 'inpW2') {
         const w1 = Math.max(0, parseNum(document.getElementById('inpW1').value) || 0);
         const w2 = Math.max(0, parseNum(document.getElementById('inpW2').value) || 0);
         if (w2 > 0 && w2 < w1) {
           updateLiveFormCalculation();
           showToast('⚠️ الوزنة الثانية (القائم) يجب أن تكون أكبر من أو تساوي الوزنة الأولى!', '⚠️');
+          return;
+        }
+        const cCash = parseNum(document.getElementById('inpCustodyCash')?.value) || 0;
+        const cTr = parseNum(document.getElementById('inpCustodyTransfer')?.value) || 0;
+        if (cCash > 0 || cTr > 0) {
+          distributeCustodyWaterfall({ silent: false, focusTarget: true });
           return;
         }
         updateLiveFormCalculation();
