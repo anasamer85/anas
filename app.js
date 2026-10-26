@@ -2767,10 +2767,21 @@ function computeSaleRow(row) {
   const totalPaidAndCredit = cashSales + transferSales + creditSales;
   const invoiceDiff = totalPaidAndCredit - totalWithTip;
   const code = resolveMerchantCode(row.merchant);
+  const isDebtCollectionOnly = Boolean(
+    !row.isPending &&
+    w1 === 0 &&
+    w2 === 0 &&
+    totalWithTip === 0 &&
+    cashSales === 0 &&
+    transferSales === 0 &&
+    creditSales === 0 &&
+    (debtCash > 0 || debtTransfer > 0 || prevCash > 0 || prevTransfer > 0 || row.entryMode === 'debt_only')
+  );
 
   return {
     ...row,
     code,
+    isDebtCollectionOnly,
     w1,
     w2,
     netWeight,
@@ -2807,6 +2818,7 @@ function computeDaySummary(dayNum) {
   const expenses = dayObj.expenses || [];
 
   let countCars = 0;
+  let countDebtVouchers = 0;
   let sumW1 = 0, sumW2 = 0, sumNetW = 0, sumTip = 0, sumBase = 0, sumTotalWithTip = 0;
   let sumCashSales = 0, sumTransferSales = 0, sumCreditSales = 0;
   let sumDebtCash = 0, sumDebtTransfer = 0;
@@ -2814,7 +2826,9 @@ function computeDaySummary(dayNum) {
   let sumPaidAndCredit = 0, sumInvoiceDiff = 0;
 
   rows.forEach(r => {
-    if (r.w1 > 0 || r.w2 > 0 || r.totalWithTip > 0 || r.cashSales > 0 || r.debtCash > 0 || r.prevCash > 0) {
+    if (r.isDebtCollectionOnly) {
+      countDebtVouchers++;
+    } else if (r.w1 > 0 || r.w2 > 0 || r.totalWithTip > 0 || r.cashSales > 0 || r.transferSales > 0 || r.creditSales > 0) {
       countCars++;
     }
     sumW1 += r.w1;
@@ -2882,6 +2896,7 @@ function computeDaySummary(dayNum) {
     allOrderedRows,
     expenses,
     countCars,
+    countDebtVouchers,
     pendingCarsCount,
     avgCarWeight,
     sumW1,
@@ -3152,10 +3167,12 @@ function renderDailyView() {
       const safeId = escXmlStr(r.id);
       const merchantCellHtml = r.isPending
         ? `${safeMerchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold shadow-sm">⏳ محجوز (وزنة 1)</span>`
-        : safeMerchant;
+        : (r.isDebtCollectionOnly
+            ? `${safeMerchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-teal-700 text-white text-[10px] font-extrabold shadow-sm">💵 سند تحصيل مديونية</span>`
+            : safeMerchant);
       const w2CellHtml = r.isPending
         ? '<span class="text-amber-800 font-extrabold text-[11px]">⏳ بانتظار وزنة 2</span>'
-        : fmtInt(r.w2);
+        : (r.isDebtCollectionOnly ? '<span class="text-teal-800 font-extrabold text-[10px]">💵 سند تحصيل</span>' : fmtInt(r.w2));
       const showReceiptBtn = Boolean(excelTableState && excelTableState.showScaleReceiptButtons);
       const receiptBtnHtml = showReceiptBtn
         ? `<span class="inline-flex items-center gap-0.5 ml-1 bg-indigo-50 p-0.5 rounded-lg border border-indigo-200">
@@ -3475,7 +3492,7 @@ const MERCH_COLUMNS = [
 function enrichDashSummaryRow(s) {
   const statusOk = s.weightAuditDiff === 0 && s.invoiceAuditDiff === 0;
   const locked = isDayLocked(s.dayNum);
-  const baseStatus = s.countCars === 0 && s.sumExpenses === 0 && s.deliveredCash === 0
+  const baseStatus = s.countCars === 0 && (s.countDebtVouchers || 0) === 0 && s.sumExpenses === 0 && s.deliveredCash === 0
     ? 'مفتوح (بدون حركات)'
     : (statusOk ? 'مطابق ومتزن ✓' : 'راجع الميزان!');
   const statusText = locked ? `🔒 معتمد ومقفل (${baseStatus})` : baseStatus;
@@ -3496,7 +3513,7 @@ function getOpenAndActiveDashSummaries() {
   const rows = [];
   for (let d = 1; d <= 10; d++) {
     const s = computeDaySummary(d);
-    const hasMovements = s.countCars > 0 || s.sumExpenses > 0 || s.deliveredCash > 0 ||
+    const hasMovements = s.countCars > 0 || (s.countDebtVouchers || 0) > 0 || s.sumExpenses > 0 || s.deliveredCash > 0 ||
       ((appState.days[d] && appState.days[d].pendingSales && appState.days[d].pendingSales.length > 0));
     if (visDays.includes(d) || hasMovements) {
       rows.push(enrichDashSummaryRow(s));
@@ -4120,7 +4137,9 @@ function computeMerchantAggregates() {
     summary.rows.forEach(r => {
       if (!r.code || !map[r.code]) return;
       const m = map[r.code];
-      m.cars += 1;
+      if (!r.isDebtCollectionOnly) {
+        m.cars += 1;
+      }
       m.netW += r.netWeight;
       m.totalSales += r.totalWithTip;
       m.cashSales += r.cashSales;
@@ -4500,7 +4519,9 @@ function computeMerchantDetailedLedger(merchantCode) {
       if (r.isPending) {
         totalPendingCars++;
       } else {
-        totalCompletedCars++;
+        if (!r.isDebtCollectionOnly) {
+          totalCompletedCars++;
+        }
         sumW1 += r.w1;
         sumW2 += r.w2;
         sumNetWeight += r.netWeight;
@@ -5012,7 +5033,7 @@ function renderScaleReceiptPrintView(saleId, dayNumInput) {
   const printTimeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const statusBadgeTxt = isPending
     ? '⏳ كارتة وزنة أولى (تحت التحميل)'
-    : '✅ كارتة ميزان وفاتورة مكتملة';
+    : (r.isDebtCollectionOnly ? '💵 إيصال / سند تحصيل مديونية (بدون ميزان)' : '✅ كارتة ميزان وفاتورة مكتملة');
   const statusBadgeBg = isPending ? '#fef3c7' : '#d1fae5';
   const statusBadgeColor = isPending ? '#92400e' : '#065f46';
 
@@ -7075,7 +7096,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V50',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V51',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -8775,6 +8796,152 @@ function syncPrevFarmsCollapsibleState(info = {}) {
   setPrevFarmsSectionExpanded(hasArchiveReferenceDebt, false);
 }
 
+// =========================================================================
+// DEBT-COLLECTION-ONLY MODE ENGINE (وضع سند تحصيل مديونية فقط بدون ميزان — v51)
+// =========================================================================
+let activeSaleEntryMode = 'sale'; // 'sale' | 'debt_only'
+
+function isDebtCollectionOnlyMode() {
+  return activeSaleEntryMode === 'debt_only';
+}
+
+function setSaleEntryMode(mode = 'sale', options = {}) {
+  const { clearWeightFields = true, focusMerchantOrDebt = false, showModeToast = false } = options;
+  activeSaleEntryMode = (mode === 'debt_only') ? 'debt_only' : 'sale';
+  const isDebtOnly = (activeSaleEntryMode === 'debt_only');
+
+  const inpModeEl = document.getElementById('inpSaleEntryMode');
+  if (inpModeEl) inpModeEl.value = activeSaleEntryMode;
+
+  // 1. Toggle Header Buttons & Title Styling
+  const btnScale = document.getElementById('btnModeScaleSale');
+  const btnDebt = document.getElementById('btnModeDebtCollectionOnly');
+  const hdrEl = document.getElementById('saleFormCardHeader');
+  const hdrIcon = document.getElementById('saleFormHeaderIcon');
+  const titleActTxt = document.getElementById('saleFormTitleActionText');
+  const debtBanner = document.getElementById('debtCollectionOnlyModeBanner');
+
+  if (btnScale && btnDebt) {
+    if (isDebtOnly) {
+      btnDebt.className = 'px-2.5 py-1 rounded-lg bg-emerald-400 text-slate-950 font-extrabold text-xs shadow transition flex items-center gap-1';
+      btnScale.className = 'px-2.5 py-1 rounded-lg text-slate-200 hover:bg-white/10 font-extrabold text-xs transition flex items-center gap-1';
+    } else {
+      btnScale.className = 'px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-extrabold text-xs shadow transition flex items-center gap-1';
+      btnDebt.className = 'px-2.5 py-1 rounded-lg text-slate-200 hover:bg-white/10 font-extrabold text-xs transition flex items-center gap-1';
+    }
+  }
+  if (hdrEl) {
+    hdrEl.className = isDebtOnly
+      ? 'bg-teal-950 text-white px-4 py-2.5 rounded-t-2xl flex flex-wrap items-center justify-between gap-2 border-b-2 border-teal-400'
+      : 'navy-gradient text-white px-4 py-2.5 rounded-t-2xl flex flex-wrap items-center justify-between gap-2';
+  }
+  if (hdrIcon) hdrIcon.textContent = isDebtOnly ? '💵' : '🚛';
+  if (titleActTxt) {
+    titleActTxt.textContent = isDebtOnly
+      ? 'سند تحصيل مديونية فقط — بدون ميزان'
+      : 'تسجيل حركة بيع / تحصيل جديدة';
+  }
+  if (debtBanner) {
+    debtBanner.classList.toggle('hidden', !isDebtOnly);
+  }
+
+  // 2. Hide/Show Row 2 (Weights w1, w2, Price, Tip) and Car No / Scale Labels
+  const weightsRow = document.getElementById('saleWeightsAndPriceRow');
+  if (weightsRow) {
+    weightsRow.classList.toggle('hidden', isDebtOnly);
+  }
+  const lblScaleNo = document.getElementById('lblScaleOrVoucherNo');
+  if (lblScaleNo) {
+    lblScaleNo.innerHTML = isDebtOnly
+      ? 'رقم السند <span class="text-teal-700 font-normal">(متسلسل تلقائي)</span>'
+      : 'ميزان رقم <span class="text-emerald-700 font-normal">(متسلسل تلقائي)</span>';
+  }
+  const lblCarNo = document.getElementById('lblCarNoField');
+  if (lblCarNo) {
+    lblCarNo.innerHTML = isDebtOnly
+      ? 'رقم السيارة <span class="text-slate-400 font-normal">(اختياري)</span>'
+      : 'رقم السيارة';
+  }
+
+  // 3. Adapt Blue Live KPI Banner & Hide Group 1 (سداد فاتورة اليوم) in Debt-Only Mode
+  ['kpiBoxNetWeight', 'kpiBoxTotalWithTip', 'kpiBoxInvoiceDiff'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', isDebtOnly);
+  });
+  const liveBannerGrid = document.getElementById('saleLiveCalcBannerGrid');
+  if (liveBannerGrid) {
+    liveBannerGrid.className = isDebtOnly
+      ? 'grid grid-cols-1 sm:grid-cols-2 gap-2 bg-teal-950 text-white p-2.5 rounded-xl text-center'
+      : 'grid grid-cols-2 sm:grid-cols-5 gap-2 bg-blue-950 text-white p-2.5 rounded-xl text-center';
+  }
+
+  const grp1Card = document.getElementById('currentInvoiceCollectionCard');
+  if (grp1Card) {
+    grp1Card.classList.toggle('hidden', isDebtOnly);
+  }
+  const grp2Card = document.getElementById('currentDebtCollectionCard');
+  if (grp2Card) {
+    grp2Card.className = isDebtOnly
+      ? 'lg:col-span-2 border-2 border-teal-600 bg-teal-50/80 rounded-xl p-3 space-y-2 shadow-sm'
+      : 'border-2 border-teal-800/20 bg-teal-50/40 rounded-xl p-2.5 space-y-2';
+  }
+
+  // 4. Hide "⏳ حفظ مؤقت وزنة 1" & "⚡ باقي الفاتورة آجل" buttons when in Debt-Only Mode
+  ['btnSavePendingW1', 'btnInlineSavePendingW1', 'btnStickyAutoCredit'].forEach(btnId => {
+    const b = document.getElementById(btnId);
+    if (b) b.classList.toggle('hidden', isDebtOnly);
+  });
+
+  // 5. Clear weight & current-day invoice fields when switching to Debt-Only Mode
+  if (isDebtOnly && clearWeightFields) {
+    ['inpW1', 'inpW2', 'inpPrice', 'inpTip', 'inpCashSales', 'inpTransferSales', 'inpCreditSales'].forEach(fid => {
+      const inp = document.getElementById(fid);
+      if (inp) inp.value = '';
+    });
+    const selTrS = document.getElementById('selTransferSalesType');
+    if (selTrS) selTrS.value = '';
+    const wAlert = document.getElementById('weightValidationAlert');
+    if (wAlert) wAlert.classList.add('hidden');
+  } else if (!isDebtOnly && clearWeightFields) {
+    applyStickySaleDefaults();
+  }
+
+  // Update Save Button Label according to mode & edit state
+  const editIdVal = document.getElementById('editSaleId')?.value || '';
+  const s1 = document.getElementById('btnSaveSaleText');
+  const s2 = document.getElementById('btnInlineSaveSaleText');
+  if (!editIdVal && !activeRecalledPendingId) {
+    const defaultSaveLbl = isDebtOnly ? 'حفظ سند التحصيل 💵' : 'حفظ نهائي';
+    if (s1) s1.textContent = defaultSaveLbl;
+    if (s2) s2.textContent = defaultSaveLbl;
+  }
+
+  updateLiveFormCalculation();
+
+  if (focusMerchantOrDebt) {
+    const mName = (document.getElementById('inpMerchantName')?.value || '').trim();
+    const targetFocusId = mName ? (isDebtOnly ? 'inpDebtCash' : 'inpW1') : 'inpMerchantName';
+    const targetEl = document.getElementById(targetFocusId);
+    if (targetEl) {
+      setTimeout(() => {
+        targetEl.focus();
+        if (typeof targetEl.select === 'function') {
+          try { targetEl.select(); } catch (e) {}
+        }
+      }, 40);
+    }
+  }
+
+  if (showModeToast) {
+    showToast(
+      isDebtOnly
+        ? '💵 تم تفعيل وضع (سند تحصيل مديونية فقط بدون ميزان) — أدخل التاجر والمبلغ المسدد نقداً أو تحويلاً واضغط حفظ السند!'
+        : '🚛 تم التبديل إلى وضع (حركة ميزان وبيع سيارة) وإظهار حقول الأوزان والسعر والإكرامية.',
+      isDebtOnly ? '💵' : '🚛'
+    );
+  }
+}
+
 function updateLiveFormCalculation() {
   const rawW1 = document.getElementById('inpW1').value;
   const rawW2 = document.getElementById('inpW2').value;
@@ -9244,7 +9411,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v50-collapsible-prev-farms') {
+          if (k !== 'farm-sales-committee-v51-debt-collection-voucher-mode') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -10467,8 +10634,12 @@ function initFarmSalesApp() {
         distributeCustodyWaterfall({ silent: true, focusTarget: false });
       }
       updateLiveFormCalculation();
-      const carVal = (document.getElementById('inpCarNo').value || '').trim();
-      focusAndSelectField(carVal ? 'inpW1' : 'inpCarNo');
+      if (isDebtCollectionOnlyMode()) {
+        focusAndSelectField('inpDebtCash');
+      } else {
+        const carVal = (document.getElementById('inpCarNo').value || '').trim();
+        focusAndSelectField(carVal ? 'inpW1' : 'inpCarNo');
+      }
     }
   });
 
@@ -10578,11 +10749,12 @@ function initFarmSalesApp() {
       return false;
     }
 
-    // الخطوة 1: سداد المديونية السابقة للمزرعة الحالية أولاً
-    const allocDebtCash = Math.min(custCash, positivePrevDebt);
+    // الخطوة 1: سداد المديونية السابقة للمزرعة الحالية أولاً (وفي وضع سند تحصيل مديونية فقط، توجه العهدة بالكامل لسداد المديونية)
+    const debtOnlyActive = isDebtCollectionOnlyMode();
+    const allocDebtCash = debtOnlyActive ? custCash : Math.min(custCash, positivePrevDebt);
     const remCashAfterDebt = Math.max(0, custCash - allocDebtCash);
     const remDebtNeeded = Math.max(0, positivePrevDebt - allocDebtCash);
-    const allocDebtTr = Math.min(custTr, remDebtNeeded);
+    const allocDebtTr = debtOnlyActive ? custTr : Math.min(custTr, remDebtNeeded);
     const remTrAfterDebt = Math.max(0, custTr - allocDebtTr);
 
     if (inpDebtCashEl) inpDebtCashEl.value = allocDebtCash > 0 ? fmtMoney(allocDebtCash) : '';
@@ -10763,6 +10935,7 @@ function initFarmSalesApp() {
     if (codeDispEl) codeDispEl.textContent = 'يُحدد تلقائياً';
     const suggestBoxEl = document.getElementById('merchantSuggestBox');
     if (suggestBoxEl) suggestBoxEl.classList.add('hidden');
+    setSaleEntryMode('sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
     setSaleFormActionLabels('حفظ نهائي', false);
     resetPrevFarmsCollapsibleToDefault();
     applyStickySaleDefaults();
@@ -10779,6 +10952,27 @@ function initFarmSalesApp() {
   if (btnInlineCancelEl) {
     btnInlineCancelEl.addEventListener('click', () => {
       cancelOrClearCurrentSaleEntry(true);
+    });
+  }
+
+  const btnModeScaleEl = document.getElementById('btnModeScaleSale');
+  if (btnModeScaleEl) {
+    btnModeScaleEl.addEventListener('click', () => {
+      setSaleEntryMode('sale', { clearWeightFields: true, focusMerchantOrDebt: true, showModeToast: true });
+    });
+  }
+
+  const btnModeDebtOnlyEl = document.getElementById('btnModeDebtCollectionOnly');
+  if (btnModeDebtOnlyEl) {
+    btnModeDebtOnlyEl.addEventListener('click', () => {
+      setSaleEntryMode('debt_only', { clearWeightFields: true, focusMerchantOrDebt: true, showModeToast: true });
+    });
+  }
+
+  const btnSwitchBackScaleEl = document.getElementById('btnSwitchBackToScaleMode');
+  if (btnSwitchBackScaleEl) {
+    btnSwitchBackScaleEl.addEventListener('click', () => {
+      setSaleEntryMode('sale', { clearWeightFields: true, focusMerchantOrDebt: true, showModeToast: true });
     });
   }
 
@@ -10871,7 +11065,9 @@ function initFarmSalesApp() {
     'inpPrice',
     'inpTip',
     'inpCashSales',
-    'inpCreditSales'
+    'inpCreditSales',
+    'inpDebtCash',
+    'inpDebtTransfer'
   ];
 
   fastEnterSaleFields.forEach((fieldId) => {
@@ -10903,7 +11099,7 @@ function initFarmSalesApp() {
       }
 
       if (fieldId === 'inpCarNo') {
-        focusAndSelectField('inpW1');
+        focusAndSelectField(isDebtCollectionOnlyMode() ? 'inpDebtCash' : 'inpW1');
         return;
       }
 
@@ -10954,6 +11150,36 @@ function initFarmSalesApp() {
         return;
       }
 
+      if (fieldId === 'inpDebtCash') {
+        updateLiveFormCalculation();
+        if (isDebtCollectionOnlyMode()) {
+          const dcVal = parseNum(document.getElementById('inpDebtCash').value) || 0;
+          const dtVal = parseNum(document.getElementById('inpDebtTransfer').value) || 0;
+          if (dcVal > 0 || dtVal > 0) {
+            const btnSave = document.getElementById('btnSaveSale');
+            if (btnSave) btnSave.click();
+          } else {
+            focusAndSelectField('inpDebtTransfer');
+          }
+        }
+        return;
+      }
+
+      if (fieldId === 'inpDebtTransfer') {
+        updateLiveFormCalculation();
+        if (isDebtCollectionOnlyMode()) {
+          const dtVal = parseNum(document.getElementById('inpDebtTransfer').value) || 0;
+          const dtType = document.getElementById('selDebtTransferType')?.value || '';
+          if (dtVal > 0 && !dtType) {
+            document.getElementById('selDebtTransferType')?.focus();
+          } else {
+            const btnSave = document.getElementById('btnSaveSale');
+            if (btnSave) btnSave.click();
+          }
+        }
+        return;
+      }
+
       // 4) باقي الفاتورة آجل ⬅️ حفظ الحركة النهائية (أو حفظ مؤقت إذا كانت وزنة 1 فقط)
       if (fieldId === 'inpCreditSales') {
         updateLiveFormCalculation();
@@ -10984,6 +11210,7 @@ function initFarmSalesApp() {
     const item = (dayObj.pendingSales || []).find(x => x.id === pid);
     if (!item) return;
     activeRecalledPendingId = item.id;
+    setSaleEntryMode('sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
     document.getElementById('editSaleId').value = '';
     document.getElementById('inpMerchantName').value = item.merchant;
     document.getElementById('inpScaleNo').value = item.scaleNo || '';
@@ -11174,19 +11401,35 @@ function initFarmSalesApp() {
       showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن إضافة أو تعديل حركات بيع إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
       return;
     }
-    const checkW1 = parseNum(document.getElementById('inpW1').value) || 0;
-    const checkW2 = parseNum(document.getElementById('inpW2').value) || 0;
-    if (checkW2 <= 0) {
-      document.getElementById('inpW2').focus();
-      showToast('⚠️ لا يمكن حفظ النتيجة النهائية إلا بعد إدخال (الوزنة الثانية)! إذا كانت السيارة تحت التحميل اضغط (⏳ حفظ مؤقت للوزنة الأولى).', '⚠️');
-      return;
-    }
-    if (checkW2 < checkW1) {
-      const wAlert = document.getElementById('weightValidationAlert');
-      if (wAlert) wAlert.classList.remove('hidden');
-      document.getElementById('inpW2').focus();
-      showToast('خطأ في الميزان: الوزنة الثانية يجب أن تكون أكبر من أو تساوي الوزنة الأولى!', '❌');
-      return;
+    const debtOnlyMode = isDebtCollectionOnlyMode();
+    const checkW1 = debtOnlyMode ? 0 : (parseNum(document.getElementById('inpW1').value) || 0);
+    const checkW2 = debtOnlyMode ? 0 : (parseNum(document.getElementById('inpW2').value) || 0);
+    const checkDebtCash = parseNum(document.getElementById('inpDebtCash').value) || 0;
+    const checkDebtTr = parseNum(document.getElementById('inpDebtTransfer').value) || 0;
+    const checkPrevCash = parseNum(document.getElementById('inpPrevCash').value) || 0;
+    const checkPrevTr = parseNum(document.getElementById('inpPrevTransfer').value) || 0;
+    const totalDebtOrPrevCollected = checkDebtCash + checkDebtTr + checkPrevCash + checkPrevTr;
+    const isStandaloneDebtVoucher = Boolean(debtOnlyMode || (checkW1 <= 0 && checkW2 <= 0 && totalDebtOrPrevCollected > 0));
+
+    if (isStandaloneDebtVoucher) {
+      if (totalDebtOrPrevCollected <= 0) {
+        focusAndSelectField('inpDebtCash');
+        showToast('⚠️ في وضع (سند تحصيل مديونية فقط): يرجى إدخال المبلغ المحصل نقداً أو تحويلاً أولاً قبل الحفظ!', '⚠️');
+        return;
+      }
+    } else {
+      if (checkW2 <= 0) {
+        document.getElementById('inpW2').focus();
+        showToast('⚠️ لا يمكن حفظ النتيجة النهائية إلا بعد إدخال (الوزنة الثانية)! إذا كانت السيارة تحت التحميل اضغط (⏳ حفظ مؤقت وزنة 1) أو اختر وضع (💵 سند تحصيل مديونية فقط).', '⚠️');
+        return;
+      }
+      if (checkW2 < checkW1) {
+        const wAlert = document.getElementById('weightValidationAlert');
+        if (wAlert) wAlert.classList.remove('hidden');
+        document.getElementById('inpW2').focus();
+        showToast('خطأ في الميزان: الوزنة الثانية يجب أن تكون أكبر من أو تساوي الوزنة الأولى!', '❌');
+        return;
+      }
     }
     const enteredScale = Number(document.getElementById('inpScaleNo').value) || getNextSequentialScaleNo();
     const scaleConflict = [...(daySales || []), ...(dayObj.pendingSales || [])].find(x => {
@@ -11203,11 +11446,13 @@ function initFarmSalesApp() {
       return;
     }
 
-    const enteredPrice = parseNum(document.getElementById('inpPrice').value) || 0;
-    const enteredTip = parseNum(document.getElementById('inpTip').value) || 0;
+    const enteredPrice = isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpPrice').value) || 0);
+    const enteredTip = isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpTip').value) || 0);
 
-    appState.defaultPrice = enteredPrice;
-    appState.defaultTip = enteredTip;
+    if (!isStandaloneDebtVoucher && enteredPrice > 0) {
+      appState.defaultPrice = enteredPrice;
+      appState.defaultTip = enteredTip;
+    }
     appState.lastScaleNo = Math.max(Number(appState.lastScaleNo) || 0, enteredScale);
 
     const existingSaleForAudit = editId ? daySales.find(x => x.id === editId) : null;
@@ -11218,20 +11463,21 @@ function initFarmSalesApp() {
         )
       : null;
     const candidateSaleFields = {
+      entryMode: isStandaloneDebtVoucher ? 'debt_only' : 'sale',
       merchant: mName,
       scaleNo: enteredScale,
       carNo: Number(document.getElementById('inpCarNo').value) || '',
-      w1: parseNum(document.getElementById('inpW1').value) || 0,
-      w2: parseNum(document.getElementById('inpW2').value) || 0,
+      w1: isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpW1').value) || 0),
+      w2: isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpW2').value) || 0),
       price: enteredPrice,
       tip: enteredTip,
       custodyCash: parseNum(document.getElementById('inpCustodyCash').value) || 0,
       custodyTransfer: parseNum(document.getElementById('inpCustodyTransfer').value) || 0,
       custodyTransferType: document.getElementById('selCustodyTransferType').value,
-      cashSales: parseNum(document.getElementById('inpCashSales').value) || 0,
-      transferSales: parseNum(document.getElementById('inpTransferSales').value) || 0,
-      transferSalesType: document.getElementById('selTransferSalesType').value,
-      creditSales: parseNum(document.getElementById('inpCreditSales').value) || 0,
+      cashSales: isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpCashSales').value) || 0),
+      transferSales: isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpTransferSales').value) || 0),
+      transferSalesType: isStandaloneDebtVoucher ? '' : document.getElementById('selTransferSalesType').value,
+      creditSales: isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpCreditSales').value) || 0),
       debtCash: parseNum(document.getElementById('inpDebtCash').value) || 0,
       debtTransfer: parseNum(document.getElementById('inpDebtTransfer').value) || 0,
       debtTransferType: document.getElementById('selDebtTransferType').value,
@@ -11257,12 +11503,16 @@ function initFarmSalesApp() {
       const sameMerchant = String(r.merchant || '').trim() === rowObj.merchant;
       const sameCar = String(r.carNo || '').trim() === String(rowObj.carNo || '').trim();
       const sameWeights = Number(r.w1) === Number(rowObj.w1) && Number(r.w2) === Number(rowObj.w2);
+      const hasWeights = Number(rowObj.w1) > 0 || Number(rowObj.w2) > 0;
       const sameFinancials = Number(r.price) === Number(rowObj.price) &&
         Number(r.cashSales) === Number(rowObj.cashSales) &&
         Number(r.creditSales) === Number(rowObj.creditSales) &&
         Number(r.transferSales) === Number(rowObj.transferSales) &&
-        Number(r.debtCash) === Number(rowObj.debtCash);
-      return (sameMerchant && sameCar && sameWeights) || (sameMerchant && sameWeights && sameFinancials);
+        Number(r.debtCash) === Number(rowObj.debtCash) &&
+        Number(r.debtTransfer) === Number(rowObj.debtTransfer) &&
+        Number(r.prevCash) === Number(rowObj.prevCash) &&
+        Number(r.prevTransfer) === Number(rowObj.prevTransfer);
+      return (hasWeights && sameMerchant && sameCar && sameWeights) || (sameMerchant && sameWeights && sameFinancials);
     });
     if (isDuplicateSale) {
       showToast('❌ لا يُسمح بحفظ سجلين بنفس البيانات في جدول حركات البيع المسجلة!', '⚠️');
@@ -11363,6 +11613,8 @@ function initFarmSalesApp() {
       const id = editBtn.getAttribute('data-edit-sale');
       const row = appState.days[appState.currentDay].sales.find(x => x.id === id);
       if (!row) return;
+      const compRow = computeSaleRow(row);
+      setSaleEntryMode(compRow.isDebtCollectionOnly ? 'debt_only' : 'sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
       document.getElementById('editSaleId').value = row.id;
       document.getElementById('inpMerchantName').value = row.merchant;
       document.getElementById('inpScaleNo').value = row.scaleNo || '';
