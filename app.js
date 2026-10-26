@@ -6928,7 +6928,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V46',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V47',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -8930,7 +8930,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v46-login-and-merchants-fix') {
+          if (k !== 'farm-sales-committee-v47-cancel-entry-and-clean-ui') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -10150,7 +10150,48 @@ function initFarmSalesApp() {
     calculateAndFillRemainingCredit(true);
   });
 
-    const btnInlineW1 = document.getElementById('btnInlineSavePendingW1');
+  function setSaleFormActionLabels(saveText = 'حفظ نهائي', isEditingOrRecalling = false) {
+    const s1 = document.getElementById('btnSaveSaleText');
+    const s2 = document.getElementById('btnInlineSaveSaleText');
+    if (s1) s1.textContent = saveText;
+    if (s2) s2.textContent = saveText;
+    const cancelText = isEditingOrRecalling ? 'إلغاء التعديل' : 'إلغاء الإدخال';
+    const c1 = document.getElementById('btnCancelEditSaleText');
+    const c2 = document.getElementById('btnInlineCancelSaleText');
+    if (c1) c1.textContent = cancelText;
+    if (c2) c2.textContent = cancelText;
+  }
+
+  function cancelOrClearCurrentSaleEntry(showFeedbackToast = true) {
+    const wasEditing = Boolean((document.getElementById('editSaleId') && document.getElementById('editSaleId').value) || activeRecalledPendingId);
+    activeRecalledPendingId = '';
+    const formEl = document.getElementById('saleEntryForm');
+    if (formEl) formEl.reset();
+    const editIdEl = document.getElementById('editSaleId');
+    if (editIdEl) editIdEl.value = '';
+    const codeDispEl = document.getElementById('dispMerchantCode');
+    if (codeDispEl) codeDispEl.textContent = 'يُحدد تلقائياً';
+    const suggestBoxEl = document.getElementById('merchantSuggestBox');
+    if (suggestBoxEl) suggestBoxEl.classList.add('hidden');
+    setSaleFormActionLabels('حفظ نهائي', false);
+    applyStickySaleDefaults();
+    updateLiveFormCalculation();
+    if (showFeedbackToast) {
+      showToast(
+        wasEditing ? 'تم إلغاء التعديل وتفريغ خانات الإدخال بنجاح ✕' : 'تم إلغاء وتفريغ الإدخال الحالي بنجاح ✕',
+        '↩️'
+      );
+    }
+  }
+
+  const btnInlineCancelEl = document.getElementById('btnInlineCancelSale');
+  if (btnInlineCancelEl) {
+    btnInlineCancelEl.addEventListener('click', () => {
+      cancelOrClearCurrentSaleEntry(true);
+    });
+  }
+
+  const btnInlineW1 = document.getElementById('btnInlineSavePendingW1');
   if (btnInlineW1) {
     btnInlineW1.addEventListener('click', () => {
       const mainBtnW1 = document.getElementById('btnSavePendingW1');
@@ -10352,8 +10393,7 @@ function initFarmSalesApp() {
     document.getElementById('inpPrevTransfer').value = item.prevTransfer ? fmtMoney(item.prevTransfer) : '';
     document.getElementById('selPrevTransferType').value = item.prevTransferType || '';
     document.getElementById('inpNotes').value = item.notes || '';
-    document.getElementById('btnCancelEditSale').classList.remove('hidden');
-    document.getElementById('btnSaveSaleText').textContent = `حفظ نهائي (ميزان ${item.scaleNo || ''})`;
+    setSaleFormActionLabels(`حفظ نهائي (ميزان ${item.scaleNo || ''})`, true);
     updateMerchantSuggestions();
     updateLiveFormCalculation();
     document.getElementById('saleFormCard').scrollIntoView({ behavior: 'smooth' });
@@ -10371,10 +10411,7 @@ function initFarmSalesApp() {
     const dayObj = appState.days[appState.currentDay];
     dayObj.pendingSales = (dayObj.pendingSales || []).filter(x => x.id !== pid);
     if (activeRecalledPendingId === pid) {
-      activeRecalledPendingId = '';
-      document.getElementById('saleEntryForm').reset();
-      document.getElementById('btnCancelEditSale').classList.add('hidden');
-      document.getElementById('btnSaveSaleText').textContent = 'حفظ نهائي';
+      cancelOrClearCurrentSaleEntry(false);
     }
     saveState(true);
     renderAll();
@@ -10486,12 +10523,7 @@ function initFarmSalesApp() {
     else dayObj.pendingSales.push(pendingObj);
     dayObj.pendingSales = sortSalesListByScaleNo(dayObj.pendingSales);
 
-    activeRecalledPendingId = '';
-    document.getElementById('saleEntryForm').reset();
-    document.getElementById('editSaleId').value = '';
-    document.getElementById('btnCancelEditSale').classList.add('hidden');
-    document.getElementById('btnSaveSaleText').textContent = 'حفظ نهائي';
-    document.getElementById('dispMerchantCode').textContent = 'يُحدد تلقائياً';
+    cancelOrClearCurrentSaleEntry(false);
     saveState(true);
     renderAll();
     showToast(`تم حجز مسلسل الميزان رقم (${enteredScale}) للتاجر (${mName}) وحفظ ترتيبه في جدول حركات البيع المسجلة (وزنة أولى: ${fmtMoney(w1Val)} كجم)!`, '⏳');
@@ -10660,26 +10692,13 @@ function initFarmSalesApp() {
         return true;
       });
     }
-    activeRecalledPendingId = '';
-
-    document.getElementById('saleEntryForm').reset();
-    document.getElementById('editSaleId').value = '';
-    document.getElementById('btnCancelEditSale').classList.add('hidden');
-    document.getElementById('btnSaveSaleText').textContent = 'حفظ نهائي';
-    document.getElementById('dispMerchantCode').textContent = 'يُحدد تلقائياً';
-    updateLiveFormCalculation();
+    cancelOrClearCurrentSaleEntry(false);
     saveState(true);
     renderAll();
   });
 
   document.getElementById('btnCancelEditSale').addEventListener('click', () => {
-    activeRecalledPendingId = '';
-    document.getElementById('saleEntryForm').reset();
-    document.getElementById('editSaleId').value = '';
-    document.getElementById('btnCancelEditSale').classList.add('hidden');
-    document.getElementById('btnSaveSaleText').textContent = 'حفظ نهائي';
-    applyStickySaleDefaults();
-    updateLiveFormCalculation();
+    cancelOrClearCurrentSaleEntry(true);
   });
 
   // Edit / Delete / Recall Sale Row Delegation (Protected by Sales Permission)
@@ -10754,8 +10773,7 @@ function initFarmSalesApp() {
       document.getElementById('selPrevTransferType').value = row.prevTransferType || '';
       document.getElementById('inpNotes').value = row.notes || '';
 
-      document.getElementById('btnCancelEditSale').classList.remove('hidden');
-      document.getElementById('btnSaveSaleText').textContent = 'حفظ التعديل';
+      setSaleFormActionLabels('حفظ التعديل', true);
       updateLiveFormCalculation();
       document.getElementById('saleFormCard').scrollIntoView({ behavior: 'smooth' });
       return;

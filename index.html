@@ -23,7 +23,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=46" />
+  <link rel="stylesheet" href="./style.css?v=47" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -700,6 +700,10 @@
           <!-- Inline Form Action Buttons at end of form for both Phone & Desktop -->
           <div id="inlineSaleFormActionsMobile" class="flex items-center justify-end gap-2 pt-2.5 border-t border-slate-200 flex-wrap">
             <div class="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+              <button type="button" id="btnInlineCancelSale" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
+                <span>✕</span>
+                <span id="btnInlineCancelSaleText">إلغاء الإدخال</span>
+              </button>
               <button type="button" id="btnInlineSavePendingW1" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
                 <span>⏳</span>
                 <span>حفظ مؤقت وزنة 1</span>
@@ -730,10 +734,11 @@
                 </button>
               </div>
 
-              <!-- Pinned Action Buttons (⏳ حفظ مؤقت وزنة 1 + 💾 حفظ نهائي + إلغاء التعديل) -->
+              <!-- Pinned Action Buttons (✕ إلغاء الإدخال + ⏳ حفظ مؤقت وزنة 1 + 💾 حفظ نهائي) -->
               <div class="flex items-center gap-1.5 md:gap-2 flex-1 sm:flex-initial justify-end w-full sm:w-auto">
-                <button type="button" id="btnCancelEditSale" class="hidden px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl bg-slate-200 text-slate-900 font-extrabold text-xs hover:bg-slate-300 shrink-0">
-                  إلغاء التعديل
+                <button type="button" id="btnCancelEditSale" class="px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-300/60 font-extrabold text-xs md:text-sm shadow transition flex items-center justify-center gap-1 shrink-0" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
+                  <span>✕</span>
+                  <span id="btnCancelEditSaleText">إلغاء الإدخال</span>
                 </button>
                 <button type="button" id="btnSavePendingW1" class="flex-1 sm:flex-initial px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1">
                   <span>⏳</span>
@@ -1219,15 +1224,6 @@
               <span>📥</span>
               <span>تحميل شيت الإكسيل (.xlsx)</span>
             </button>
-            <button id="btnQuickExportJsonBackup" type="button" class="px-3.5 py-2 rounded-xl bg-indigo-900 hover:bg-indigo-800 text-amber-300 font-extrabold text-xs transition flex items-center gap-1.5 shadow border border-amber-400/60" title="تحميل نسخة احتياطية شاملة (.json) لكل المزارع والتجار والمستخدمين والحركات">
-              <span>📦</span>
-              <span>تحميل نسخة احتياطية شاملة (.json)</span>
-            </button>
-            <label for="fileRestoreJsonBackup" class="cursor-pointer px-3 py-2 rounded-xl bg-teal-800 hover:bg-teal-700 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow border border-teal-400/50" title="استرجاع نسخة احتياطية شاملة (.json) محفوظة مسبقاً">
-              <span>📂</span>
-              <span>استرجاع نسخة (.json)</span>
-            </label>
-            <input id="fileRestoreJsonBackup" type="file" accept=".json,application/json" class="hidden" />
             <button id="btnQuickForceUpdate" type="button" class="px-3.5 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-extrabold text-xs transition flex items-center gap-1.5 shadow" title="تحديث ملفات التطبيق فوراً ومسح الكاش القديم">
               <span>🔄</span>
               <span>تحديث نسخة التطبيق</span>
@@ -1765,6 +1761,7 @@
               <span>📂</span>
               <span>استرجاع نسخة احتياطية شاملة (.json)</span>
             </button>
+            <input id="fileRestoreJsonBackup" type="file" accept=".json,application/json" class="hidden" />
           </div>
         </div>
 
@@ -2287,7 +2284,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=46"></script>
-  <script src="./app.js?v=46"></script>
+  <script src="./excel-template.js?v=47"></script>
+  <script src="./app.js?v=47"></script>
 </body>
 </html>
