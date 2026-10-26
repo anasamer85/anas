@@ -82,6 +82,7 @@ function getDefaultState(customFarmName = 'أبوذكري') {
       pendingSales: [],
       expenses: [],
       deliveredCash: 0,
+      carriedForwardCash: 0,
       isLocked: false,
       lockedBy: '',
       lockedAtTxt: '',
@@ -849,6 +850,7 @@ function toggleDayLockState(dayNum = appState.currentDay) {
     renderAll();
     showToast(`🔓 تم فك قفل (يوم ${d} — ${dayObj.dateLabel}) بواسطة (${actor}) وإعادة فتحه للتعديل!`, '🔓');
   } else {
+    const pendCnt = Array.isArray(dayObj.pendingSales) ? dayObj.pendingSales.length : 0;
     dayObj.isLocked = true;
     dayObj.lockedBy = actor;
     dayObj.lockedAtTxt = nowTxt;
@@ -860,7 +862,8 @@ function toggleDayLockState(dayNum = appState.currentDay) {
     if (editIdEl) editIdEl.value = '';
     saveState(true, false);
     renderAll();
-    showToast(`🔒 تم إقفال واعتماد (يوم ${d} — ${dayObj.dateLabel}) محاسبياً وتشميعه ضد أي تعديل أو حذف!`, '🔒');
+    const pendWarnTxt = pendCnt > 0 ? ` (⚠️ تنبيه رقابي: يوجد ${pendCnt} سيارة مؤقتة تحت التحميل لم تستكمل الوزنة الثانية!)` : '';
+    showToast(`🔒 تم إقفال واعتماد (يوم ${d} — ${dayObj.dateLabel}) محاسبياً وتشميعه ضد أي تعديل أو حذف!${pendWarnTxt}`, '🔒');
   }
   return true;
 }
@@ -1719,7 +1722,7 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
       chosenLabel = cLbl !== defaultLbl ? cLbl : lLbl;
     }
 
-    // اختيار النقدية المسلمة للخزينة بذكاء بناءً على الطابع الزمني (deliveredCashUpdatedAt) دون مسح قيم الأيام الأخرى أثناء الرفع أو السحب
+    // اختيار النقدية المسلمة للخزينة والرصيد النقدي المرحّل للغد بذكاء بناءً على الطابع الزمني دون مسح قيم الأيام الأخرى أثناء الرفع أو السحب
     const lDeliv = Number(lDay.deliveredCash) || 0;
     const cDeliv = Number(cDay.deliveredCash) || 0;
     const lDelivTs = Number(lDay.deliveredCashUpdatedAt) || 0;
@@ -1733,6 +1736,21 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
       chosenDeliveredCash = lDeliv;
     } else if (!preferCloud && cDeliv > 0 && lDeliv === 0 && !lHasMov && cHasMov) {
       chosenDeliveredCash = cDeliv;
+    }
+
+    const lCarry = Number(lDay.carriedForwardCash) || 0;
+    const cCarry = Number(cDay.carriedForwardCash) || 0;
+    const lCarryTs = Number(lDay.carriedForwardCashUpdatedAt) || 0;
+    const cCarryTs = Number(cDay.carriedForwardCashUpdatedAt) || 0;
+    let chosenCarriedForwardCash = preferCloud ? cCarry : lCarry;
+    if (lCarryTs > 0 || cCarryTs > 0) {
+      chosenCarriedForwardCash = lCarryTs > cCarryTs ? lCarry : (cCarryTs > lCarryTs ? cCarry : (preferCloud ? cCarry : lCarry));
+    } else if (!preferCloud && lCarry === 0 && cCarry > 0 && d !== Number(appState.currentDay)) {
+      chosenCarriedForwardCash = cCarry;
+    } else if (preferCloud && cCarry === 0 && lCarry > 0) {
+      chosenCarriedForwardCash = lCarry;
+    } else if (!preferCloud && cCarry > 0 && lCarry === 0 && !lHasMov && cHasMov) {
+      chosenCarriedForwardCash = cCarry;
     }
 
     const mergedIsHidden = hasAnyMovement
@@ -1769,6 +1787,8 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
       expenses: mergedExpenses,
       deliveredCash: chosenDeliveredCash,
       deliveredCashUpdatedAt: Math.max(lDelivTs, cDelivTs),
+      carriedForwardCash: chosenCarriedForwardCash,
+      carriedForwardCashUpdatedAt: Math.max(lCarryTs, cCarryTs),
       isLocked: chosenIsLocked,
       lockedBy: chosenLockedBy,
       lockedAtTxt: chosenLockedAtTxt,
@@ -2815,18 +2835,44 @@ function computeDaySummary(dayNum) {
   });
 
   const avgPrice = sumNetW > 0 ? (sumBase / sumNetW) : 0;
+  const avgCarWeight = countCars > 0 ? Math.round(sumNetW / countCars) : 0;
+  const pendingCarsCount = pendingRows.length;
   const sumExpenses = expenses.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
 
+  // 1. حساب حركة الذمم والمديونية اليومية (المطابقة الاستحقاقية للمزرعة الحالية)
+  let openingDayDebt = 0;
+  for (let prevD = 1; prevD < dayNum; prevD++) {
+    const prevDayObj = appState.days && appState.days[prevD];
+    const prevSales = (prevDayObj && prevDayObj.sales) || [];
+    prevSales.forEach(rawR => {
+      const cr = Number(rawR.creditSales) || 0;
+      const dc = Number(rawR.debtCash) || 0;
+      const dt = Number(rawR.debtTransfer) || 0;
+      openingDayDebt += (cr - dc - dt);
+    });
+  }
+  const dayDebtCollected = sumDebtCash + sumDebtTransfer;
+  const netDayDebtChange = sumCreditSales - dayDebtCollected;
+  const closingDayDebt = openingDayDebt + netDayDebtChange;
+
+  // 2. حساب ميزان الخزينة النقدية شامل الرصيد النقدي المرحّل بين الأيام
+  const openingCashFromPrevDay = dayNum > 1
+    ? (Number(appState.days && appState.days[dayNum - 1] && appState.days[dayNum - 1].carriedForwardCash) || 0)
+    : (Number(dayObj.openingCash) || 0);
   const totalCashBeforeExpenses = sumCashSales + sumDebtCash + sumPrevCash;
   const netCashInBox = totalCashBeforeExpenses - sumExpenses;
+  const totalAvailableCashInBox = openingCashFromPrevDay + netCashInBox;
   const deliveredCash = Number(dayObj.deliveredCash) || 0;
-  const cashBoxDiff = netCashInBox - deliveredCash;
+  const carriedForwardCash = Number(dayObj.carriedForwardCash) || 0;
+  const totalSettledAndCarriedCash = deliveredCash + carriedForwardCash;
+  const cashBoxDiff = totalAvailableCashInBox - totalSettledAndCarriedCash;
 
   const currentFarmTransfers = sumTransferSales + sumDebtTransfer;
   const totalAllTransfers = currentFarmTransfers + sumPrevTransfer;
 
   const weightAuditDiff = sumNetW - (sumW2 - sumW1);
   const invoiceAuditDiff = Number(((sumPaidAndCredit - sumTotalWithTip) - sumInvoiceDiff).toFixed(2));
+  const isInvoicesBalanced = Math.abs(sumInvoiceDiff) <= 1 && invoiceAuditDiff === 0;
 
   return {
     dayNum,
@@ -2836,6 +2882,8 @@ function computeDaySummary(dayNum) {
     allOrderedRows,
     expenses,
     countCars,
+    pendingCarsCount,
+    avgCarWeight,
     sumW1,
     sumW2,
     sumNetW,
@@ -2848,19 +2896,28 @@ function computeDaySummary(dayNum) {
     sumCreditSales,
     sumDebtCash,
     sumDebtTransfer,
+    dayDebtCollected,
+    openingDayDebt,
+    netDayDebtChange,
+    closingDayDebt,
     sumPrevCash,
     sumPrevTransfer,
     sumPaidAndCredit,
     sumInvoiceDiff,
     sumExpenses,
+    openingCashFromPrevDay,
     totalCashBeforeExpenses,
     netCashInBox,
+    totalAvailableCashInBox,
     deliveredCash,
+    carriedForwardCash,
+    totalSettledAndCarriedCash,
     cashBoxDiff,
     currentFarmTransfers,
     totalAllTransfers,
     weightAuditDiff,
-    invoiceAuditDiff
+    invoiceAuditDiff,
+    isInvoicesBalanced
   };
 }
 
@@ -3043,6 +3100,12 @@ function renderDailyView() {
   if (expFormEl) expFormEl.classList.toggle('hidden', !canEditExpensesToday);
   const delivInpEl = document.getElementById('inpDeliveredCash');
   if (delivInpEl) delivInpEl.disabled = !canEditSalesToday;
+  const carryInpEl = document.getElementById('inpCarriedForwardCash');
+  if (carryInpEl) carryInpEl.disabled = !canEditSalesToday;
+  const btnDelivAllEl = document.getElementById('btnDeliverAllAvailableCash');
+  if (btnDelivAllEl) btnDelivAllEl.classList.toggle('hidden', !canEditSalesToday);
+  const btnCarryRemEl = document.getElementById('btnCarryForwardRemainingCash');
+  if (btnCarryRemEl) btnCarryRemEl.classList.toggle('hidden', !canEditSalesToday);
   const jumpSaleBtn = document.getElementById('btnJumpSaleForm');
   if (jumpSaleBtn) jumpSaleBtn.classList.toggle('hidden', !canEditSalesToday);
   const jumpExpBtn = document.getElementById('btnJumpExpenseForm');
@@ -3187,53 +3250,123 @@ function renderDailyView() {
     });
   }
 
+  const pendStatusHtml = summary.pendingCarsCount > 0
+    ? `<span class="px-2 py-0.5 rounded bg-amber-200 text-rose-900 border border-rose-400 font-extrabold">⚠️ ${fmtInt(summary.pendingCarsCount)} سيارة لم تستكمل وزنة 2!</span>`
+    : `<strong class="text-emerald-800">0 سيارة (لا توجد سيارات معلقة ✓)</strong>`;
+
   document.getElementById('tbPillar1').innerHTML = `
-    <div class="flex justify-between py-1 border-b"><span>عدد حركات البيع (سيارات):</span><strong>${fmtInt(summary.countCars)}</strong></div>
+    <div class="flex justify-between py-1 border-b">
+      <span>عدد السيارات المكتملة (متوسط السيارة):</span>
+      <strong>${fmtInt(summary.countCars)} سيارة <span class="text-[11px] text-slate-500">(${fmtInt(summary.avgCarWeight)} كجم)</span></strong>
+    </div>
+    <div class="flex justify-between items-center py-1 border-b ${summary.pendingCarsCount > 0 ? 'bg-amber-50 px-1.5 rounded border-amber-300' : ''}">
+      <span>إجمالي السيارات المؤقتة (تحت التحميل):</span>
+      ${pendStatusHtml}
+    </div>
     <div class="flex justify-between py-1 border-b"><span>إجمالي الوزنة الثانية (القائم):</span><strong>${fmtInt(summary.sumW2)} كجم</strong></div>
     <div class="flex justify-between py-1 border-b"><span>(-) إجمالي الوزنة الأولى (الفارغ):</span><strong>${fmtInt(summary.sumW1)} كجم</strong></div>
-    <div class="flex justify-between py-1 border-b"><span>صافي الوزن المحسوب:</span><strong>${fmtInt(summary.sumNetW)} كجم</strong></div>
-    <div class="flex justify-between p-1.5 rounded bg-emerald-100 text-emerald-950 font-extrabold">
+    <div class="flex justify-between py-1 border-b bg-sky-50/70 px-1.5 rounded font-extrabold text-sky-950">
+      <span>(=) صافي الوزن المحسوب:</span>
+      <strong>${fmtInt(summary.sumNetW)} كجم</strong>
+    </div>
+    <div class="flex justify-between py-1 border-b text-indigo-950">
+      <span>متوسط سعر الكيلو المرجح لليوم:</span>
+      <strong>${fmtDec(summary.avgPrice)} ج.م/كجم <span class="text-[10px] text-slate-500">(إكرامية: ${fmtInt(summary.sumTip)})</span></strong>
+    </div>
+    <div class="flex justify-between p-1.5 rounded ${summary.weightAuditDiff === 0 ? 'bg-emerald-100 text-emerald-950' : 'bg-rose-100 text-rose-900'} font-extrabold">
       <span>فرق ميزان الأوزان:</span>
       <span>${fmtInt(summary.weightAuditDiff)} (${summary.weightAuditDiff === 0 ? 'وزن مطابق ✓' : 'راجع الوزن!'})</span>
     </div>
   `;
 
+  const invBalancedOk = Math.abs(summary.sumInvoiceDiff) <= 1;
   document.getElementById('tbPillar2').innerHTML = `
-    <div class="flex justify-between py-1 border-b bg-amber-50 px-1.5 rounded font-extrabold"><span>إجمالي المبيعات شامل الإكرامية:</span><span>${fmtDec(summary.sumTotalWithTip)}</span></div>
-    <div class="flex justify-between py-1 border-b"><span>إجمالي غير النقدي يوم البيع (آجل+تحويل):</span><strong>${fmtInt(summary.sumCreditSales + summary.sumTransferSales)}</strong></div>
-    <div class="flex justify-between py-1 border-b text-teal-900"><span>تحويلات المزرعة الحالية (مبيعات+مديونيات):</span><strong>${fmtInt(summary.currentFarmTransfers)}</strong></div>
-    <div class="flex justify-between py-1 border-b text-purple-900"><span>تحويلات مزارع سابقة (لا تخصم من الحالية):</span><strong>${fmtInt(summary.sumPrevTransfer)}</strong></div>
+    <div class="flex justify-between py-1 border-b bg-amber-50 px-1.5 rounded font-extrabold"><span>إجمالي المبيعات شامل الإكرامية:</span><span>${fmtDec(summary.sumTotalWithTip)} ج.م</span></div>
+    <div class="flex justify-between py-1 border-b"><span>إجمالي غير النقدي يوم البيع (آجل+تحويل):</span><strong>${fmtInt(summary.sumCreditSales + summary.sumTransferSales)} ج.م</strong></div>
+    <div class="flex justify-between py-1 border-b text-teal-900"><span>تحويلات المزرعة الحالية (مبيعات+مديونيات):</span><strong>${fmtInt(summary.currentFarmTransfers)} ج.م</strong></div>
+    <div class="flex justify-between py-1 border-b text-purple-900"><span>تحويلات مزارع سابقة (لا تخصم من الحالية):</span><strong>${fmtInt(summary.sumPrevTransfer)} ج.م</strong></div>
     <div class="flex justify-between p-1.5 rounded bg-emerald-100 text-emerald-950 font-extrabold">
       <span>إجمالي جميع التحويلات اليوم:</span>
       <span>${fmtInt(summary.totalAllTransfers)} ج.م</span>
     </div>
+    <div class="flex justify-between p-1.5 rounded border ${invBalancedOk ? 'bg-slate-50 border-slate-200 text-emerald-900' : 'bg-rose-50 border-rose-300 text-rose-900'} font-extrabold text-[11px]">
+      <span>مطابقة توازن الفواتير (المسدد والآجل - الفواتير):</span>
+      <span>${fmtDec(summary.sumInvoiceDiff)} ج.م (${invBalancedOk ? 'فواتير متزنة ✓' : '⚠️ فرق توازن!'})</span>
+    </div>
+    <!-- معادلة المطابقة الاستحقاقية لحركة الذمم والمديونية اليومية -->
+    <div class="mt-1.5 p-2 rounded-xl bg-indigo-50/80 border border-indigo-200 space-y-1 text-[11px]">
+      <div class="font-extrabold text-indigo-950 border-b border-indigo-200 pb-1 flex items-center justify-between">
+        <span>📌 حركة الذمم والمديونية اليومية (المزرعة الحالية):</span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900 text-amber-300">مطابقة استحقاقية</span>
+      </div>
+      <div class="flex justify-between text-slate-700">
+        <span>مديونية أول اليوم (مرحّلة من الأيام السابقة):</span>
+        <strong>${fmtInt(summary.openingDayDebt)} ج.م</strong>
+      </div>
+      <div class="flex justify-between text-amber-950">
+        <span>(+) آجل فواتير اليوم المضاف:</span>
+        <strong>${fmtInt(summary.sumCreditSales)} ج.م</strong>
+      </div>
+      <div class="flex justify-between text-teal-900">
+        <span>(-) مسدد المديونية اليوم (نقدي ${fmtInt(summary.sumDebtCash)} + تحويل ${fmtInt(summary.sumDebtTransfer)}):</span>
+        <strong>${fmtInt(summary.dayDebtCollected)} ج.م</strong>
+      </div>
+      <div class="flex justify-between pt-1 border-t border-indigo-200 font-extrabold text-indigo-950 text-xs">
+        <span>(=) صافي مديونية المزرعة آخر اليوم:</span>
+        <span>${fmtInt(summary.closingDayDebt)} ج.م</span>
+      </div>
+    </div>
   `;
 
   document.getElementById('tbPillar3').innerHTML = `
-    <div class="flex justify-between py-1 border-b"><span>(+) نقدي المبيعات + نقدي مديونيات الحالية:</span><strong>${fmtInt(summary.sumCashSales + summary.sumDebtCash)}</strong></div>
-    <div class="flex justify-between py-1 border-b"><span>(+) نقدي مزارع سابقة (للخزنة فقط):</span><strong>${fmtInt(summary.sumPrevCash)}</strong></div>
-    <div class="flex justify-between py-1.5 px-1.5 rounded bg-amber-100 text-slate-950 font-extrabold">
-      <span>إجمالي النقدية بالخزنة (قبل المصاريف):</span>
-      <span>${fmtInt(summary.totalCashBeforeExpenses)}</span>
+    <div class="flex justify-between py-1 px-1.5 rounded ${summary.openingCashFromPrevDay > 0 ? 'bg-teal-100/90 text-teal-950 border border-teal-300 font-extrabold' : 'border-b text-slate-600'}">
+      <span>(+) رصيد نقدي مرحّل من خزنة أمس${d > 1 ? ` (يوم ${d - 1})` : ''}:</span>
+      <strong>${fmtInt(summary.openingCashFromPrevDay)} ج.م</strong>
     </div>
-    <div class="flex justify-between py-1 border-b text-rose-800 font-bold"><span>(-) يخصم: إجمالي المصروفات والمكافآت:</span><span>${fmtInt(summary.sumExpenses)}</span></div>
-    <div class="flex justify-between py-1.5 px-1.5 rounded bg-emerald-100 text-emerald-950 font-extrabold">
-      <span>(=) صافي رصيد النقدية المطلوب توريده:</span>
+    <div class="flex justify-between py-1 border-b"><span>(+) نقدي المبيعات + نقدي مديونيات الحالية:</span><strong>${fmtInt(summary.sumCashSales + summary.sumDebtCash)} ج.م</strong></div>
+    <div class="flex justify-between py-1 border-b"><span>(+) نقدي مزارع سابقة (للخزنة فقط):</span><strong>${fmtInt(summary.sumPrevCash)} ج.م</strong></div>
+    <div class="flex justify-between py-1 px-1.5 rounded bg-amber-100 text-slate-950 font-extrabold">
+      <span>إجمالي وارد النقدية اليوم (قبل المصاريف):</span>
+      <span>${fmtInt(summary.totalCashBeforeExpenses)} ج.م</span>
+    </div>
+    <div class="flex justify-between py-1 border-b text-rose-800 font-bold"><span>(-) يخصم: إجمالي المصروفات والمكافآت:</span><span>${fmtInt(summary.sumExpenses)} ج.م</span></div>
+    <div class="flex justify-between py-1 border-b text-slate-800 font-extrabold">
+      <span>(=) صافي نقدية حركات اليوم (بعد المصاريف):</span>
       <span>${fmtInt(summary.netCashInBox)} ج.م</span>
+    </div>
+    <div class="flex justify-between py-1.5 px-2 rounded-lg bg-emerald-100 border border-emerald-400 text-emerald-950 font-extrabold">
+      <span>(=) إجمالي النقدية المتاحة بالخزنة (شامل المرحّل):</span>
+      <span>${fmtInt(summary.totalAvailableCashInBox)} ج.م</span>
     </div>
   `;
 
-  document.getElementById('inpDeliveredCash').value = summary.deliveredCash ? fmtMoney(summary.deliveredCash) : '0';
+  const inpDelivEl = document.getElementById('inpDeliveredCash');
+  if (inpDelivEl && document.activeElement !== inpDelivEl) {
+    inpDelivEl.value = summary.deliveredCash ? fmtMoney(summary.deliveredCash) : '0';
+  }
+  const inpCarryEl = document.getElementById('inpCarriedForwardCash');
+  if (inpCarryEl && document.activeElement !== inpCarryEl) {
+    inpCarryEl.value = summary.carriedForwardCash ? fmtMoney(summary.carriedForwardCash) : '0';
+  }
   const diffBox = document.getElementById('tbCashDiffBox');
   const statusTxt = summary.cashBoxDiff === 0
     ? 'خزينة مطابقة ✓'
     : (summary.cashBoxDiff < 0 ? 'زيادة توريد' : 'عجز توريد');
-  diffBox.className = `p-2 rounded-lg font-extrabold flex items-center justify-between text-xs mt-1 ${
-    summary.cashBoxDiff === 0 ? 'bg-emerald-100 text-emerald-950' : 'bg-rose-100 text-rose-900'
+  diffBox.className = `p-2 rounded-lg font-extrabold flex flex-col gap-1 text-xs mt-1 ${
+    summary.cashBoxDiff === 0 ? 'bg-emerald-100 text-emerald-950 border border-emerald-300' : 'bg-rose-100 text-rose-900 border border-rose-300'
   }`;
+  const carryNextDayNote = summary.carriedForwardCash > 0
+    ? `<div class="text-[11px] text-teal-900 bg-white/80 px-2 py-0.5 rounded border border-teal-300 flex items-center justify-between">
+         <span>🔄 يُرحّل تلقائياً كرصيد افتتاحي لخزنة (${d < 10 ? `يوم ${d + 1}` : 'الدورة التالية'}):</span>
+         <strong>${fmtInt(summary.carriedForwardCash)} ج.م</strong>
+       </div>`
+    : '';
   diffBox.innerHTML = `
-    <span>فرق الخزينة اليومي (الصافي - المسلم):</span>
-    <span>${fmtInt(summary.cashBoxDiff)} ج.م (${statusTxt})</span>
+    <div class="flex items-center justify-between">
+      <span>فرق الخزينة اليومي (المتاح - المورد والمرحّل):</span>
+      <span>${fmtInt(summary.cashBoxDiff)} ج.م (${statusTxt})</span>
+    </div>
+    ${carryNextDayNote}
   `;
 
   // Render Pending First-Weigh Cars (الوزنة الأولى المحفوظة مؤقتاً لحين استكمال الوزنة الثانية)
@@ -4731,57 +4864,57 @@ function renderDailyTrialBalancePrintView() {
         </thead>
         <tbody>
           <tr>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">عدد حركات البيع (سيارات):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.countCars)} سيارة</td>
-            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#fffbeb;">إجمالي المبيعات شامل الإكرامية:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#fffbeb;">${fmtDec(s.sumTotalWithTip)} ج.م</td>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">(+) نقدي المبيعات + نقدي مديونيات الحالية:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumCashSales + s.sumDebtCash)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">عدد السيارات المكتملة (متوسط السيارة):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">${fmtInt(s.countCars)} سيارة (${fmtInt(s.avgCarWeight)} كجم)</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#fffbeb;">إجمالي المبيعات شامل الإكرامية:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#fffbeb;">${fmtDec(s.sumTotalWithTip)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#f0fdfa;">(+) رصيد نقدي مرحّل من خزنة أمس:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#f0fdfa;">${fmtInt(s.openingCashFromPrevDay)} ج.م</td>
           </tr>
           <tr style="background:#f8fafc;">
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">إجمالي الوزنة الثانية (القائم):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumW2)} كجم</td>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">إجمالي غير النقدي يوم البيع (آجل+تحويل):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumCreditSales + s.sumTransferSales)} ج.م</td>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">(+) نقدي مزارع سابقة (للخزنة فقط):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumPrevCash)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">السيارات المؤقتة (تحت التحميل - وزنة 1):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; color:${s.pendingCarsCount > 0 ? '#9f1239' : '#065f46'};">${s.pendingCarsCount > 0 ? `⚠️ ${fmtInt(s.pendingCarsCount)} سيارة مؤقتة` : '0 سيارة (مكتمل ✓)'}</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">غير النقدي يوم البيع + جميع التحويلات:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">غير نقدي: ${fmtInt(s.sumCreditSales + s.sumTransferSales)} | تحويلات: ${fmtInt(s.totalAllTransfers)}</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">(+) نقدي المبيعات + نقدي مديونيات + سابقة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">حالية: ${fmtInt(s.sumCashSales + s.sumDebtCash)} | سابقة: ${fmtInt(s.sumPrevCash)}</td>
           </tr>
           <tr>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">(-) إجمالي الوزنة الأولى (الفارغ):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtInt(s.sumW1)} كجم</td>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px; color:#115e59;">تحويلات المزرعة الحالية (مبيعات+مديونيات):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; color:#115e59;">${fmtInt(s.currentFarmTransfers)} ج.م</td>
-            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#fef3c7;">إجمالي النقدية بالخزنة (قبل المصاريف):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#fef3c7;">${fmtInt(s.totalCashBeforeExpenses)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">إجمالي الوزنة الثانية (القائم) - الأولى (الفارغ):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">${fmtInt(s.sumW2)} - ${fmtInt(s.sumW1)} كجم</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px; color:#312e81;">مديونية أول اليوم (مرحّلة من الأيام السابقة):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; color:#312e81;">${fmtInt(s.openingDayDebt)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#fef3c7;">إجمالي وارد النقدية اليوم (قبل المصاريف):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#fef3c7;">${fmtInt(s.totalCashBeforeExpenses)} ج.م</td>
           </tr>
           <tr style="background:#f8fafc;">
-            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#eff6ff;">صافي الوزن المحسوب (ثانية - أولى):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#eff6ff;">${fmtInt(s.sumNetW)} كجم</td>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px; color:#581c87;">تحويلات مزارع سابقة (لا تخصم من الحالية):</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; color:#581c87;">${fmtInt(s.sumPrevTransfer)} ج.م</td>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px; color:#9f1239;">(-) يخصم: إجمالي المصروفات والمكافآت:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; color:#9f1239;">${fmtInt(s.sumExpenses)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#eff6ff;">(=) صافي الوزن المحسوب:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#eff6ff;">${fmtInt(s.sumNetW)} كجم</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px; color:#115e59;">(+) آجل اليوم (${fmtInt(s.sumCreditSales)}) - سداد المديونية (${fmtInt(s.dayDebtCollected)}):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; color:#115e59;">${fmtInt(s.netDayDebtChange)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px; color:#9f1239;">(-) يخصم: إجمالي المصروفات والمكافآت:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; color:#9f1239;">${fmtInt(s.sumExpenses)} ج.م</td>
           </tr>
           <tr>
-            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">فرق ميزان الأوزان:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">${fmtInt(s.weightAuditDiff)} (${s.weightAuditDiff === 0 ? 'مطابق ✓' : 'راجع الوزن!'})</td>
-            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">إجمالي جميع التحويلات اليوم:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">${fmtInt(s.totalAllTransfers)} ج.م</td>
-            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">(=) صافي رصيد النقدية المطلوب توريده:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#d1fae5; color:#064e3b;">${fmtInt(s.netCashInBox)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">متوسط سعر الكيلو المرجح لليوم:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">${fmtDec(s.avgPrice)} ج.م/كجم</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#eef2ff; color:#1e1b4b;">(=) صافي مديونية المزرعة آخر اليوم:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#eef2ff; color:#1e1b4b;">${fmtInt(s.closingDayDebt)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">(=) إجمالي النقدية المتاحة بالخزنة (شامل المرحّل):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">${fmtInt(s.totalAvailableCashInBox)} ج.م</td>
           </tr>
-          <tr>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">متوسط صافي وزن السيارة الواحدة:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${s.countCars > 0 ? fmtInt(Math.round(s.sumNetW / s.countCars)) : '0'} كجم</td>
-            <td style="text-align:right; font-weight:700; font-size:9.5px; padding:5px;">صافي فروق التقريب بالفواتير:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px;">${fmtDec(s.sumInvoiceDiff)} ج.م</td>
-            <td style="text-align:right; font-weight:800; font-size:9.5px; padding:5px; background:#eff6ff;">(-) النقدية المسلمة فعلياً للخزينة:</td>
-            <td style="text-align:center; font-weight:800; font-size:9.5px; padding:5px; background:#eff6ff;">${fmtInt(s.deliveredCash)} ج.م</td>
+          <tr style="background:#f8fafc;">
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">فرق ميزان الأوزان:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">${fmtInt(s.weightAuditDiff)} (${s.weightAuditDiff === 0 ? 'مطابق ✓' : 'راجع الوزن!'})</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">مطابقة توازن الفواتير (المسدد والآجل - الفواتير):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">${fmtDec(s.sumInvoiceDiff)} ج.م (${Math.abs(s.sumInvoiceDiff) <= 1 ? 'متزنة ✓' : 'فرق توازن!'})</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#eff6ff;">(-) المورد للإدارة (${fmtInt(s.deliveredCash)}) + مرحّل للغد (${fmtInt(s.carriedForwardCash)}):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#eff6ff;">${fmtInt(s.totalSettledAndCarriedCash)} ج.م</td>
           </tr>
         </tbody>
         <tfoot>
           <tr style="background:${diffBg}; color:${diffColor}; font-weight:800;">
-            <td colspan="4" style="text-align:left; font-size:10px; padding:5px;">فرق الخزينة اليومي (صافي النقدية المطلوب توريده بعد المصاريف - النقدية المسلمة فعلياً للخزينة):</td>
+            <td colspan="4" style="text-align:left; font-size:10px; padding:5px;">فرق الخزينة اليومي (إجمالي النقدية المتاحة بالخزنة - [النقدية الموردة للإدارة + الرصيد المرحّل للغد]):</td>
             <td colspan="2" style="text-align:center; font-size:10.5px; padding:5px;">${fmtInt(s.cashBoxDiff)} ج.م (${statusTxt})</td>
           </tr>
         </tfoot>
@@ -5203,12 +5336,20 @@ function renderOfficialDaySettlementReportPrintView(dayNumInput) {
             <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; color:#9f1239;">(-) يخصم: إجمالي المصروفات والمكافآت:</td>
             <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; color:#9f1239;">${fmtInt(s.sumExpenses)} ج.م</td>
           </tr>
+          <tr>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:700;">متوسط سعر الكيلو المرجح | سيارات مؤقتة:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800;">${fmtDec(s.avgPrice)} ج.م | مؤقت: ${fmtInt(s.pendingCarsCount)}</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; background:#eef2ff; color:#1e1b4b;">حركة المديونية (أول ${fmtInt(s.openingDayDebt)} + آجل - سداد):</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; background:#eef2ff; color:#1e1b4b;">آخر اليوم: ${fmtInt(s.closingDayDebt)} ج.م</td>
+            <td style="border:1px solid #334155; padding:3px 4px; font-weight:800; background:#f0fdfa; color:#0f766e;">(+) مرحّل من أمس (${fmtInt(s.openingCashFromPrevDay)}) + صافي اليوم:</td>
+            <td style="border:1px solid #334155; padding:3px 4px; text-align:center; font-weight:800; background:#f0fdfa; color:#0f766e;">متاح: ${fmtInt(s.totalAvailableCashInBox)} ج.م</td>
+          </tr>
           <tr style="background:${diffBg}; color:${diffColor}; font-weight:800;">
             <td colspan="2" style="border:1.5px solid #0f172a; padding:4px; text-align:center;">
-              صافي النقدية المطلوب توريده للخزينة: <strong>${fmtInt(s.netCashInBox)} ج.م</strong>
+              إجمالي النقدية المتاحة بالخزنة: <strong>${fmtInt(s.totalAvailableCashInBox)} ج.م</strong>
             </td>
             <td colspan="2" style="border:1.5px solid #0f172a; padding:4px; text-align:center;">
-              النقدية المسلمة فعلياً لأمين الخزينة: <strong>${fmtInt(s.deliveredCash)} ج.م</strong>
+              المورد للإدارة: <strong>${fmtInt(s.deliveredCash)}</strong> | مرحّل للغد: <strong>${fmtInt(s.carriedForwardCash)} ج.م</strong>
             </td>
             <td colspan="2" style="border:1.5px solid #0f172a; padding:4px; text-align:center;">
               فرق الخزينة: <strong>${fmtInt(s.cashBoxDiff)} ج.م (${statusTxt})</strong>
@@ -5282,7 +5423,7 @@ function renderOfficialDaySettlementReportPrintView(dayNumInput) {
 
       <!-- رابعاً: إقرار تصفية الخزينة والتوقيعات الرسمية للجنة البيع وأمين الخزينة -->
       <div style="margin-top:6px; padding:4px 8px; border:1.5px solid #1b365d; border-radius:5px; background:#f8fafc; font-size:8.5px; font-weight:800; color:#0f172a;">
-        ✍️ <strong>إقرار لجنة البيع وأمين الخزينة:</strong> تقر لجنة البيع والميزان بصحة الأوزان والفواتير والتحصيلات الموضحة أعلاه عن <strong>(يوم ${d} — ${escXmlStr(s.dateLabel)})</strong>، وأن صافي النقدية واجب التوريد للخزينة بعد خصم مصروفات اليوم هو <strong>(${fmtInt(s.netCashInBox)} ج.م)</strong>، وقد تم تسليم مبلغ <strong>(${fmtInt(s.deliveredCash)} ج.م)</strong> نقداً إلى السيد أمين الخزينة، وهذا محضر رسمي بذلك للتوقيع والاعتماد.
+        ✍️ <strong>إقرار لجنة البيع وأمين الخزينة:</strong> تقر لجنة البيع والميزان بصحة الأوزان والفواتير والتحصيلات الموضحة أعلاه عن <strong>(يوم ${d} — ${escXmlStr(s.dateLabel)})</strong>، وأن إجمالي النقدية المتاحة بالخزينة بعد خصم مصروفات اليوم (شاملاً المرحّل من أمس ${fmtInt(s.openingCashFromPrevDay)} ج.م) هو <strong>(${fmtInt(s.totalAvailableCashInBox)} ج.م)</strong>، وقد تم تسليم وتوريد مبلغ <strong>(${fmtInt(s.deliveredCash)} ج.م)</strong> نقداً إلى السيد أمين الخزينة وإبقاء مبلغ <strong>(${fmtInt(s.carriedForwardCash)} ج.م)</strong> مرحّلاً بالخزينة لليوم التالي، وهذا محضر رسمي بذلك للتوقيع والاعتماد.
       </div>
 
       <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-top:5px; text-align:center; font-size:8.5px;">
@@ -6934,7 +7075,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V48',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V49',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -8979,7 +9120,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v48-smart-custody-waterfall') {
+          if (k !== 'farm-sales-committee-v49-enhanced-trial-balance') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -10076,7 +10217,7 @@ function initFarmSalesApp() {
     }
   });
 
-  // Delivered Cash Input in Trial Balance
+  // Delivered Cash & Carried-Forward Cash Inputs + Quick Settlement Buttons in Trial Balance
   document.getElementById('inpDeliveredCash').addEventListener('input', (e) => {
     if (isDayLocked(appState.currentDay)) {
       showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل النقدية المسلمة إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
@@ -10089,6 +10230,62 @@ function initFarmSalesApp() {
     saveState(true);
     renderDailyView();
   });
+
+  const inpCarryForwardEl = document.getElementById('inpCarriedForwardCash');
+  if (inpCarryForwardEl) {
+    inpCarryForwardEl.addEventListener('input', (e) => {
+      if (isDayLocked(appState.currentDay)) {
+        showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل الرصيد المرحّل إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+        renderDailyView();
+        return;
+      }
+      const curD = appState.days[appState.currentDay];
+      curD.carriedForwardCash = parseNum(e.target.value) || 0;
+      curD.carriedForwardCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.carriedForwardCashUpdatedAt) || 0) + 10);
+      saveState(true);
+      renderDailyView();
+    });
+  }
+
+  const btnDeliverAllCashEl = document.getElementById('btnDeliverAllAvailableCash');
+  if (btnDeliverAllCashEl) {
+    btnDeliverAllCashEl.addEventListener('click', () => {
+      if (isDayLocked(appState.currentDay)) {
+        showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً!', '🔒');
+        return;
+      }
+      const s = computeDaySummary(appState.currentDay);
+      const curD = appState.days[appState.currentDay];
+      const targetDeliver = Math.max(0, Math.round(s.totalAvailableCashInBox - s.carriedForwardCash));
+      curD.deliveredCash = targetDeliver;
+      curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
+      const inpEl = document.getElementById('inpDeliveredCash');
+      if (inpEl) inpEl.value = fmtMoney(targetDeliver);
+      saveState(true);
+      renderDailyView();
+      showToast(`⚡ تم تسجيل توريد المتاح بالخزنة (${fmtInt(targetDeliver)} ج.م) ومطابقة الصندوق بنجاح!`, '✅');
+    });
+  }
+
+  const btnCarryRemCashEl = document.getElementById('btnCarryForwardRemainingCash');
+  if (btnCarryRemCashEl) {
+    btnCarryRemCashEl.addEventListener('click', () => {
+      if (isDayLocked(appState.currentDay)) {
+        showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً!', '🔒');
+        return;
+      }
+      const s = computeDaySummary(appState.currentDay);
+      const curD = appState.days[appState.currentDay];
+      const remToCarry = Math.max(0, Math.round(s.totalAvailableCashInBox - s.deliveredCash));
+      curD.carriedForwardCash = remToCarry;
+      curD.carriedForwardCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.carriedForwardCashUpdatedAt) || 0) + 10);
+      const inpEl = document.getElementById('inpCarriedForwardCash');
+      if (inpEl) inpEl.value = fmtMoney(remToCarry);
+      saveState(true);
+      renderDailyView();
+      showToast(`🔄 تم ترحيل باقي النقدية بالخزنة (${fmtInt(remToCarry)} ج.م) تلقائياً لليوم التالي ومطابقة الصندوق!`, '✅');
+    });
+  }
 
   // Merchant Instant Auto-Suggest without arrow
   const inpMerch = document.getElementById('inpMerchantName');
@@ -11849,8 +12046,11 @@ function initFarmSalesApp() {
       `💵 نقدي المبيعات + تحصيل مديونيات: ${fmtInt(s.sumCashSales + s.sumDebtCash)} ج.م`,
       `🏦 تحصيلات مزارع سابقة (نقدي للخزنة): ${fmtInt(s.sumPrevCash)} ج.م`,
       `💳 إجمالي التحويلات (كاش/بنكي/إنستا/شيك): ${fmtInt(s.totalAllTransfers)} ج.م`,
+      `⚖️ متوسط سعر الكيلو المرجح: ${fmtDec(s.avgPrice)} ج.م/كجم${s.pendingCarsCount > 0 ? ` | ⚠️ سيارات مؤقتة: ${fmtInt(s.pendingCarsCount)}` : ''}`,
+      `📌 حركة مديونية المزرعة: أول اليوم (${fmtInt(s.openingDayDebt)}) + آجل اليوم (${fmtInt(s.sumCreditSales)}) - مسدد المديونية (${fmtInt(s.dayDebtCollected)}) = *صافي المديونية آخر اليوم: ${fmtInt(s.closingDayDebt)} ج.م*`,
       `💸 (-) إجمالي المصروفات والمكافآت: ${fmtInt(s.sumExpenses)} ج.م`,
-      `✅ *صافي رصيد النقدية بالخزنة للتوريد: ${fmtInt(s.netCashInBox)} ج.م*`
+      ...(s.openingCashFromPrevDay > 0 ? [`🔄 (+) رصيد نقدي مرحّل من خزنة أمس: ${fmtInt(s.openingCashFromPrevDay)} ج.م`] : []),
+      `✅ *إجمالي النقدية المتاحة بالخزنة: ${fmtInt(s.totalAvailableCashInBox)} ج.م* (المورد للإدارة: ${fmtInt(s.deliveredCash)} ج.م${s.carriedForwardCash > 0 ? ` | مرحّل للغد: ${fmtInt(s.carriedForwardCash)} ج.م` : ''} | فرق الخزينة: ${fmtInt(s.cashBoxDiff)} ج.م)`
     ].join('\n');
 
     const ta = document.createElement('textarea');

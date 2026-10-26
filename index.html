@@ -23,7 +23,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=48" />
+  <link rel="stylesheet" href="./style.css?v=49" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -965,27 +965,44 @@
             <div class="p-2.5 space-y-2 text-xs" id="tbPillar1"></div>
           </div>
 
-          <!-- Pillar 2: Sales, Credit & All Transfers Audit -->
+          <!-- Pillar 2: Sales, Credit, Accrual Debt Reconciliation & All Transfers Audit -->
           <div class="border border-slate-300 rounded-xl overflow-hidden">
             <div class="bg-indigo-900 text-white px-3 py-2 text-xs font-extrabold text-center">
-              ثانياً: ميزان المبيعات والآجل والتحويلات الشامل
+              ثانياً: ميزان المبيعات وحركة الذمم والتحويلات الشامل
             </div>
             <div class="p-2.5 space-y-2 text-xs" id="tbPillar2"></div>
           </div>
 
-          <!-- Pillar 3: Treasury & Physical Cash Box Audit -->
+          <!-- Pillar 3: Treasury & Physical Cash Box Audit (with Carry-Forward Cash) -->
           <div class="border border-slate-300 rounded-xl overflow-hidden">
             <div class="bg-emerald-900 text-white px-3 py-2 text-xs font-extrabold text-center">
-              ثالثاً: ميزان الخزينة النقدية (بعد خصم المصروفات)
+              ثالثاً: ميزان الخزينة النقدية والرصيد المرحّل للصندوق
             </div>
             <div class="p-2.5 space-y-2 text-xs">
-              <div id="tbPillar3"></div>
-              <div class="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
-                <label class="font-extrabold text-slate-800 text-xs">(-) النقدية المسلمة فعلياً للخزينة:</label>
-                <input id="inpDeliveredCash" type="text" inputmode="decimal" data-money-input="1"
-                  class="w-36 px-2.5 py-1.5 text-sm font-extrabold border-2 border-blue-600 rounded-lg text-left bg-white" />
+              <div id="tbPillar3" class="space-y-1.5"></div>
+              <div class="pt-2 border-t border-slate-200 space-y-2">
+                <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                  <div class="flex items-center gap-1">
+                    <label for="inpDeliveredCash" class="font-extrabold text-slate-800 text-xs">(-) النقدية الموردة للإدارة / البنك:</label>
+                    <button type="button" id="btnDeliverAllAvailableCash" class="px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-900 font-extrabold text-[10px] border border-blue-300 transition" title="توريد كامل النقدية المتاحة بالخزنة بعد خصم المرحّل">
+                      ⚡ توريد المتاح
+                    </button>
+                  </div>
+                  <input id="inpDeliveredCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-36 px-2.5 py-1.5 text-sm font-extrabold border-2 border-blue-600 rounded-lg text-left bg-white" />
+                </div>
+                <div class="flex items-center justify-between gap-1.5 flex-wrap bg-teal-50/70 p-1.5 rounded-lg border border-teal-200">
+                  <div class="flex items-center gap-1">
+                    <label for="inpCarriedForwardCash" class="font-extrabold text-teal-950 text-xs">(-) رصيد نقدي مرحّل للغد بالخزنة:</label>
+                    <button type="button" id="btnCarryForwardRemainingCash" class="px-1.5 py-0.5 rounded bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-[10px] transition" title="ترحيل باقي النقدية المتاحة بالخزنة تلقائياً لليوم التالي">
+                      ⚡ ترحيل الباقي
+                    </button>
+                  </div>
+                  <input id="inpCarriedForwardCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="w-36 px-2.5 py-1.5 text-sm font-extrabold border-2 border-teal-600 rounded-lg text-left bg-white text-teal-950" />
+                </div>
               </div>
-              <div id="tbCashDiffBox" class="p-2 rounded-lg font-extrabold flex items-center justify-between text-xs"></div>
+              <div id="tbCashDiffBox" class="p-2 rounded-lg font-extrabold flex flex-col gap-1 text-xs"></div>
             </div>
           </div>
         </div>
@@ -2322,7 +2339,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=48"></script>
-  <script src="./app.js?v=48"></script>
+  <script src="./excel-template.js?v=49"></script>
+  <script src="./app.js?v=49"></script>
 </body>
 </html>
