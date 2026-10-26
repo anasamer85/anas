@@ -23,7 +23,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=49" />
+  <link rel="stylesheet" href="./style.css?v=50" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -607,8 +607,8 @@
             </div>
           </div>
 
-          <!-- Row 3: The 3 Collection Sections (Current Invoice / Current Farm Debt / Previous Farms Debt) -->
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <!-- Row 3: The 3 Collection Sections (Current Invoice / Current Farm Debt / Collapsible Previous Farms Debt) -->
+          <div id="saleCollectionsRow3Grid" class="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
             <!-- Group 1: سداد فاتورة اليوم (المزرعة الحالية) -->
             <div class="border-2 border-blue-800/20 bg-blue-50/40 rounded-xl p-2.5 space-y-2">
@@ -677,44 +677,56 @@
               </div>
             </div>
 
-            <!-- Group 3: تحصيلات مديونيات سابقة (مزارع أخرى) + الربط المرجعي الذكي لأرشيف المزارع -->
-            <div class="border-2 border-purple-800/20 bg-purple-50/40 rounded-xl p-2.5 space-y-2">
-              <div class="flex items-center justify-between border-b border-purple-200 pb-1.5 gap-1 flex-wrap">
-                <span class="text-xs font-extrabold text-purple-950">3. تحصيلات مزارع سابقة (مواقع أخرى)</span>
-                <span class="text-[10px] font-bold text-purple-800 bg-purple-100 px-1.5 py-0.5 rounded">لا تخصم من الحالية</span>
+            <!-- Group 3 (Collapsible by default): تحصيلات مديونيات سابقة (مزارع أخرى) + الربط المرجعي الذكي لأرشيف المزارع -->
+            <div id="prevFarmsCollectionCard" class="lg:col-span-2 border-2 border-purple-800/20 bg-purple-50/40 rounded-xl p-2.5 transition-all">
+              <div id="prevFarmsCollectionHeader" class="flex items-center justify-between gap-2 flex-wrap cursor-pointer select-none" title="اضغط لفتح أو طيّ قسم تحصيلات المزارع السابقة والملاحظات (يفتح تلقائياً عند وجود مديونية مرجعية للتاجر في الأرشيف)">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-xs font-extrabold text-purple-950">🏦 3. تحصيلات مزارع سابقة (مواقع أخرى) / ملاحظات</span>
+                  <span id="prevFarmsCollapsedSummaryBadge" class="text-[10px] font-extrabold text-purple-800 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-lg">
+                    مطوي افتراضياً — يفتح تلقائياً عند وجود مديونية بالأرشيف
+                  </span>
+                </div>
+                <button type="button" id="btnTogglePrevFarmsSection" aria-expanded="false" class="px-2.5 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1">
+                  <span id="btnTogglePrevFarmsIcon">➕</span>
+                  <span id="btnTogglePrevFarmsText">فتح القسم / ملاحظات ▾</span>
+                </button>
               </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي سابقة (للخزنة فقط)</label>
-                  <input id="inpPrevCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+
+              <!-- Collapsible Body (Hidden by default, opens on click or auto-expands when merchant has archive debt or existing values) -->
+              <div id="prevFarmsCollapsibleBody" class="hidden pt-2.5 mt-2 border-t border-purple-200 space-y-2">
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي سابقة (للخزنة فقط)</label>
+                    <input id="inpPrevCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                      class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-700 mb-0.5">اسم المزرعة السابقة / ملاحظات</label>
+                    <input id="inpNotes" type="text" list="prevFarmsArchiveDatalist" placeholder="اختر أو اكتب اسم المزرعة السابقة..."
+                      class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+                    <datalist id="prevFarmsArchiveDatalist"></datalist>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-amber-900 mb-0.5">تحويل سابقة (معاملة التحويل)</label>
+                    <input id="inpPrevTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                      class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-amber-900 mb-0.5">نوع تحويل السابقة</label>
+                    <select id="selPrevTransferType" class="w-full px-2 py-1.5 text-xs font-bold border border-amber-400 rounded-lg bg-white">
+                      <option value="">-- اختر النوع --</option>
+                      <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                      <option value="تحويل بنكي">تحويل بنكي</option>
+                      <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                      <option value="شيكات">شيكات</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">اسم المزرعة السابقة / ملاحظات</label>
-                  <input id="inpNotes" type="text" list="prevFarmsArchiveDatalist" placeholder="اختر أو اكتب اسم المزرعة السابقة..."
-                    class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
-                  <datalist id="prevFarmsArchiveDatalist"></datalist>
+                <!-- Cross-Farm Reference Debt Indicator (مرجع استرشادي من أرشيف المزارع دون المساس بمعادلات المزرعة الحالية) -->
+                <div id="crossFarmDebtRefBox" class="mt-1 px-2.5 py-1.5 rounded-lg bg-purple-100/90 border border-purple-300 text-[11px] font-extrabold text-purple-950 flex items-center justify-between gap-1.5 flex-wrap">
+                  <span id="crossFarmDebtRefLabel">🔎 مرجع أرشيف المزارع السابقة: اختر التاجر واسم المزرعة السابقة لعرض رصيده المرجعي</span>
+                  <span id="crossFarmDebtRefValue" class="px-2 py-0.5 rounded bg-white text-purple-900 border border-purple-300 text-[10px] font-extrabold">مرجع استرشادي فقط</span>
                 </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">تحويل سابقة (معاملة التحويل)</label>
-                  <input id="inpPrevTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
-                </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">نوع تحويل السابقة</label>
-                  <select id="selPrevTransferType" class="w-full px-2 py-1.5 text-xs font-bold border border-amber-400 rounded-lg bg-white">
-                    <option value="">-- اختر النوع --</option>
-                    <option value="تحويل كاش">تحويل كاش / محفظة</option>
-                    <option value="تحويل بنكي">تحويل بنكي</option>
-                    <option value="إنستا باي">إنستا باي (InstaPay)</option>
-                    <option value="شيكات">شيكات</option>
-                  </select>
-                </div>
-              </div>
-              <!-- Cross-Farm Reference Debt Indicator (مرجع استرشادي من أرشيف المزارع دون المساس بمعادلات المزرعة الحالية) -->
-              <div id="crossFarmDebtRefBox" class="mt-1 px-2.5 py-1.5 rounded-lg bg-purple-100/90 border border-purple-300 text-[11px] font-extrabold text-purple-950 flex items-center justify-between gap-1.5 flex-wrap">
-                <span id="crossFarmDebtRefLabel">🔎 مرجع أرشيف المزارع السابقة: اختر التاجر واسم المزرعة السابقة لعرض رصيده المرجعي</span>
-                <span id="crossFarmDebtRefValue" class="px-2 py-0.5 rounded bg-white text-purple-900 border border-purple-300 text-[10px] font-extrabold">مرجع استرشادي فقط</span>
               </div>
             </div>
 
@@ -2339,7 +2351,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=49"></script>
-  <script src="./app.js?v=49"></script>
+  <script src="./excel-template.js?v=50"></script>
+  <script src="./app.js?v=50"></script>
 </body>
 </html>

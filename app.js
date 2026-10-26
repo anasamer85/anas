@@ -7075,7 +7075,7 @@ function exportFullJsonBackup() {
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
     const backupPayload = {
-      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V49',
+      backupFormat: 'ABOUZEKRY_FULL_JSON_BACKUP_V50',
       version: 38,
       exportedAtIso: now.toISOString(),
       exportedAtArabic: `${now.toLocaleDateString('ar-EG')} — ${timeStr}`,
@@ -8672,6 +8672,109 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
 // =========================================================================
 // 6. EVENT LISTENERS & INTERACTIVE HANDLERS
 // =========================================================================
+let prevFarmsManualToggleState = {
+  merchantCode: 0,
+  userExplicitlySet: null // null = auto, true = user opened, false = user closed
+};
+
+function setPrevFarmsSectionExpanded(isExpanded, isManualUserAction = false) {
+  const bodyEl = document.getElementById('prevFarmsCollapsibleBody');
+  const cardEl = document.getElementById('prevFarmsCollectionCard');
+  const gridEl = document.getElementById('saleCollectionsRow3Grid');
+  const btnEl = document.getElementById('btnTogglePrevFarmsSection');
+  const iconEl = document.getElementById('btnTogglePrevFarmsIcon');
+  const txtEl = document.getElementById('btnTogglePrevFarmsText');
+  if (!bodyEl) return;
+
+  const expand = Boolean(isExpanded);
+  bodyEl.classList.toggle('hidden', !expand);
+
+  if (gridEl && cardEl) {
+    if (expand) {
+      gridEl.classList.remove('lg:grid-cols-2');
+      gridEl.classList.add('lg:grid-cols-3');
+      cardEl.classList.remove('lg:col-span-2');
+      cardEl.classList.add('lg:col-span-1');
+    } else {
+      gridEl.classList.remove('lg:grid-cols-3');
+      gridEl.classList.add('lg:grid-cols-2');
+      cardEl.classList.remove('lg:col-span-1');
+      cardEl.classList.add('lg:col-span-2');
+    }
+  }
+
+  if (btnEl) {
+    btnEl.setAttribute('aria-expanded', expand ? 'true' : 'false');
+    btnEl.className = expand
+      ? 'px-2.5 py-1 rounded-lg bg-purple-200 hover:bg-purple-300 text-purple-950 border border-purple-400 font-extrabold text-[11px] shadow-sm transition flex items-center gap-1'
+      : 'px-2.5 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1';
+  }
+  if (iconEl) iconEl.textContent = expand ? '🔼' : '➕';
+  if (txtEl) txtEl.textContent = expand ? 'طيّ وإخفاء القسم' : 'فتح القسم / ملاحظات ▾';
+
+  if (isManualUserAction) {
+    const mName = (document.getElementById('inpMerchantName')?.value || '').trim();
+    const mCode = resolveMerchantCode(mName);
+    prevFarmsManualToggleState.merchantCode = mCode;
+    prevFarmsManualToggleState.userExplicitlySet = expand;
+  }
+}
+
+function resetPrevFarmsCollapsibleToDefault() {
+  prevFarmsManualToggleState = { merchantCode: 0, userExplicitlySet: null };
+  setPrevFarmsSectionExpanded(false, false);
+}
+
+function syncPrevFarmsCollapsibleState(info = {}) {
+  const {
+    mCode = 0,
+    mName = '',
+    hasPrevFarmInputsNow = false,
+    hasArchiveReferenceDebt = false,
+    crossRef = null,
+    totalPrevEntered = 0,
+    notesVal = ''
+  } = info;
+
+  // إذا تغير التاجر المختار، نعيد ضبط التفضيل اليدوي ليسمح بالفتح التلقائي إذا كان للتاجر الجديد مديونية في الأرشيف
+  if (mCode !== prevFarmsManualToggleState.merchantCode) {
+    prevFarmsManualToggleState.merchantCode = mCode;
+    prevFarmsManualToggleState.userExplicitlySet = null;
+  }
+
+  const badgeEl = document.getElementById('prevFarmsCollapsedSummaryBadge');
+  if (badgeEl) {
+    if (totalPrevEntered > 0) {
+      badgeEl.textContent = `✅ محصل مزرعة سابقة: ${fmtInt(totalPrevEntered)} ج.م${notesVal ? ` (${notesVal})` : ''}`;
+      badgeEl.className = 'text-[10px] font-extrabold text-emerald-950 bg-emerald-100 border border-emerald-400 px-2 py-0.5 rounded-lg';
+    } else if (hasArchiveReferenceDebt && crossRef) {
+      const breakdownStr = crossRef.otherFarmsDebts.map(x => `${x.farmName}: ${fmtInt(x.debt)}`).join(' | ');
+      badgeEl.textContent = `📌 مديونية أرشيف سابقة (${breakdownStr || fmtInt(crossRef.totalOtherFarmsDebt)} ج.م) — فُتح تلقائياً`;
+      badgeEl.className = 'text-[10px] font-extrabold text-amber-950 bg-amber-200 border border-amber-500 px-2 py-0.5 rounded-lg animate-pulse';
+    } else if (notesVal) {
+      badgeEl.textContent = `📝 ملاحظة: ${notesVal}`;
+      badgeEl.className = 'text-[10px] font-extrabold text-purple-950 bg-purple-200 border border-purple-400 px-2 py-0.5 rounded-lg';
+    } else {
+      badgeEl.textContent = 'مطوي افتراضياً — يفتح بضغطة زر أو تلقائياً عند وجود مديونية بالأرشيف';
+      badgeEl.className = 'text-[10px] font-extrabold text-purple-800 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-lg';
+    }
+  }
+
+  // قواعد الفتح والطيّ التلقائي:
+  // 1) إذا كانت هناك قيم مدخلة بالفعل في حقول المزارع السابقة/الملاحظات -> نفتح القسم دائماً حتى لا تختفي بيانات مدخلة
+  if (hasPrevFarmInputsNow) {
+    setPrevFarmsSectionExpanded(true, false);
+    return;
+  }
+  // 2) إذا قام المستخدم يدوياً بفتح أو طيّ القسم لهذا التاجر -> نحترم اختياره اليدوي
+  if (prevFarmsManualToggleState.userExplicitlySet !== null) {
+    setPrevFarmsSectionExpanded(prevFarmsManualToggleState.userExplicitlySet, false);
+    return;
+  }
+  // 3) إذا كان للتاجر مديونية مرجعية في أرشيف المزارع السابقة -> يفتح القسم تلقائياً! وإلا يظل مطوياً افتراضياً لتقليل طول الشاشة
+  setPrevFarmsSectionExpanded(hasArchiveReferenceDebt, false);
+}
+
 function updateLiveFormCalculation() {
   const rawW1 = document.getElementById('inpW1').value;
   const rawW2 = document.getElementById('inpW2').value;
@@ -8797,7 +8900,7 @@ function updateLiveFormCalculation() {
     }
   }
 
-  // 3. الربط المرجعي الذكي لتحصيلات المزارع السابقة (Cross-Farm Debt Reference — استرشادي فقط دون المساس بمعادلات المزرعة الحالية)
+  // 3. الربط المرجعي الذكي لتحصيلات المزارع السابقة + الطيّ والفتح التلقائي الذكي للقسم (Collapsible Section 3)
   const prevCashVal = parseNum(document.getElementById('inpPrevCash') ? document.getElementById('inpPrevCash').value : 0) || 0;
   const prevTrVal = parseNum(document.getElementById('inpPrevTransfer') ? document.getElementById('inpPrevTransfer').value : 0) || 0;
   const prevTrTypeVal = document.getElementById('selPrevTransferType') ? document.getElementById('selPrevTransferType').value : '';
@@ -8805,6 +8908,27 @@ function updateLiveFormCalculation() {
   const totalPrevEntered = prevCashVal + prevTrVal;
 
   const crossRef = computeMerchantCrossFarmDebtReference(mCode, notesVal);
+  const hasPrevFarmInputsNow = (totalPrevEntered > 0 || notesVal !== '' || prevTrTypeVal !== '');
+  const hasArchiveReferenceDebt = Boolean(
+    mCode > 0 && (
+      crossRef.otherFarmsDebts.length > 0 ||
+      Math.abs(crossRef.totalOtherFarmsDebt) > 0.01 ||
+      (crossRef.matchedFarmName && Math.abs(crossRef.matchedFarmDebt) > 0.01)
+    )
+  );
+
+  // تحديث شارة الملخص في رأس القسم المطوي وفتح القسم تلقائياً إذا كان للتاجر مديونية مرجعية في الأرشيف أو قيم مدخلة
+  if (typeof syncPrevFarmsCollapsibleState === 'function') {
+    syncPrevFarmsCollapsibleState({
+      mCode,
+      mName,
+      hasPrevFarmInputsNow,
+      hasArchiveReferenceDebt,
+      crossRef,
+      totalPrevEntered,
+      notesVal
+    });
+  }
   const refBox = document.getElementById('crossFarmDebtRefBox');
   const refLbl = document.getElementById('crossFarmDebtRefLabel');
   const refVal = document.getElementById('crossFarmDebtRefValue');
@@ -9120,7 +9244,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v49-enhanced-trial-balance') {
+          if (k !== 'farm-sales-committee-v50-collapsible-prev-farms') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -10640,6 +10764,7 @@ function initFarmSalesApp() {
     const suggestBoxEl = document.getElementById('merchantSuggestBox');
     if (suggestBoxEl) suggestBoxEl.classList.add('hidden');
     setSaleFormActionLabels('حفظ نهائي', false);
+    resetPrevFarmsCollapsibleToDefault();
     applyStickySaleDefaults();
     updateLiveFormCalculation();
     if (showFeedbackToast) {
@@ -10654,6 +10779,22 @@ function initFarmSalesApp() {
   if (btnInlineCancelEl) {
     btnInlineCancelEl.addEventListener('click', () => {
       cancelOrClearCurrentSaleEntry(true);
+    });
+  }
+
+  const prevFarmsHdrEl = document.getElementById('prevFarmsCollectionHeader');
+  if (prevFarmsHdrEl) {
+    prevFarmsHdrEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      const bodyEl = document.getElementById('prevFarmsCollapsibleBody');
+      const isCurrentlyHidden = bodyEl ? bodyEl.classList.contains('hidden') : true;
+      setPrevFarmsSectionExpanded(isCurrentlyHidden, true);
+      if (isCurrentlyHidden) {
+        setTimeout(() => {
+          const inpPrevCashEl = document.getElementById('inpPrevCash');
+          if (inpPrevCashEl) inpPrevCashEl.focus();
+        }, 60);
+      }
     });
   }
 

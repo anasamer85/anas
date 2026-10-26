@@ -1,5 +1,5 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v49-enhanced-trial-balance";
+const CACHE_NAME = "farm-sales-committee-v50-collapsible-prev-farms";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -18,12 +18,14 @@ const ASSETS_TO_CACHE = [
   "./style.css?v=47",
   "./style.css?v=48",
   "./style.css?v=49",
+  "./style.css?v=50",
   "./excel-template.js",
   "./excel-template.js?v=45",
   "./excel-template.js?v=46",
   "./excel-template.js?v=47",
   "./excel-template.js?v=48",
   "./excel-template.js?v=49",
+  "./excel-template.js?v=50",
   "./app.js",
   "./app.js?v=27",
   "./app.js?v=28",
@@ -39,6 +41,7 @@ const ASSETS_TO_CACHE = [
   "./app.js?v=47",
   "./app.js?v=48",
   "./app.js?v=49",
+  "./app.js?v=50",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
