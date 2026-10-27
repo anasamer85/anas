@@ -1,5 +1,5 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v52-mobile";
+const CACHE_NAME = "farm-sales-committee-v52.1-mobile";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -37,6 +37,12 @@ self.addEventListener("activate", (event) => {
       Promise.all(keys.map((key) => { if (key !== CACHE_NAME) return caches.delete(key); }))
     ).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {

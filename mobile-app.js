@@ -1,5 +1,5 @@
 // =========================================================================
-// MOBILE COMPANION ENGINE (mobile-app.js — v52)
+// MOBILE COMPANION ENGINE (mobile-app.js — v52.1)
 // =========================================================================
 (function () {
   'use strict';
