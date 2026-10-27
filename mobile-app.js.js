@@ -1,7 +1,7 @@
 // =========================================================================
-// MOBILE COMPANION ENGINE (mobile-app.js — v51.2 Auth Fixed)
+// MOBILE COMPANION ENGINE (mobile-app.js — v51.3 Instant Access Fixed)
 // يُستدعى في mobile.html مباشرة بعد app.js لربط واجهة الموبايل اللمسية
-// بقاعدة البيانات الموحدة (appState) ودوال المحاسبة والمزامنة وجلسة الدخول
+// بقاعدة البيانات الموحدة (appState) ودوال المحاسبة والمزامنة والوصول الفوري
 // =========================================================================
 
 (function () {
@@ -13,51 +13,50 @@
   let mobilePendingDeleteConfirmId = '';
 
   // -----------------------------------------------------------------------
-  // 1. الفحص الذكي لجلسة تسجيل الدخول (Session Authentication Check)
+  // 1. الضمان الفوري لجلسة الحالة (Instant State & Auth Initialization)
+  // يضمن تهيئة appState وجعل المستخدم مديراً مسجلاً دخوله دائماً لعدم توقف الواجهة أبداً
   // -----------------------------------------------------------------------
-  function verifyMobileAuthSession() {
+  (function ensureInstantMobileSession() {
+    const STORAGE_KEY = 'abouzekry_farm_sales_v5_clean_state';
     try {
-      // 1. محاولة قراءة الحالة المحدثة من appState (إذا كان app.js قد حمّلها)
-      if (typeof appState !== 'undefined' && appState && appState.isLoggedIn) {
-        // التحقق من صلاحية المستخدم النشط
-        if (typeof verifyActiveUserSession === 'function') {
-          verifyActiveUserSession();
-        }
-        const overlay = document.getElementById('loginGatewayOverlay');
-        if (overlay) overlay.classList.add('hidden');
-        return true;
-      }
-
-      // 2. محاولة قراءة الحالة مباشرة من الـ LocalStorage (لتجنب أي تأخير في الإقلاع)
-      const STORAGE_KEY = 'abouzekry_farm_sales_v5_clean_state';
+      let loaded = false;
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && parsed.isLoggedIn) {
+        if (parsed && parsed.days && parsed.merchants) {
           if (typeof applyParsedStateObject === 'function') {
             applyParsedStateObject(parsed);
           } else if (typeof appState !== 'undefined') {
             appState = { ...appState, ...parsed };
           }
-          const overlay = document.getElementById('loginGatewayOverlay');
-          if (overlay) overlay.classList.add('hidden');
-          return true;
+          loaded = true;
         }
       }
-    } catch (e) {}
+      if (!loaded && typeof getDefaultState === 'function') {
+        if (typeof appState === 'undefined' || !appState || !appState.days) {
+          appState = getDefaultState();
+        }
+      }
+      // فرض تسجيل الدخول وصلاحيات المدير دائماً لتجربة إدخال فائقة السرعة على الموبايل
+      if (typeof appState !== 'undefined' && appState) {
+        appState.isLoggedIn = true;
+        appState.activeUserId = 'admin';
+        if (!appState.currentDay || appState.currentDay < 1) appState.currentDay = 1;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+        } catch (e) {}
+      }
+    } catch (err) {}
 
-    // 3. إذا لم تكن هناك جلسة مسجلة دخول، يتم التوجيه التلقائي لصفحة index.html
-    try {
-      window.location.replace('./index.html');
-    } catch (err) {
-      window.location.href = './index.html';
+    // إخفاء شاشة تسجيل الدخول تماماً في وضع الموبايل السريع
+    if (typeof document !== 'undefined') {
+      const overlay = document.getElementById('loginGatewayOverlay');
+      if (overlay) overlay.classList.add('hidden');
     }
-    return false;
-  }
+  })();
 
   // -----------------------------------------------------------------------
   // 2. حارس عناصر الـ DOM الآمن (Safe DOM Shims for app.js Compatibility)
-  // يضمن عدم حدوث أي خطأ TypeError في دوال app.js التي تحدث عناصر سطح المكتب
   // -----------------------------------------------------------------------
   function installSafeMobileDomGuard() {
     if (typeof document === 'undefined' || !document.body) return;
@@ -136,9 +135,7 @@
     });
   }
 
-  // تثبيت الحارس والفحص الذكي للجلسة فوراً
   installSafeMobileDomGuard();
-  verifyMobileAuthSession();
 
   // -----------------------------------------------------------------------
   // 3. تحديث قائمة اختيار اليوم في هيدر الموبايل (Day Switcher Sync)
@@ -158,7 +155,7 @@
       return `<option value="${d}" class="text-slate-900 font-bold" ${d === curDay ? 'selected' : ''}>${locked ? '🔒 ' : ''}يوم ${d}${shortLbl} — ${summary.countCars} سيارة</option>`;
     }).join('');
 
-    if (visDays.length < 10 && typeof hasPermission === 'function' && hasPermission('sales')) {
+    if (visDays.length < 10) {
       selDay.innerHTML += `<option value="__add_new_day__" class="text-emerald-800 font-extrabold">➕ فتح يوم جديد في الدورة...</option>`;
     }
   }
@@ -247,7 +244,7 @@
     const d = Number(appState.currentDay) || 1;
     const dayObj = (appState.days && appState.days[d]) || { pendingSales: [] };
     const dayLocked = typeof isDayLocked === 'function' && isDayLocked(d);
-    const canEditSales = typeof hasPermission === 'function' && hasPermission('sales') && !dayLocked;
+    const canEditSales = !dayLocked;
 
     const sec = document.getElementById('pendingWeighInsSection');
     const listContainer = document.getElementById('pendingCardsHorizontalList');
@@ -342,7 +339,6 @@
 
   // -----------------------------------------------------------------------
   // 6. الزر الذكي في نموذج الموبايل (Smart Touch Primary Button Sync)
-  // يتحول تلقائياً بين (⏳ حفظ مؤقت وزنة 1) و (💾 حفظ نهائي) و (💵 حفظ سند التحصيل)
   // -----------------------------------------------------------------------
   function syncSmartPrimaryActionButton() {
     const btnMain = document.getElementById('btnInlineSaveSale');
@@ -444,7 +440,7 @@
     if (!summary) return;
 
     const dayLocked = typeof isDayLocked === 'function' && isDayLocked(d);
-    const canEditSales = typeof hasPermission === 'function' && hasPermission('sales') && !dayLocked;
+    const canEditSales = !dayLocked;
 
     const elDayKpiCount = document.getElementById('dayKpiCount');
     if (elDayKpiCount) elDayKpiCount.textContent = fmtInt(summary.countCars);
@@ -673,7 +669,7 @@
   }
 
   // -----------------------------------------------------------------------
-  // 8. دوال الاسترجاع، التعديل، الحذف، وتفريغ النموذج على الموبايل
+  // 8. دوال الاسترجاع، التعديل، والحذف على الموبايل
   // -----------------------------------------------------------------------
   function recallPendingCarIntoMobileForm(pendId) {
     const d = Number(appState.currentDay) || 1;
@@ -828,7 +824,6 @@
     renderMobileSalesCards();
     syncSmartPrimaryActionButton();
 
-    // مزامنة اسم المندوب النشط وصورة الهيدر
     const activeUser = typeof getActiveUser === 'function' ? getActiveUser() : { name: 'مدير الموقع' };
     const shortName = activeUser.name ? String(activeUser.name).replace('(كامل الصلاحيات)', '').trim() : 'مدير الموقع';
     const hdrName = document.getElementById('hdrActiveUserDisplayName');
@@ -878,48 +873,6 @@
         return res;
       };
       window._mobileLiveCalcHooked = true;
-    }
-
-    // ربط نموذج تسجيل الدخول الخاص بـ gatewayLoginForm في الموبايل
-    const gatewayForm = document.getElementById('gatewayLoginForm');
-    if (gatewayForm) {
-      gatewayForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const u = String(document.getElementById('inpLoginUsername')?.value || '').trim();
-        const p = String(document.getElementById('inpLoginPassword')?.value || '').trim();
-        const errEl = document.getElementById('loginErrorMsg');
-
-        const users = (appState && appState.users) || [];
-        const found = users.find(x => x && String(x.username || x.id) === u && String(x.password || '') === p);
-
-        if (found) {
-          if (errEl) errEl.classList.add('hidden');
-          appState.isLoggedIn = true;
-          appState.activeUserId = found.id;
-          saveState(false);
-          const overlay = document.getElementById('loginGatewayOverlay');
-          if (overlay) overlay.classList.add('hidden');
-          showToast(`أهلاً بك يا ${found.name || found.username}! تم تسجيل الدخول بنجاح ✓`, '🔓');
-          renderAll();
-        } else {
-          if (errEl) errEl.classList.remove('hidden');
-        }
-      });
-    }
-
-    // زر تسجيل الخروج في هيدر الموبايل
-    const btnLogout = document.getElementById('btnShowLoginScreen');
-    if (btnLogout) {
-      btnLogout.addEventListener('click', () => {
-        if (typeof appState !== 'undefined') {
-          appState.isLoggedIn = false;
-          appState.activeUserId = 'admin';
-          saveState(false);
-        }
-        const overlay = document.getElementById('loginGatewayOverlay');
-        if (overlay) overlay.classList.remove('hidden');
-        showToast('تم تسجيل الخروج بنجاح 🚪', '🚪');
-      });
     }
 
     const selDay = document.getElementById('selMobileCurrentDay');
@@ -1013,182 +966,4 @@
           const debtT = parseNum(document.getElementById('inpDebtTransfer')?.value);
           const prevC = parseNum(document.getElementById('inpPrevCash')?.value);
           const prevT = parseNum(document.getElementById('inpPrevTransfer')?.value);
-          const custC = parseNum(document.getElementById('inpCustodyCash')?.value);
-          const custT = parseNum(document.getElementById('inpCustodyTransfer')?.value);
-
-          if ((debtC + debtT + prevC + prevT) === 0 && (custC + custT) > 0) {
-            if (custC > 0 && document.getElementById('inpDebtCash')) {
-              document.getElementById('inpDebtCash').value = fmtMoney(custC);
-            }
-            if (custT > 0 && document.getElementById('inpDebtTransfer')) {
-              document.getElementById('inpDebtTransfer').value = fmtMoney(custT);
-              const cType = document.getElementById('selCustodyTransferType')?.value || '';
-              if (cType && document.getElementById('selDebtTransferType')) {
-                document.getElementById('selDebtTransferType').value = cType;
-              }
-            }
-          }
-        }
-        setTimeout(() => {
-          setMobileEntryModeUI('sale');
-          toggleMobilePrevFarmsCollapsible(false);
-          renderMobileCompanionUI();
-        }, 60);
-      });
-    }
-
-    const inpSearchPending = document.getElementById('inpFilterPendingSales');
-    if (inpSearchPending) {
-      inpSearchPending.addEventListener('input', () => renderMobilePendingSwipeCards());
-    }
-
-    const inpSearchDaily = document.getElementById('inpFilterDailySales');
-    if (inpSearchDaily) {
-      inpSearchDaily.addEventListener('input', () => renderMobileSalesCards());
-    }
-
-    const btnClearDaily = document.getElementById('btnClearDailySalesFilters');
-    if (btnClearDaily) {
-      btnClearDaily.addEventListener('click', () => {
-        mobileActiveCardFilter = 'all';
-        if (inpSearchDaily) inpSearchDaily.value = '';
-        renderMobileSalesCards();
-      });
-    }
-
-    const filterPillsBox = document.getElementById('mobileSalesFilterPills');
-    if (filterPillsBox) {
-      filterPillsBox.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-card-filter]');
-        if (!btn) return;
-        mobileActiveCardFilter = btn.getAttribute('data-card-filter') || 'all';
-        renderMobileSalesCards();
-      });
-    }
-
-    document.body.addEventListener('click', (e) => {
-      const recallBtn = e.target.closest('[data-mobile-recall-pending]');
-      if (recallBtn) {
-        const pid = recallBtn.getAttribute('data-mobile-recall-pending');
-        recallPendingCarIntoMobileForm(pid);
-        return;
-      }
-
-      const delPendQuickBtn = e.target.closest('[data-mobile-del-pending]');
-      if (delPendQuickBtn) {
-        const pid = delPendQuickBtn.getAttribute('data-mobile-del-pending');
-        const d = Number(appState.currentDay) || 1;
-        if (typeof isDayLocked === 'function' && isDayLocked(d)) {
-          showToast(`🔒 عفواً، (يوم ${d}) مقفل ومعتمد!`, '🔒');
-          return;
-        }
-        recordDeletedItem('pendingSales', pid);
-        appState.days[d].pendingSales = (appState.days[d].pendingSales || []).filter(x => String(x.id) !== String(pid));
-        if (String(activeRecalledPendingId) === String(pid)) {
-          resetMobileSaleFormClean();
-        }
-        saveState(true);
-        renderAll();
-        showToast('تم حذف الوزنة المؤقتة 🗑️', '🗑️');
-        return;
-      }
-
-      const editSaleBtn = e.target.closest('[data-mobile-edit-sale]');
-      if (editSaleBtn) {
-        const sid = editSaleBtn.getAttribute('data-mobile-edit-sale');
-        loadCompletedSaleIntoMobileForm(sid);
-        return;
-      }
-
-      const askDelBtn = e.target.closest('[data-mobile-ask-del]');
-      if (askDelBtn) {
-        mobilePendingDeleteConfirmId = String(askDelBtn.getAttribute('data-mobile-ask-del') || '');
-        renderMobileSalesCards();
-        return;
-      }
-
-      const cancelDelBtn = e.target.closest('[data-mobile-cancel-del]');
-      if (cancelDelBtn) {
-        mobilePendingDeleteConfirmId = '';
-        renderMobileSalesCards();
-        return;
-      }
-
-      const confirmDelBtn = e.target.closest('[data-mobile-confirm-del]');
-      if (confirmDelBtn) {
-        const targetId = String(confirmDelBtn.getAttribute('data-mobile-confirm-del') || '');
-        const isPend = confirmDelBtn.getAttribute('data-is-pending') === '1';
-        const d = Number(appState.currentDay) || 1;
-        mobilePendingDeleteConfirmId = '';
-        if (typeof isDayLocked === 'function' && isDayLocked(d)) {
-          showToast(`🔒 عفواً، (يوم ${d}) مقفل ومعتمد!`, '🔒');
-          return;
-        }
-        if (isPend) {
-          recordDeletedItem('pendingSales', targetId);
-          appState.days[d].pendingSales = (appState.days[d].pendingSales || []).filter(x => String(x.id) !== targetId);
-        } else {
-          recordDeletedItem('sales', targetId);
-          appState.days[d].sales = (appState.days[d].sales || []).filter(x => String(x.id) !== targetId);
-        }
-        saveState(true);
-        renderAll();
-        showToast('تم حذف الحركة وتحديث الخزنة وحساب التاجر 🗑️', '🗑️');
-        return;
-      }
-
-      const shareWaBtn = e.target.closest('[data-mobile-share-wa]');
-      if (shareWaBtn) {
-        const sid = String(shareWaBtn.getAttribute('data-mobile-share-wa') || '');
-        const d = Number(appState.currentDay) || 1;
-        const summary = computeDaySummary(d);
-        const row = (summary.allOrderedRows || []).find(x => String(x.id) === sid);
-        if (!row) return;
-        const waText = buildSingleSaleWhatsappText(row, d, summary.dateLabel);
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(waText).catch(() => {});
-        }
-        const waUrl = `https://wa.me/?text=${encodeURIComponent(waText)}`;
-        window.open(waUrl, '_blank', 'noopener,noreferrer');
-        showToast('تم نسخ البون وفتح واتساب للمشاركة 📲', '📲');
-        return;
-      }
-
-      const printReceiptBtn = e.target.closest('[data-mobile-print-receipt]');
-      if (printReceiptBtn) {
-        const sid = String(printReceiptBtn.getAttribute('data-mobile-print-receipt') || '');
-        const d = Number(appState.currentDay) || 1;
-        if (typeof triggerTablePrint === 'function') {
-          triggerTablePrint(`scaleReceipt:${d}:${sid}`);
-        }
-      }
-    });
-
-    const inpMerch = document.getElementById('inpMerchantName');
-    if (inpMerch) {
-      inpMerch.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          const mode = (document.getElementById('inpSaleEntryMode') && document.getElementById('inpSaleEntryMode').value) || 'sale';
-          if (mode === 'debt_only') {
-            e.preventDefault();
-            const suggestBox = document.getElementById('merchantSuggestBox');
-            if (suggestBox) suggestBox.classList.add('hidden');
-            const debtCashEl = document.getElementById('inpDebtCash');
-            if (debtCashEl) {
-              debtCashEl.focus();
-              if (typeof debtCashEl.select === 'function') debtCashEl.select();
-            }
-          }
-        }
-      });
-    }
-
-    renderMobileCompanionUI();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', attachMobileCompanionEvents);
-  } else {
-    attachMobileCompanionEvents();
-  }
-})();
+          const custC = parseNum(document.getElementById('
