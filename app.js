@@ -1539,7 +1539,7 @@ function isUserActivelyTypingInForm() {
   const ae = document.activeElement;
   if (!ae || !ae.tagName) return false;
   if (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA') {
-    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm', 'chkShowFloatingActionBar', 'chkShowAuditMetadata', 'inpFilterAuditTrail', 'selFilterAuditType'];
+    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpLiteFilterPendingCards', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm', 'chkShowFloatingActionBar', 'chkShowAuditMetadata', 'inpFilterAuditTrail', 'selFilterAuditType'];
     if (!ignoreIds.includes(ae.id)) return true;
   }
   return false;
@@ -7070,15 +7070,50 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
 
   const pendingList = (appState.days[dayNum] && appState.days[dayNum].pendingSales) || [];
 
-  // 1. العنصر الأول: شريط البطاقات الأفقية للوزنات المؤقتة (Swipeable Pending Cards)
+  // 1. العنصر الأول: شريط البطاقات الأفقية للوزنات المؤقتة (Swipeable Pending Cards) مع دعم البحث السريع
   if (pendStripBox && pendHorizList && pendCntBadge) {
-    pendCntBadge.textContent = `${pendingList.length} سيارة`;
+    const pendQuery = (document.getElementById('inpLiteFilterPendingCards')?.value || '').trim().toLowerCase();
+    const filteredPendingList = pendQuery
+      ? pendingList.filter(item =>
+          String(item.merchant || '').toLowerCase().includes(pendQuery) ||
+          String(item.carNo || '').toLowerCase().includes(pendQuery) ||
+          String(item.scaleNo || '').toLowerCase().includes(pendQuery) ||
+          String(item.w1 || '').toLowerCase().includes(pendQuery) ||
+          String(item.notes || '').toLowerCase().includes(pendQuery)
+        )
+      : pendingList;
+
+    pendCntBadge.textContent = pendQuery
+      ? `معروض ${filteredPendingList.length} من ${pendingList.length} سيارة`
+      : `${pendingList.length} سيارة`;
+
+    const btnTogglePendSearch = document.getElementById('btnToggleLitePendingSearch');
+    const lblTogglePendSearch = document.getElementById('lblToggleLitePendingSearch');
+    const pendSearchWrap = document.getElementById('litePendingSearchBoxWrapper');
+    const isSearchOpen = pendSearchWrap && !pendSearchWrap.classList.contains('hidden');
+    if (btnTogglePendSearch && lblTogglePendSearch) {
+      if (pendQuery || isSearchOpen) {
+        btnTogglePendSearch.className = 'px-2.5 py-1 rounded-xl bg-slate-900 text-amber-300 border-2 border-amber-400 text-xs font-extrabold shadow-sm transition flex items-center gap-1';
+        lblTogglePendSearch.textContent = pendQuery ? `بحث نشط (${filteredPendingList.length})` : 'إغلاق البحث';
+      } else {
+        btnTogglePendSearch.className = 'px-2.5 py-1 rounded-xl bg-white hover:bg-amber-100 text-slate-900 border-2 border-amber-500 text-xs font-extrabold shadow-sm transition flex items-center gap-1';
+        lblTogglePendSearch.textContent = 'بحث سريع';
+      }
+    }
+
     if (!active || pendingList.length === 0 || !canEditSalesToday) {
       pendStripBox.classList.add('hidden');
       pendHorizList.innerHTML = '';
+    } else if (filteredPendingList.length === 0) {
+      pendStripBox.classList.remove('hidden');
+      pendHorizList.innerHTML = `
+        <div class="w-full bg-white rounded-xl border border-amber-300 p-3 text-center text-xs font-extrabold text-slate-600">
+          لا توجد سيارة تحت التحميل مطابقة للبحث (${escXmlStr(pendQuery)}) — اضغط <strong>"مسح ✕"</strong> لإظهار كل السيارات (${pendingList.length}).
+        </div>
+      `;
     } else {
       pendStripBox.classList.remove('hidden');
-      pendHorizList.innerHTML = pendingList.map(item => {
+      pendHorizList.innerHTML = filteredPendingList.map(item => {
         const safeId = escXmlStr(item.id);
         const custodyAmt = (Number(item.custodyCash) || 0) + (Number(item.custodyTransfer) || 0);
         return `
@@ -9763,7 +9798,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v52-lite-field-mode') {
+          if (k !== 'farm-sales-committee-v53-lite-pending-search') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -11550,6 +11585,42 @@ function initFarmSalesApp() {
         const d = appState.currentDay || 1;
         renderLiteFieldModeComponents(d, computeDaySummary(d), hasPermission('sales') && !isDayLocked(d), isDayLocked(d));
       }
+    });
+  }
+
+  // أحداث أيقونة وشريط البحث السريع في سيارات تحت التحميل بانتظار الوزنة 2 (وضع المندوب)
+  const btnToggleLitePendSearch = document.getElementById('btnToggleLitePendingSearch');
+  const litePendSearchWrap = document.getElementById('litePendingSearchBoxWrapper');
+  const inpLitePendSearch = document.getElementById('inpLiteFilterPendingCards');
+  const btnClearLitePendSearch = document.getElementById('btnClearLitePendingSearch');
+
+  if (btnToggleLitePendSearch && litePendSearchWrap) {
+    btnToggleLitePendSearch.addEventListener('click', () => {
+      const willShow = litePendSearchWrap.classList.contains('hidden');
+      litePendSearchWrap.classList.toggle('hidden', !willShow);
+      if (willShow && inpLitePendSearch) {
+        setTimeout(() => inpLitePendSearch.focus(), 40);
+      } else if (!willShow && inpLitePendSearch && inpLitePendSearch.value) {
+        inpLitePendSearch.value = '';
+      }
+      const d = appState.currentDay || 1;
+      renderLiteFieldModeComponents(d, computeDaySummary(d), hasPermission('sales') && !isDayLocked(d), isDayLocked(d));
+    });
+  }
+
+  if (inpLitePendSearch) {
+    inpLitePendSearch.addEventListener('input', () => {
+      const d = appState.currentDay || 1;
+      renderLiteFieldModeComponents(d, computeDaySummary(d), hasPermission('sales') && !isDayLocked(d), isDayLocked(d));
+    });
+  }
+
+  if (btnClearLitePendSearch) {
+    btnClearLitePendSearch.addEventListener('click', () => {
+      if (inpLitePendSearch) inpLitePendSearch.value = '';
+      if (litePendSearchWrap) litePendSearchWrap.classList.add('hidden');
+      const d = appState.currentDay || 1;
+      renderLiteFieldModeComponents(d, computeDaySummary(d), hasPermission('sales') && !isDayLocked(d), isDayLocked(d));
     });
   }
 
