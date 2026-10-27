@@ -1,5 +1,5 @@
 // =========================================================================
-// MOBILE COMPANION ENGINE (mobile-app.js — v51)
+// MOBILE COMPANION ENGINE (mobile-app.js — v52)
 // يُستدعى في mobile.html مباشرة بعد app.js لربط واجهة الموبايل اللمسية
 // بقاعدة البيانات الموحدة (appState) والدوال المحاسبية والمزامنة اللحظية
 // =========================================================================
@@ -106,12 +106,9 @@
     const curDay = Number(appState.currentDay) || 1;
 
     selDay.innerHTML = visDays.map(d => {
-      const dObj = (appState.days && appState.days[d]) || { dayNumber: d, dateLabel: `اليوم ${d}` };
-      const summary = typeof computeDaySummary === 'function' ? computeDaySummary(d) : { countCars: 0 };
-      const locked = typeof isDayLocked === 'function' && isDayLocked(d);
-      const lbl = String(dObj.dateLabel || `اليوم ${d}`).trim();
+      const dObj = (appState.days && appState.days[d]) || { dayNumber: d, dateLabel: `اليوم ${d}` }; const summary = typeof computeDaySummary === 'function' ? computeDaySummary(d) : { countCars: 0 }; const locked = typeof isDayLocked === 'function' && isDayLocked(d); const lbl = String(dObj.dateLabel \vert{}\vert{} `اليوم ${d}`).trim();
       const shortLbl = lbl !== `اليوم ${d}` ? ` (${lbl})` : '';
-      return `<option value="${d}" class="text-slate-900 font-bold" ${d === curDay ? 'selected' : ''}>${locked ? '🔒 ' : ''}يوم ${d}${shortLbl} — ${summary.countCars} سيارة</option>`;
+      return `<option value="${d}" class="text-slate-900 font-bold" ${d === curDay ? 'selected' : ''}>${locked ? '🔒 ' : ''}يوم ${d}${shortLbl} —${summary.countCars} سيارة</option>`;
     }).join('');
 
     if (visDays.length < 10 && typeof hasPermission === 'function' && hasPermission('sales')) {
@@ -162,7 +159,7 @@
     const hdrIcon = document.getElementById('saleFormHeaderIcon');
     const hdrTitleTxt = document.getElementById('saleFormTitleActionText');
     const editId = (document.getElementById('editSaleId') && document.getElementById('editSaleId').value) || '';
-    if (!editId && !activeRecalledPendingId) {
+    if (!editId && !typeof activeRecalledPendingId !== 'undefined' && !window.activeRecalledPendingId) {
       if (hdrIcon) hdrIcon.textContent = isDebtOnly ? '💵' : '🚛';
       if (hdrTitleTxt) {
         hdrTitleTxt.textContent = isDebtOnly ? 'تسجيل سند تحصيل مديونية' : 'تسجيل حركة جديدة';
@@ -186,14 +183,13 @@
       });
       const selTrSales = document.getElementById('selTransferSalesType');
       if (selTrSales) selTrSales.value = '';
-    } else if (!editId && !activeRecalledPendingId) {
+    } else if (!editId) {
       if (typeof applyStickySaleDefaults === 'function') applyStickySaleDefaults();
     }
 
     if (typeof updateLiveFormCalculation === 'function') {
       updateLiveFormCalculation();
     }
-    syncSmartPrimaryActionButton();
   }
 
   // -----------------------------------------------------------------------
@@ -205,17 +201,15 @@
     const dayLocked = typeof isDayLocked === 'function' && isDayLocked(d);
     const canEditSales = typeof hasPermission === 'function' && hasPermission('sales') && !dayLocked;
 
-    const sec = document.getElementById('pendingWeighInsSection');
     const listContainer = document.getElementById('pendingCardsHorizontalList');
     const badge = document.getElementById('pendingWeighInsCountBadge');
     const searchInp = document.getElementById('inpFilterPendingSales');
 
-    if (!sec || !listContainer) return;
+    if (!listContainer) return;
 
-    const rawPending = sortSalesListByScaleNo(dayObj.pendingSales || []);
+    const rawPending = typeof sortSalesListByScaleNo === 'function' ? sortSalesListByScaleNo(dayObj.pendingSales || []) : (dayObj.pendingSales || []);
     if (badge) badge.textContent = `${rawPending.length} سيارة`;
 
-    // إظهار القسم دائماً إذا كانت هناك سيارات مؤقتة أو إذا كان المستخدم يبحث
     const q = String((searchInp && searchInp.value) || '').trim().toLowerCase();
     const filteredPending = q
       ? rawPending.filter(item =>
@@ -238,20 +232,20 @@
     if (filteredPending.length === 0) {
       listContainer.innerHTML = `
         <div class="w-full py-2.5 px-3 text-center text-xs font-bold text-slate-600 bg-white rounded-xl border border-amber-300">
-          لا توجد سيارة مؤقتة مطابقة للبحث (${escXmlStr(q)})
+          لا توجد سيارة مؤقتة مطابقة للبحث
         </div>
       `;
       return;
     }
 
     listContainer.innerHTML = filteredPending.map(item => {
-      const safeId = escXmlStr(item.id);
-      const safeMerchant = escXmlStr(item.merchant || '-');
-      const safeCar = escXmlStr(item.carNo || '-');
-      const safeScale = escXmlStr(item.scaleNo || '-');
-      const isCurrentlyRecalled = String(activeRecalledPendingId) === String(item.id);
+      const safeId = String(item.id || '');
+      const safeMerchant = String(item.merchant || '-');
+      const safeCar = String(item.carNo || '-');
+      const safeScale = String(item.scaleNo || '-');
+      const isCurrentlyRecalled = typeof activeRecalledPendingId !== 'undefined' && String(activeRecalledPendingId) === safeId;
       const custodyTotal = (Number(item.custodyCash) || 0) + (Number(item.custodyTransfer) || 0);
-      const timeTxt = escXmlStr(item.updatedTimeTxt || item.createdTimeTxt || '');
+      const timeTxt = String(item.updatedTimeTxt || item.createdTimeTxt || '');
 
       return `
         <div class="pending-card-item rounded-2xl border-2 ${isCurrentlyRecalled ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-400' : 'border-amber-400 bg-white'} p-2.5 shadow-sm flex flex-col justify-between gap-2 transition">
@@ -260,27 +254,4 @@
               <span class="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950 text-[10px] font-extrabold">
                 بون #${safeScale}
               </span>
-              <span class="text-[10px] font-extrabold text-slate-600">
-                🚚 سيارة: <strong class="text-slate-900">${safeCar}</strong>
-              </span>
-            </div>
-            <div class="font-extrabold text-slate-900 text-xs mt-1.5 truncate" title="${safeMerchant}">
-              👤 ${safeMerchant}
-            </div>
-            <div class="flex items-center justify-between text-[11px] font-bold mt-1 bg-amber-50/90 px-2 py-1 rounded-lg border border-amber-200">
-              <span class="text-amber-900">وزنة 1 (فارغ):</span>
-              <strong class="text-amber-950 font-extrabold">${fmtInt(item.w1)} كجم</strong>
-            </div>
-            ${custodyTotal > 0 ? `<div class="text-[10px] font-extrabold text-teal-900 mt-1">💼 عهدة مسجلة: ${fmtInt(custodyTotal)} ج.م</div>` : ''}
-            ${timeTxt ? `<div class="text-[9px] font-bold text-slate-400 mt-0.5">🕒 ${timeTxt}</div>` : ''}
-          </div>
-
-          ${canEditSales ? `
-            <div class="flex items-center gap-1.5 pt-1 border-t border-slate-100">
-              <button type="button" data-mobile-recall-pending="${safeId}"
-                class="flex-1 py-2 px-2.5 rounded-xl ${isCurrentlyRecalled ? 'bg-emerald-700 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'} font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
-                <span>🔄</span>
-                <span>${isCurrentlyRecalled ? 'قيد الاستكمال...' : 'استكمال وزنة 2'}</span>
-              </button>
-              <button type="button" data-mobile-print-receipt="${safeId}"
-                class="py-2 px-2 rounded-xl bg-indigo-100 hover:bg-indigo-200 text-indigo-9
+              <span class="text-[10px] font-extrabold text-
