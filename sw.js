@@ -1,8 +1,13 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v51-debt-collection-voucher-mode";
+const CACHE_NAME = "farm-sales-committee-v52-mobile";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
+  "./mobile.html",
+  "./manifest-mobile.json",
+  "./mobile-app.js",
+  "./mobile-app.js?v=51",
+  "./mobile-app.js?v=52",
   "./style.css",
   "./style.css?v=27",
   "./style.css?v=28",
@@ -20,6 +25,7 @@ const ASSETS_TO_CACHE = [
   "./style.css?v=49",
   "./style.css?v=50",
   "./style.css?v=51",
+  "./style.css?v=52",
   "./excel-template.js",
   "./excel-template.js?v=45",
   "./excel-template.js?v=46",
@@ -28,6 +34,7 @@ const ASSETS_TO_CACHE = [
   "./excel-template.js?v=49",
   "./excel-template.js?v=50",
   "./excel-template.js?v=51",
+  "./excel-template.js?v=52",
   "./app.js",
   "./app.js?v=27",
   "./app.js?v=28",
@@ -45,6 +52,7 @@ const ASSETS_TO_CACHE = [
   "./app.js?v=49",
   "./app.js?v=50",
   "./app.js?v=51",
+  "./app.js?v=52",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
@@ -107,13 +115,20 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Network-first with cache: 'no-store' for HTML, CSS, JS, and Manifest so GitHub Pages updates appear immediately on all devices
-  const isHtmlNav = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html") || url.endsWith("/") || url.includes("/index.html");
+  const isHtmlNav =
+    req.mode === "navigate" ||
+    (req.headers.get("accept") || "").includes("text/html") ||
+    url.endsWith("/") ||
+    url.includes("/index.html") ||
+    url.includes("/mobile.html");
   if (
     isHtmlNav ||
     url.includes("/excel-template.js") ||
     url.includes("/app.js") ||
+    url.includes("/mobile-app.js") ||
     url.includes("/style.css") ||
-    url.includes("/manifest.json")
+    url.includes("/manifest.json") ||
+    url.includes("/manifest-mobile.json")
   ) {
     event.respondWith(
       fetch(req, { cache: "no-store" })
@@ -127,6 +142,7 @@ self.addEventListener("fetch", (event) => {
         .catch(() =>
           caches.match(req).then((cached) => {
             if (cached) return cached;
+            if (url.includes("/mobile.html")) return caches.match("./mobile.html");
             if (isHtmlNav) return caches.match("./index.html");
             return cached;
           })

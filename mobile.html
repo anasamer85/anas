@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ميزان المزرعة السريع — إدخال الموبايل (Offline-First PWA)</title>
+  <meta name="theme-color" content="#1b365d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ميزان المزرعة" />
+  <link rel="manifest" href="./manifest-mobile.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+
+  <!-- Tailwind CSS & Cairo Font (بدون مكتبات الإكسيل والرسوم البيانية الثقيلة لسرعة فتح فائقة) -->
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
+  <script id="embeddedWebhookConfigScript">
+    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
+  </script>
+  <link rel="stylesheet" href="./style.css?v=51" />
+
+  <style id="mobileCompanionCustomStyles">
+    body {
+      font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      padding-bottom: 28px !important;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* ارتفاع لمس قياسي مكبّر (48px) لجميع الحقول والأزرار على الموبايل */
+    .touch-input {
+      min-height: 48px;
+      font-size: 15px !important;
+    }
+    .touch-btn {
+      min-height: 48px;
+    }
+    /* شريط التمرير الأفقي السلس لبطاقات الوزنات المؤقتة */
+    .pending-cards-scroll {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 6px;
+      scrollbar-width: thin;
+      scrollbar-color: #f59e0b #fef3c7;
+    }
+    .pending-cards-scroll::-webkit-scrollbar {
+      height: 6px;
+    }
+    .pending-cards-scroll::-webkit-scrollbar-track {
+      background: #fef3c7;
+      border-radius: 6px;
+    }
+    .pending-cards-scroll::-webkit-scrollbar-thumb {
+      background: #d97706;
+      border-radius: 6px;
+    }
+    .pending-card-item {
+      scroll-snap-align: start;
+      flex: 0 0 245px;
+    }
+    #toastContainer {
+      bottom: 16px !important;
+      left: 12px !important;
+      right: 12px !important;
+      max-width: none !important;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ===================================================================== -->
+  <!-- 0. بوابة تسجيل الدخول الموحدة مع النظام الرئيسي (Login Gateway Overlay) -->
+  <!-- ===================================================================== -->
+  <div id="loginGatewayOverlay" class="fixed inset-0 z-50 navy-gradient flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white text-slate-900 rounded-3xl shadow-2xl border-4 border-amber-400 max-w-md w-full p-6 space-y-5 text-right">
+      <div class="text-center space-y-1.5 border-b border-slate-200 pb-4">
+        <div class="inline-flex items-center justify-center px-4 py-1.5 rounded-2xl gold-badge font-extrabold text-sm shadow">
+          ⚖️ ميزان المزرعة السريع (إدخال الموبايل)
+        </div>
+        <h2 class="text-lg font-extrabold text-slate-900 pt-1">تسجيل الدخول للميزان</h2>
+        <p class="text-xs text-slate-500 font-semibold">
+          أدخل بيانات حسابك للبدء في تسجيل الوزنات وسندات التحصيل
+        </p>
+      </div>
+
+      <form id="gatewayLoginForm" class="space-y-3.5">
+        <div>
+          <label for="inpLoginUsername" class="block text-xs font-extrabold text-slate-700 mb-1">👤 اسم المستخدم</label>
+          <input id="inpLoginUsername" type="text" autocomplete="username" placeholder="أدخل اسم المستخدم..."
+            class="touch-input w-full px-3.5 py-2.5 font-bold border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-700" />
+        </div>
+        <div>
+          <label for="inpLoginPassword" class="block text-xs font-extrabold text-slate-700 mb-1">🔑 كلمة المرور</label>
+          <input id="inpLoginPassword" type="password" autocomplete="current-password" placeholder="أدخل كلمة المرور..."
+            class="touch-input w-full px-3.5 py-2.5 font-bold border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-700" />
+        </div>
+
+        <div id="loginErrorMsg" class="hidden p-2.5 rounded-xl bg-rose-100 border border-rose-400 text-rose-900 text-xs font-extrabold text-center">
+          ❌ اسم المستخدم أو كلمة المرور غير صحيحة!
+        </div>
+
+        <button type="submit" id="btnLoginAdminSubmit" class="touch-btn w-full py-3 px-4 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-sm shadow-lg transition flex items-center justify-center gap-2">
+          <span>🔐</span>
+          <span>دخول للميزان السريع</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- الهيدر العلوي المدمج للموبايل (Compact Mobile Header & Day Switcher)   -->
+  <!-- ===================================================================== -->
+  <header class="navy-gradient text-white sticky top-0 z-40 shadow-md border-b border-white/15">
+    <div class="max-w-xl mx-auto px-2.5 py-2 space-y-1.5">
+
+      <!-- السطر الأول: اسم المزرعة + اختيار اليوم + حالة الاتصال والمزامنة -->
+      <div class="flex items-center justify-between gap-1.5">
+        <div class="flex items-center gap-1.5 min-w-0">
+          <span id="headerFarmBadge" class="px-2 py-1 rounded-lg gold-badge font-extrabold text-xs shadow shrink-0">
+            أبوذكري
+          </span>
+          <!-- تبديل المزرعة -->
+          <select id="selTopCloudFarm" title="تبديل المزرعة النشطة"
+            class="bg-slate-900/90 text-amber-300 text-xs font-extrabold rounded-lg px-2 py-1 border border-amber-400/50 focus:outline-none max-w-[105px] truncate">
+            <option value="أبوذكري">☁️ أبوذكري</option>
+          </select>
+          <!-- اختيار اليوم النشط (يوم 1 .. 10) -->
+          <select id="selMobileCurrentDay" title="تبديل اليوم النشط"
+            class="bg-white/15 text-white text-xs font-extrabold rounded-lg px-2 py-1 border border-white/25 focus:outline-none">
+            <option value="1" class="text-slate-900">يوم 1</option>
+          </select>
+        </div>
+
+        <!-- أزرار المزامنة الفورية وحالة الاتصال والخروج -->
+        <div class="flex items-center gap-1 shrink-0">
+          <span id="connStatusBadge" class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[10px] font-extrabold">
+            <span id="connDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="connText">متصل</span>
+          </span>
+          <button id="btnSyncNow" type="button" class="px-2 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-extrabold text-[11px] shadow-sm flex items-center gap-1" title="مزامنة مع السحابة الآن">
+            <span>🔄</span>
+            <span id="pendingCountTxt" class="px-1 rounded bg-slate-900/60 text-amber-300 text-[10px]">0</span>
+          </button>
+          <a href="./index.html" id="btnOpenFullSystem" class="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white font-bold text-[11px] border border-white/20" title="الانتقال للنظام الكامل والتقارير والإكسيل">
+            🖥️ الكامل
+          </a>
+          <button id="btnShowLoginScreen" type="button" class="px-2 py-1 rounded-lg bg-rose-700/90 hover:bg-rose-600 text-white font-extrabold text-[11px]" title="تسجيل الخروج">
+            🚪
+          </button>
+        </div>
+      </div>
+
+      <!-- السطر الثاني: شريط ملخص اليوم السريع + اسم المندوب النشط -->
+      <div class="grid grid-cols-4 gap-1 text-center bg-slate-900/60 rounded-xl p-1.5 border border-white/10 text-[11px]">
+        <div class="border-l border-white/10 pl-1">
+          <span class="text-slate-300 block text-[9px] font-bold">السيارات</span>
+          <strong class="text-white font-extrabold"><span id="dayKpiCount">0</span> سيارة</strong>
+        </div>
+        <div class="border-l border-white/10 pl-1">
+          <span class="text-slate-300 block text-[9px] font-bold">صافي اليوم</span>
+          <strong class="text-amber-300 font-extrabold"><span id="dayKpiNetWeight">0</span> ك</strong>
+        </div>
+        <div class="border-l border-white/10 pl-1">
+          <span class="text-slate-300 block text-[9px] font-bold">صافي الخزنة</span>
+          <strong class="text-emerald-300 font-extrabold"><span id="dayKpiNetCash">0</span> ج</strong>
+        </div>
+        <div class="truncate px-1">
+          <span class="text-slate-300 block text-[9px] font-bold">المندوب النشط</span>
+          <strong id="hdrActiveUserDisplayName" class="text-sky-200 font-extrabold text-[10px] truncate block">مدير الموقع</strong>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- بانر تنبيه في حال كان اليوم مقفلاً ومعتمداً محاسبياً -->
+  <div id="dayLockedNoticeBanner" class="hidden max-w-xl mx-auto mt-2 px-2.5">
+    <div class="bg-amber-100 border-2 border-amber-500 text-slate-900 px-3 py-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 text-xs font-extrabold">
+      <span id="dayLockedNoticeText">🔒 هذا اليوم مقفل ومعتمد محاسبياً — للعرض فقط.</span>
+      <span id="dayLockedMetaBadge" class="text-[10px] bg-amber-300 px-2 py-0.5 rounded-lg shrink-0">معتمد ✓</span>
+    </div>
+  </div>
+
+  <!-- الحاوية الرئيسية لتطبيق الموبايل (المكونات الثلاثة الحصرية) -->
+  <main class="max-w-xl mx-auto px-2.5 pt-2.5 space-y-3.5">
+
+    <!-- =================================================================== -->
+    <!-- المكون الأول (1): ⏳ شريط البطاقات الأفقية للوزنات المؤقتة (Swipeable) -->
+    <!-- =================================================================== -->
+    <section id="pendingWeighInsSection" class="bg-amber-50 border-2 border-amber-400 rounded-2xl p-2.5 shadow-sm space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-1.5">
+          <span class="text-base">⏳</span>
+          <h2 class="text-xs font-extrabold text-amber-950">
+            سيارات تحت التحميل (اضغط لاستكمال وزنة 2)
+          </h2>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input id="inpFilterPendingSales" type="text" placeholder="🔍 بحث..."
+            class="px-2 py-1 text-[11px] font-bold text-slate-900 rounded-lg bg-white border border-amber-400 w-24 focus:outline-none" />
+          <span id="pendingWeighInsCountBadge" class="px-2.5 py-0.5 rounded-full bg-slate-900 text-amber-300 text-[11px] font-extrabold">
+            0 سيارة
+          </span>
+        </div>
+      </div>
+
+      <!-- حاوية البطاقات الأفقية القابلة للسحب باللمس -->
+      <div id="pendingCardsHorizontalList" class="pending-cards-scroll">
+        <!-- نموذج بطاقة وزنة أولى مؤقتة توضيحية (يتم توليد البطاقات ديناميكياً بالـ JS) -->
+        <div id="pendingCardsEmptyHint" class="w-full py-3 text-center text-xs font-bold text-amber-900/80 bg-white/70 rounded-xl border border-dashed border-amber-300">
+          لا توجد سيارات منتظرة حالياً — عند حفظ (وزنة أولى فارغ) ستظهر بطاقتها هنا للمسها واستكمال الوزنة الثانية فوراً.
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- المكون الثاني (2): 🚛 لوحة تسجيل حركة بيع / 💵 سند تحصيل (Touch Form) -->
+    <!-- =================================================================== -->
+    <section id="saleFormCard" class="bg-white rounded-2xl shadow-md border-2 border-blue-900/20 overflow-visible">
+
+      <!-- ترويسة النموذج + مفتاح التبديل الكبير بين (🚛 حركة ميزان) و (💵 سند تحصيل) -->
+      <div id="saleFormCardHeader" class="navy-gradient text-white p-3 rounded-t-2xl space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <span id="saleFormHeaderIcon" class="text-base">🚛</span>
+            <h2 id="saleFormTitle" class="text-sm font-extrabold">
+              <span id="saleFormTitleActionText">تسجيل حركة جديدة</span>
+              <span class="text-amber-300 text-xs">(<span id="saleFormDayLabel">يوم 1</span>)</span>
+            </h2>
+          </div>
+          <!-- شارة حالة التعديل أو الاستكمال عند استرجاع وزنة مؤقتة -->
+          <span id="mobileFormStateBadge" class="hidden px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-extrabold shadow">
+            🔄 استكمال وزنة 2
+          </span>
+        </div>
+
+        <!-- مفتاح التبديل اللمسي الكبير بين الوضعين (Touch Mode Switcher) -->
+        <div id="saleEntryModeToggleBar" class="grid grid-cols-2 gap-1.5 bg-slate-950/70 p-1.5 rounded-xl border border-white/20">
+          <button type="button" id="btnModeScaleSale"
+            class="touch-btn py-2 px-2 rounded-lg bg-amber-400 text-slate-950 font-extrabold text-xs shadow transition flex items-center justify-center gap-1.5">
+            <span>🚛</span>
+            <span>حركة ميزان وبيع</span>
+          </button>
+          <button type="button" id="btnModeDebtCollectionOnly"
+            class="touch-btn py-2 px-2 rounded-lg text-slate-200 hover:bg-white/10 font-extrabold text-xs transition flex items-center justify-center gap-1.5">
+            <span>💵</span>
+            <span>سند تحصيل مديونية فقط</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- نموذج الإدخال الرئيسي -->
+      <form id="saleEntryForm" class="p-3 space-y-3" novalidate>
+        <input type="hidden" id="editSaleId" value="" />
+        <input type="hidden" id="inpSaleEntryMode" value="sale" />
+        <input type="hidden" id="activeRecalledPendingIdInput" value="" />
+
+        <!-- بانر تنبيه وضع سند تحصيل مديونية فقط (بدون ميزان) -->
+        <div id="debtCollectionOnlyModeBanner" class="hidden bg-teal-50 border-2 border-teal-500 text-teal-950 p-2.5 rounded-xl flex items-center justify-between gap-2 text-xs font-extrabold">
+          <span>💵 وضع سند تحصيل مديونية فقط: اختر التاجر وأدخل المبلغ المسدد نقداً أو تحويلاً.</span>
+          <button type="button" id="btnSwitchBackToScaleMode" class="px-2.5 py-1.5 rounded-lg bg-teal-800 text-white text-[11px] font-extrabold shrink-0">
+            🚛 وضع الميزان
+          </button>
+        </div>
+
+        <!-- القسم أ: بيانات التاجر، الكود الموحد، رقم الميزان، ورقم السيارة -->
+        <div class="space-y-2.5">
+          <div class="relative">
+            <div class="flex items-center justify-between mb-1">
+              <label id="lblMerchantNameField" for="inpMerchantName" class="text-xs font-extrabold text-slate-800">
+                👤 اسم التاجر / عهدة السيارة
+              </label>
+              <span id="dispMerchantCode" class="px-2.5 py-0.5 rounded-lg bg-blue-100 text-blue-900 border border-blue-300 text-[11px] font-extrabold">
+                كود التاجر: تلقائي
+              </span>
+            </div>
+            <input id="inpMerchantName" type="text" enterkeyhint="next" autocomplete="off" required
+              placeholder="اكتب حرفين من اسم التاجر أو السيارة..."
+              class="touch-input w-full px-3.5 py-2.5 font-extrabold border-2 border-slate-300 rounded-xl bg-white focus:outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-600" />
+            <!-- قائمة الإكمال التلقائي الفوري لأسماء التجار -->
+            <div id="merchantSuggestBox" class="hidden absolute z-30 w-full mt-1 bg-white border-2 border-blue-700 rounded-xl shadow-2xl max-h-56 overflow-y-auto divide-y divide-slate-100"></div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label id="lblScaleOrVoucherNo" for="inpScaleNo" class="block text-xs font-extrabold text-slate-700 mb-1">
+                🔢 رقم بون الميزان <span class="text-emerald-700 text-[10px]">(تلقائي)</span>
+              </label>
+              <input id="inpScaleNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="5222"
+                class="touch-input w-full px-3 py-2 font-extrabold border-2 border-slate-300 rounded-xl text-center bg-slate-50 focus:bg-white focus:border-blue-700" />
+            </div>
+            <div id="wrapCarNoField">
+              <label id="lblCarNoField" for="inpCarNo" class="block text-xs font-extrabold text-slate-700 mb-1">
+                🚚 رقم السيارة
+              </label>
+              <input id="inpCarNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="6923"
+                class="touch-input w-full px-3 py-2 font-extrabold border-2 border-slate-300 rounded-xl text-center bg-slate-50 focus:bg-white focus:border-blue-700" />
+            </div>
+          </div>
+        </div>
+
+        <!-- القسم ب: حقول الأوزان والسعر والإكرامية (يُخفى تلقائياً في وضع سند تحصيل المديونية) -->
+        <div id="saleWeightsAndPriceRow" class="bg-slate-50 p-2.5 rounded-2xl border-2 border-slate-200 space-y-2.5">
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label for="inpW1" class="block text-xs font-extrabold text-amber-900 mb-1">
+                ⚖️ وزنة 1 (فارغ - كجم)
+              </label>
+              <input id="inpW1" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
+                class="touch-input w-full px-3 py-2.5 font-extrabold border-2 border-amber-400 rounded-xl bg-white text-center text-slate-900 focus:ring-2 focus:ring-amber-500" />
+            </div>
+            <div>
+              <label for="inpW2" class="block text-xs font-extrabold text-emerald-900 mb-1">
+                ⚖️ وزنة 2 (قائم - كجم)
+              </label>
+              <input id="inpW2" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
+                class="touch-input w-full px-3 py-2.5 font-extrabold border-2 border-emerald-500 rounded-xl bg-white text-center text-emerald-950 focus:ring-2 focus:ring-emerald-600" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label for="inpPrice" class="block text-xs font-extrabold text-slate-700 mb-1">
+                🏷️ السعر (ج.م / كجم)
+              </label>
+              <input id="inpPrice" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="78.02"
+                class="touch-input w-full px-3 py-2 font-extrabold border border-slate-300 rounded-xl bg-white text-center focus:ring-2 focus:ring-blue-600" />
+            </div>
+            <div>
+              <label for="inpTip" class="block text-xs font-extrabold text-slate-700 mb-1">
+                🎁 الإكرامية (ج.م)
+              </label>
+              <input id="inpTip" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="250"
+                class="touch-input w-full px-3 py-2 font-extrabold border border-slate-300 rounded-xl bg-white text-center focus:ring-2 focus:ring-blue-600" />
+            </div>
+          </div>
+
+          <!-- تنبيه خطأ الميزان (عندما تكون الوزنة الثانية أقل من الوزنة الأولى) -->
+          <div id="weightValidationAlert" class="hidden p-2.5 rounded-xl bg-rose-100 border-2 border-rose-500 text-rose-900 text-xs font-extrabold flex items-center gap-2">
+            <span class="text-base">⚠️</span>
+            <span>خطأ في الميزان: الوزنة الثانية (القائم) يجب أن تكون أكبر من أو تساوي الوزنة الأولى (الفارغ)!</span>
+          </div>
+        </div>
+
+        <!-- شريط النتائج الفورية المدمج (الصافي + إجمالي الفاتورة + مديونية التاجر السابقة) -->
+        <div id="saleLiveCalcBannerGrid" class="grid grid-cols-3 gap-1.5 bg-blue-950 text-white p-2.5 rounded-2xl text-center shadow-inner">
+          <div id="kpiBoxNetWeight" class="border-l border-white/15 pl-1">
+            <div class="text-[10px] text-blue-200 font-bold">الوزن الصافي</div>
+            <div id="calcNetWeight" class="text-sm font-extrabold text-amber-400 mt-0.5">0 كجم</div>
+          </div>
+          <div id="kpiBoxTotalWithTip" class="border-l border-white/15 pl-1">
+            <div class="text-[10px] text-blue-200 font-bold">إجمالي الفاتورة</div>
+            <div id="calcTotalWithTip" class="text-sm font-extrabold text-emerald-300 mt-0.5">0 ج.م</div>
+          </div>
+          <div id="kpiBoxPrevDebt">
+            <div class="text-[10px] text-indigo-200 font-bold">مديونية التاجر السابقة</div>
+            <div id="calcPrevMerchantDebt" class="text-sm font-extrabold text-white mt-0.5">0 ج.م</div>
+            <div id="calcPrevMerchantDebtSub" class="hidden text-[9px] text-indigo-200"></div>
+          </div>
+          <!-- عناصر مخفية للتوافق الكامل مع دالة الحساب الحي في المحرك الرئيسي -->
+          <div id="kpiBoxInvoiceDiff" class="hidden"><span id="calcInvoiceDiff">0</span></div>
+          <div class="hidden"><span id="calcMerchantBalance">0</span><span id="calcMerchantBalanceSub"></span></div>
+        </div>
+
+        <!-- شريط العهدة الموحد القابل للطي والفتح السريع (Unified Custody Waterfall) -->
+        <div id="unifiedCustodyWaterfallBox" class="border-2 border-amber-400 bg-amber-50/80 rounded-2xl p-2.5 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-extrabold text-amber-950">💼 شريط العهدة والتوزيع التلقائي (اختياري)</span>
+            <div class="flex items-center gap-1.5">
+              <label class="inline-flex items-center gap-1 text-[11px] font-extrabold text-slate-800 bg-white px-2 py-1 rounded-lg border border-amber-400">
+                <input type="checkbox" id="chkAutoDistributeCustody" class="rounded text-emerald-700 w-3.5 h-3.5" checked />
+                <span>توزيع تلقائي</span>
+              </label>
+              <button type="button" id="btnDistributeCustodyWaterfall" class="px-2 py-1 rounded-lg bg-amber-500 text-slate-950 font-extrabold text-[11px] border border-amber-600">
+                ⚡ توزيع
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label for="inpCustodyCash" class="block text-[11px] font-extrabold text-slate-700 mb-0.5">عهدة نقدية (ج.م)</label>
+              <input id="inpCustodyCash" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
+                class="touch-input w-full px-2.5 py-1.5 font-extrabold border border-amber-400 rounded-xl bg-white text-emerald-900" />
+            </div>
+            <div>
+              <label for="inpCustodyTransfer" class="block text-[11px] font-extrabold text-slate-700 mb-0.5">عهدة تحويل (ج.م)</label>
+              <input id="inpCustodyTransfer" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
+                class="touch-input w-full px-2.5 py-1.5 font-extrabold border border-amber-400 rounded-xl bg-white text-blue-900" />
+            </div>
+            <div class="col-span-2">
+              <select id="selCustodyTransferType" class="touch-input w-full px-2.5 py-1.5 text-xs font-extrabold border border-amber-400 rounded-xl bg-white">
+                <option value="">-- نوع تحويل العهدة (إن وجد) --</option>
+                <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                <option value="تحويل بنكي">تحويل بنكي</option>
+                <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                <option value="شيكات">شيكات</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="custodyWaterfallSummaryStrip" class="grid grid-cols-3 gap-1 text-[10px] font-extrabold text-center pt-1">
+            <div class="bg-white rounded-lg p-1 border border-amber-300">العهدة: <strong id="lblTotalCustodyEntered">0</strong></div>
+            <div class="bg-teal-50 rounded-lg p-1 border border-teal-300">للمديونية: <strong id="lblCustodyToDebt">0</strong> <span class="hidden" id="lblCustodyAfterDebt">0</span></div>
+            <div class="bg-emerald-50 rounded-lg p-1 border border-emerald-300"><span id="lblNetCustodyRemainingTitle">المتبقي:</span> <strong id="lblNetCustodyRemaining">0</strong> <span class="hidden" id="lblCustodyToInvoice">0</span></div>
+          </div>
+          <button type="button" id="btnDepositCustodySurplusToAccount" class="hidden w-full py-2 px-3 rounded-xl bg-emerald-700 text-white font-extrabold text-xs">
+            📥 إيداع فائض العهدة بالخزنة تحت حساب التاجر
+          </button>
+        </div>
+
+        <!-- القسم ج: بطاقات التحصيل والسداد (فاتورة اليوم + مديونية المزرعة الحالية + المزارع السابقة المطوية) -->
+        <div id="saleCollectionsRow3Grid" class="space-y-2.5">
+
+          <!-- 1. سداد فاتورة اليوم (المزرعة الحالية - يُخفى في وضع سند تحصيل المديونية فقط) -->
+          <div id="currentInvoiceCollectionCard" class="border-2 border-blue-800/20 bg-blue-50/50 rounded-2xl p-2.5 space-y-2">
+            <div class="flex items-center justify-between border-b border-blue-200 pb-1.5">
+              <span class="text-xs font-extrabold text-blue-950">1. سداد فاتورة اليوم (المزرعة الحالية)</span>
+              <button type="button" id="btnAutoFillCredit" class="px-2.5 py-1 rounded-lg bg-blue-800 text-amber-300 text-[11px] font-extrabold shadow-sm">
+                ⚡ باقي الفاتورة آجل
+              </button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label for="inpCashSales" class="block text-[11px] font-extrabold text-slate-700 mb-0.5">💵 نقدي مبيعات (للخزنة)</label>
+                <input id="inpCashSales" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
+                  class="touch-input w-full px-2.5 py-2 font-extrabold border-2 border-emerald-500 rounded-xl bg-white text-emerald-950" />
+              </div>
+              <div>
+                <label for="inpCreditSales" class="block text-[11px] font-extrabold text-slate-700 mb-0.5">📌 آجل فاتورة اليوم</label>
+                <input id="inpCreditSales" type="text" inputmode="decimal" enterkeyhint="done" data-money-input="1" placeholder="0"
+                  class="touch-input w-full px-2.5 py-2 font-extrabold border-2 border-slate-300 rounded-xl bg-white text-rose-900" />
+              </div>
+              <div>
+                <label for="inpTransferSales" class="block text-[11px] font-extrabold text-amber-900 mb-0.5">💳 تحويل مبيعات</label>
+                <input id="inpTransferSales" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                  class="touch-input w-full px-2.5 py-2 font-extrabold border border-amber-400 rounded-xl bg-white" />
+              </div>
+              <div>
+                <label for="selTransferSalesType" class="block text-[11px] font-extrabold text-amber-900 mb-0.5">نوع التحويل</label>
+                <select id="selTransferSalesType" class="touch-input w-full px-2 py-2 text-xs font-extrabold border border-amber-400 rounded-xl bg-white">
+                  <option value="">-- اختر النوع --</option>
+                  <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                  <option value="تحويل بنكي">تحويل بنكي</option>
+                  <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                  <option value="شيكات">شيكات</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. تحصيل مديونيات المزرعة الحالية -->
+          <div id="currentDebtCollectionCard" class="border-2 border-teal-800/25 bg-teal-50/50 rounded-2xl p-2.5 space-y-2">
+            <div class="flex items-center justify-between border-b border-teal-200 pb-1.5">
+              <span class="text-xs font-extrabold text-teal-950">2. تحصيل مديونيات المزرعة الحالية</span>
+              <span class="text-[10px] font-extrabold text-teal-900 bg-teal-100 px-2 py-0.5 rounded-lg">يُخصم من مديونية التاجر</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="col-span-2">
+                <label for="inpDebtCash" class="block text-[11px] font-extrabold text-slate-700 mb-0.5">💵 نقدي تحصيل مديونيات (يدخل الخزنة)</label>
+                <input id="inpDebtCash" type="text" inputmode="decimal" enterkeyhint="done" data-money-input="1" placeholder="0"
+                  class="touch-input w-full px-3 py-2 font-extrabold border-2 border-teal-500 rounded-xl bg-white text-teal-950" />
+              </div>
+              <div>
+                <label for="inpDebtTransfer" class="block text-[11px] font-extrabold text-amber-900 mb-0.5">💳 تحويل مديونيات</label>
+                <input id="inpDebtTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                  class="touch-input w-full px-2.5 py-2 font-extrabold border border-amber-400 rounded-xl bg-white" />
+              </div>
+              <div>
+                <label for="selDebtTransferType" class="block text-[11px] font-extrabold text-amber-900 mb-0.5">نوع تحويل المديونية</label>
+                <select id="selDebtTransferType" class="touch-input w-full px-2 py-2 text-xs font-extrabold border border-amber-400 rounded-xl bg-white">
+                  <option value="">-- اختر النوع --</option>
+                  <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                  <option value="تحويل بنكي">تحويل بنكي</option>
+                  <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                  <option value="شيكات">شيكات</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. تحصيلات مزارع سابقة / ملاحظات (مطوي افتراضياً لتوفير المساحة الرأسية على الموبايل) -->
+          <div id="prevFarmsCollectionCard" class="border-2 border-purple-800/20 bg-purple-50/40 rounded-2xl p-2.5">
+            <div id="prevFarmsCollectionHeader" class="flex items-center justify-between gap-2 cursor-pointer select-none">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs font-extrabold text-purple-950">🏦 3. مزارع سابقة / ملاحظات</span>
+                <span id="prevFarmsCollapsedSummaryBadge" class="text-[10px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-lg">
+                  مطوي افتراضياً
+                </span>
+              </div>
+              <button type="button" id="btnTogglePrevFarmsSection" aria-expanded="false" class="px-2.5 py-1 rounded-lg bg-purple-800 text-white font-extrabold text-[11px] flex items-center gap-1">
+                <span id="btnTogglePrevFarmsIcon">➕</span>
+                <span id="btnTogglePrevFarmsText">فتح ▾</span>
+              </button>
+            </div>
+
+            <div id="prevFarmsCollapsibleBody" class="hidden pt-2.5 mt-2 border-t border-purple-200 space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label for="inpPrevCash" class="block text-[11px] font-extrabold text-slate-700 mb-0.5">نقدي سابقة (للخزنة فقط)</label>
+                  <input id="inpPrevCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="touch-input w-full px-2.5 py-1.5 font-extrabold border border-slate-300 rounded-xl bg-white" />
+                </div>
+                <div>
+                  <label for="inpNotes" class="block text-[11px] font-extrabold text-slate-700 mb-0.5">اسم المزرعة السابقة / ملاحظة</label>
+                  <input id="inpNotes" type="text" list="prevFarmsArchiveDatalist" placeholder="ملاحظات أو اسم المزرعة..."
+                    class="touch-input w-full px-2.5 py-1.5 text-xs font-extrabold border border-slate-300 rounded-xl bg-white" />
+                  <datalist id="prevFarmsArchiveDatalist"></datalist>
+                </div>
+                <div>
+                  <label for="inpPrevTransfer" class="block text-[11px] font-extrabold text-amber-900 mb-0.5">تحويل سابقة</label>
+                  <input id="inpPrevTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
+                    class="touch-input w-full px-2.5 py-1.5 font-extrabold border border-amber-400 rounded-xl bg-white" />
+                </div>
+                <div>
+                  <label for="selPrevTransferType" class="block text-[11px] font-extrabold text-amber-900 mb-0.5">نوع تحويل السابقة</label>
+                  <select id="selPrevTransferType" class="touch-input w-full px-2 py-1.5 text-xs font-extrabold border border-amber-400 rounded-xl bg-white">
+                    <option value="">-- اختر النوع --</option>
+                    <option value="تحويل كاش">تحويل كاش / محفظة</option>
+                    <option value="تحويل بنكي">تحويل بنكي</option>
+                    <option value="إنستا باي">إنستا باي (InstaPay)</option>
+                    <option value="شيكات">شيكات</option>
+                  </select>
+                </div>
+              </div>
+              <div id="crossFarmDebtRefBox" class="px-2.5 py-1.5 rounded-xl bg-purple-100 border border-purple-300 text-[11px] font-extrabold text-purple-950 flex items-center justify-between gap-1 flex-wrap">
+                <span id="crossFarmDebtRefLabel">🔎 مرجع أرشيف المزارع السابقة</span>
+                <span id="crossFarmDebtRefValue" class="px-2 py-0.5 rounded bg-white text-purple-900 text-[10px]">استرشادي</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- صندوق تنبيهات الرقابة الذكية غير المانعة للحفظ -->
+        <div id="smartAuditAlertsBox" class="hidden rounded-xl border-2 border-amber-400 bg-amber-50 p-2.5 space-y-1">
+          <div class="flex items-center justify-between text-xs font-extrabold text-amber-950">
+            <span>🛡️ تنبيهات المراجعة الفورية:</span>
+            <span id="smartAuditAlertsCountBadge" class="px-2 py-0.5 rounded-full bg-amber-300 text-[10px]">0 تنبيه</span>
+          </div>
+          <div id="smartAuditAlertsList" class="space-y-1 text-[11px] font-bold text-slate-800"></div>
+        </div>
+
+        <!-- أزرار الحفظ اللمسية الكبيرة والذكية (يتحول زر الحفظ الذكي تلقائياً بين حفظ مؤقت وزنة 1 وحفظ نهائي) -->
+        <div id="inlineSaleFormActionsMobile" class="pt-2 border-t border-slate-200 space-y-2">
+          <!-- الزر الرئيسي الذكي المكبّر (Smart Primary Action Button) -->
+          <button type="submit" id="btnInlineSaveSale"
+            class="touch-btn w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-base shadow-lg border-2 border-emerald-400 transition flex items-center justify-center gap-2">
+            <span id="btnInlineSaveSaleIcon">💾</span>
+            <span id="btnInlineSaveSaleText">حفظ نهائي للحركة</span>
+          </button>
+
+          <!-- صف الأزرار المساندة: حفظ مؤقت وزنة 1 صريح + تفريغ/إلغاء الإدخال -->
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="btnInlineSavePendingW1"
+              class="touch-btn py-2.5 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow border border-amber-500 transition flex items-center justify-center gap-1.5">
+              <span>⏳</span>
+              <span>حفظ مؤقت (وزنة 1 فقط)</span>
+            </button>
+            <button type="button" id="btnInlineCancelSale"
+              class="touch-btn py-2.5 px-3 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 font-extrabold text-xs border border-rose-300 transition flex items-center justify-center gap-1.5">
+              <span>✕</span>
+              <span id="btnInlineCancelSaleText">إلغاء / تفريغ الحقول</span>
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- المكون الثالث (3): 📋 سجل حركات البيع المسجلة اليوم بنظام البطاقات     -->
+    <!-- =================================================================== -->
+    <section id="mobileSalesCardsSection" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 space-y-3">
+      <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
+        <div class="flex items-center gap-1.5">
+          <span class="text-base">📋</span>
+          <h3 class="text-sm font-extrabold text-slate-900">
+            سجل حركات اليوم (<span id="tblDayTitle">يوم 1</span>)
+          </h3>
+        </div>
+        <span id="mobileRecordedSalesCountBadge" class="px-2.5 py-0.5 rounded-full bg-blue-900 text-amber-300 text-xs font-extrabold">
+          0 حركة
+        </span>
+      </div>
+
+      <!-- شريط البحث السريع وفلترة بطاقات اليوم -->
+      <div class="space-y-2">
+        <div class="flex items-center gap-1.5">
+          <input id="inpFilterDailySales" type="text" placeholder="🔍 ابحث باسم التاجر أو رقم السيارة أو الميزان..."
+            class="touch-input flex-1 px-3 py-2 text-xs font-bold text-slate-900 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          <button type="button" id="btnClearDailySalesFilters" class="touch-btn px-3 py-2 rounded-xl bg-amber-400 text-slate-950 font-extrabold text-xs shrink-0">
+            🔄 الكل
+          </button>
+        </div>
+
+        <!-- شرائح تصفية سريعة لبطاقات الموبايل -->
+        <div id="mobileSalesFilterPills" class="grid grid-cols-4 gap-1 text-center text-[11px] font-extrabold">
+          <button type="button" data-card-filter="all" class="py-1.5 px-2 rounded-xl bg-blue-900 text-white shadow-sm">
+            الكل
+          </button>
+          <button type="button" data-card-filter="completed" class="py-1.5 px-2 rounded-xl bg-slate-100 text-slate-700">
+            🚛 مكتملة
+          </button>
+          <button type="button" data-card-filter="pending" class="py-1.5 px-2 rounded-xl bg-amber-50 text-amber-900 border border-amber-300">
+            ⏳ مؤقتة
+          </button>
+          <button type="button" data-card-filter="debt_only" class="py-1.5 px-2 rounded-xl bg-teal-50 text-teal-900 border border-teal-300">
+            💵 سندات
+          </button>
+        </div>
+      </div>
+
+      <!-- حاوية بطاقات حركات البيع المسجلة (Mobile Sale Cards — بدون أي تمرير أفقي) -->
+      <div id="mobileSalesCardsContainer" class="space-y-2.5">
+        <!-- حالة عدم وجود حركات بعد -->
+        <div id="mobileSalesEmptyState" class="p-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-1">
+          <div class="text-2xl">🚛</div>
+          <div class="text-xs font-extrabold text-slate-700">لا توجد حركات بيع أو سندات مسجلة في هذا اليوم حتى الآن</div>
+          <div class="text-[11px] font-semibold text-slate-500">استخدم النموذج أعلاه لتسجيل وزنة جديدة أو سند تحصيل مديونية</div>
+        </div>
+      </div>
+
+      <!-- ملخص إجماليات اليوم أسفل البطاقات -->
+      <div id="mobileSalesDayFooterSummary" class="bg-slate-900 text-white rounded-2xl p-3 grid grid-cols-3 gap-2 text-center text-xs">
+        <div class="border-l border-white/15 pl-1">
+          <span class="text-[10px] text-slate-300 block">إجمالي الصافي</span>
+          <strong id="footMobileSumNetW" class="text-amber-300 font-extrabold">0 كجم</strong>
+        </div>
+        <div class="border-l border-white/15 pl-1">
+          <span class="text-[10px] text-slate-300 block">إجمالي الفواتير</span>
+          <strong id="footMobileSumSales" class="text-emerald-300 font-extrabold">0 ج.م</strong>
+        </div>
+        <div>
+          <span class="text-[10px] text-slate-300 block">نقدي + مديونيات</span>
+          <strong id="footMobileSumCashCollected" class="text-white font-extrabold">0 ج.م</strong>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- بانر الإشعارات الفورية (Toast Notification Banner — بديل alert/confirm) -->
+  <div id="toastContainer" class="fixed z-50 hidden bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border-r-4 border-amber-400 text-xs font-extrabold flex items-center gap-2">
+    <span id="toastIcon">✅</span>
+    <span id="toastMsg">تم الحفظ بنجاح</span>
+  </div>
+
+<!-- حاوية الطباعة المعزولة لبون الميزان (تُستخدم عند طلب طباعة البون من الموبايل) -->
+  <div id="merchantPrintOnlyContainer" dir="rtl"></div>
+
+  <!-- ملفات البرمجة الأساسية للتشغيل -->
+  <script src="app.js"></script>
+  <script src="mobile-app.js"></script>
+
+</body>
+</html>
