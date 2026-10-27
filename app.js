@@ -9411,7 +9411,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v51-debt-collection-voucher-mode') {
+          if (k !== 'farm-sales-committee-v53-mobile-fixed' && k !== 'farm-sales-committee-v51-debt-collection-voucher-mode') {
             caches.delete(k).catch(() => {});
           }
         });

@@ -1,103 +1,92 @@
 // =========================================================================
-// MOBILE COMPANION ENGINE (mobile-app.js — v52)
-// يُستدعى في mobile.html مباشرة بعد app.js لربط واجهة الموبايل اللمسية
+// MOBILE COMPANION ENGINE (mobile-app.js — v53 Bulletproof Fix)
+// يعمل كحارس توافق ديناميكي قبل app.js ثم يربط واجهة الموبايل اللمسية
 // بقاعدة البيانات الموحدة (appState) والدوال المحاسبية والمزامنة اللحظية
 // =========================================================================
 
 (function () {
   'use strict';
 
-  // حالة الفلترة المحلية لبطاقات حركات اليوم على الموبايل ('all' | 'completed' | 'pending' | 'debt_only')
   let mobileActiveCardFilter = 'all';
-  // معرّف البطاقة المفتوح لها تأكيد الحذف المضمن (بديل window.confirm المحظور)
   let mobilePendingDeleteConfirmId = '';
 
   // -----------------------------------------------------------------------
-  // 1. حارس عناصر الـ DOM الآمن (Safe DOM Shims for app.js Compatibility)
-  // يضمن عدم حدوث أي خطأ TypeError في دوال app.js التي تحدث عناصر سطح المكتب
+  // 1. الحارس الديناميكي الشامل (On-Demand Auto-Shim for document.getElementById)
+  // يمنع توقف initFarmSalesApp() في app.js عند طلب أي عنصر خاص بواجهة الكمبيوتر
   // -----------------------------------------------------------------------
-  function installSafeMobileDomGuard() {
-    if (typeof document === 'undefined' || !document.body) return;
-    let shimBox = document.getElementById('mobileAppJsCompatibilityShim');
-    if (!shimBox) {
-      shimBox = document.createElement('div');
-      shimBox.id = 'mobileAppJsCompatibilityShim';
-      shimBox.className = 'hidden';
-      shimBox.style.display = 'none';
-      shimBox.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(shimBox);
-    }
+  function installBulletproofDomGuard() {
+    if (typeof document === 'undefined' || window.__mobileDomGuardInstalled) return;
+    window.__mobileDomGuardInstalled = true;
 
-    const requiredIds = [
-      { id: 'inpTopFarmName', tag: 'input' },
-      { id: 'inpSettingsFarmName', tag: 'input' },
-      { id: 'dailyFarmNameBadge', tag: 'span' },
-      { id: 'dashFarmNameTitle', tag: 'span' },
-      { id: 'linkedExcelNameTxt', tag: 'span' },
-      { id: 'daySelectorContainer', tag: 'div' },
-      { id: 'currentDayDateInput', tag: 'input' },
-      { id: 'expDayTitle', tag: 'span' },
-      { id: 'tbDayTitle', tag: 'span' },
-      { id: 'dayKpiTotalSales', tag: 'span' },
-      { id: 'dayKpiExpenses', tag: 'span' },
-      { id: 'dayKpiTransfers', tag: 'span' },
-      { id: 'dailySalesTbody', tag: 'tbody', wrapTable: 'dailySalesTable', theadRowId: 'dailySalesTheadRow', tfootId: 'dailySalesTfoot' },
-      { id: 'pendingWeighInsTbody', tag: 'tbody', wrapTable: 'pendingWeighInsTable', theadRowId: 'pendingWeighInsTheadRow' },
-      { id: 'dailyExpensesTbody', tag: 'tbody', wrapTable: 'dailyExpensesTable', theadRowId: 'dailyExpensesTheadRow' },
-      { id: 'dayTotalExpensesBadge', tag: 'span' },
-      { id: 'tbPillar1', tag: 'div' },
-      { id: 'tbPillar2', tag: 'div' },
-      { id: 'tbPillar3', tag: 'div' },
-      { id: 'inpDeliveredCash', tag: 'input' },
-      { id: 'inpCarriedForwardCash', tag: 'input' },
-      { id: 'tbCashDiffBox', tag: 'div' },
-      { id: 'btnSaveSale', tag: 'button' },
-      { id: 'btnSaveSaleText', tag: 'span' },
-      { id: 'btnSavePendingW1', tag: 'button' },
-      { id: 'btnCancelEditSale', tag: 'button' },
-      { id: 'btnCancelEditSaleText', tag: 'span' },
-      { id: 'stickyBarNetWeight', tag: 'strong' },
-      { id: 'stickyBarTotalInvoice', tag: 'strong' },
-      { id: 'stickyBarRemCredit', tag: 'strong' },
-      { id: 'btnStickyAutoCredit', tag: 'button' },
-      { id: 'btnStickyDistributeCustody', tag: 'button' },
-      { id: 'mobileWeighbridgeActionBar', tag: 'div' }
-    ];
-
-    requiredIds.forEach(item => {
-      if (document.getElementById(item.id)) return;
-      if (item.wrapTable) {
-        const tbl = document.createElement('table');
-        tbl.id = item.wrapTable;
-        if (item.theadRowId) {
-          const thead = document.createElement('thead');
-          const tr = document.createElement('tr');
-          tr.id = item.theadRowId;
-          thead.appendChild(tr);
-          tbl.appendChild(thead);
-        }
-        const tbody = document.createElement('tbody');
-        tbody.id = item.id;
-        tbl.appendChild(tbody);
-        if (item.tfootId) {
-          const tfoot = document.createElement('tfoot');
-          tfoot.id = item.tfootId;
-          tbl.appendChild(tfoot);
-        }
-        shimBox.appendChild(tbl);
-      } else {
-        const el = document.createElement(item.tag || 'div');
-        el.id = item.id;
-        shimBox.appendChild(el);
+    const ensureShimContainer = () => {
+      let box = document.querySelector('#mobileAppJsCompatibilityShim');
+      if (!box && document.body) {
+        box = document.createElement('div');
+        box.id = 'mobileAppJsCompatibilityShim';
+        box.className = 'hidden';
+        box.style.display = 'none';
+        box.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(box);
       }
-    });
+      return box;
+    };
+
+    const origGetById = document.getElementById.bind(document);
+
+    // العناصر التي يتعامل معها app.js بـ if (el) ولا يجب توليد بديل وهمي لها إلا إذا لزم
+    const doNotFakeIds = new Set([
+      'metaEmbeddedCloudWebhookUrl',
+      'criticalPrintStyles',
+      'merchantPrintOnlyContainer',
+      'dashSalesChart'
+    ]);
+
+    document.getElementById = function (id) {
+      const found = origGetById(id);
+      if (found) return found;
+      if (!id || doNotFakeIds.has(id)) return null;
+
+      const shimBox = ensureShimContainer();
+      if (!shimBox) return null;
+
+      let tag = 'div';
+      const sId = String(id);
+      if (sId.startsWith('inp') || sId.startsWith('file')) tag = 'input';
+      else if (sId.startsWith('sel')) tag = 'select';
+      else if (sId.startsWith('chk')) tag = 'input';
+      else if (sId.startsWith('rad')) tag = 'input';
+      else if (sId.startsWith('btn')) tag = 'button';
+      else if (sId.endsWith('Form')) tag = 'form';
+      else if (sId.endsWith('Tbody')) tag = 'tbody';
+      else if (sId.endsWith('Tfoot')) tag = 'tfoot';
+      else if (sId.endsWith('TheadRow')) tag = 'tr';
+      else if (sId.endsWith('Table')) tag = 'table';
+
+      if (tag === 'tbody' || tag === 'tfoot' || tag === 'tr') {
+        const tbl = document.createElement('table');
+        const el = document.createElement(tag);
+        el.id = sId;
+        tbl.appendChild(el);
+        shimBox.appendChild(tbl);
+        return el;
+      }
+
+      const el = document.createElement(tag);
+      el.id = sId;
+      if (sId.startsWith('chk')) el.type = 'checkbox';
+      else if (sId.startsWith('rad')) el.type = 'radio';
+      else if (tag === 'button') el.type = 'button';
+
+      shimBox.appendChild(el);
+      return el;
+    };
   }
 
-  // تثبيت الحارس فوراً قبل إطلاق DOMContentLoaded
-  installSafeMobileDomGuard();
+  // تفعيل الحارس فوراً قبل قراءة وتحميل app.js
+  installBulletproofDomGuard();
 
   // -----------------------------------------------------------------------
-  // 2. تحديث قائمة اختيار اليوم في هيدر الموبايل (Day Switcher Sync)
+  // 2. تحديث قائمة اختيار اليوم في هيدر الموبايل
   // -----------------------------------------------------------------------
   function renderMobileDayPicker() {
     const selDay = document.getElementById('selMobileCurrentDay');
@@ -120,7 +109,79 @@
   }
 
   // -----------------------------------------------------------------------
-  // 3. إدارة التبديل السريع بين (🚛 حركة ميزان) و (💵 سند تحصيل مديونية فقط)
+  // 3. تفعيل الإكمال التلقائي وقائمة التجار المكودين الفورية على الموبايل
+  // -----------------------------------------------------------------------
+  function renderMerchantSuggestionsPopup(forceShowAll = false) {
+    const inpMerch = document.getElementById('inpMerchantName');
+    const suggestBox = document.getElementById('merchantSuggestBox');
+    if (!inpMerch || !suggestBox || typeof appState === 'undefined') return;
+
+    if (typeof unifyGlobalMerchantsRegistry === 'function') {
+      unifyGlobalMerchantsRegistry();
+    }
+
+    const q = forceShowAll ? '' : String(inpMerch.value || '').trim();
+    const qClean = typeof cleanMerchantBaseName === 'function' ? cleanMerchantBaseName(q) : q;
+
+    const allMerchants = Array.isArray(appState.merchants) ? appState.merchants : [];
+    const matches = allMerchants.filter(m => {
+      if (!m || !m.name) return false;
+      if (!q) return true;
+      return (
+        m.name.includes(q) ||
+        (qClean && m.name.includes(qClean)) ||
+        String(m.code).includes(q)
+      );
+    });
+
+    if (matches.length === 0 && !q) {
+      suggestBox.classList.add('hidden');
+      return;
+    }
+
+    let html = matches.map(m => {
+      const safeName = escXmlStr(m.name);
+      const debt = typeof computeMerchantCurrentDebtExcluding === 'function'
+        ? computeMerchantCurrentDebtExcluding(m.code)
+        : 0;
+      const debtBadge = debt !== 0
+        ? `<span class="text-[10px] px-1.5 py-0.5 rounded ${debt > 0 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'} font-extrabold">مديونية: ${fmtInt(debt)} ج</span>`
+        : '';
+
+      return `
+        <div class="px-3 py-2.5 hover:bg-blue-50 active:bg-blue-100 cursor-pointer flex items-center justify-between border-b border-slate-100 text-xs font-extrabold"
+             data-pick-merchant="${safeName}">
+          <div class="flex items-center gap-1.5">
+            <span class="px-2 py-0.5 rounded-lg bg-blue-900 text-amber-300 text-[10px]">كود ${m.code}</span>
+            <span class="text-slate-900 text-sm">${safeName}</span>
+          </div>
+          <div class="flex items-center gap-1">
+            ${debtBadge}
+            <button type="button" data-pick-merchant="${safeName} 1" class="px-2 py-1 rounded bg-slate-100 hover:bg-blue-200 text-blue-900 text-[10px] font-extrabold border border-slate-300">سيارة 1</button>
+            <button type="button" data-pick-merchant="${safeName} 2" class="px-2 py-1 rounded bg-slate-100 hover:bg-blue-200 text-blue-900 text-[10px] font-extrabold border border-slate-300">سيارة 2</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (q && !allMerchants.some(m => m.name === q)) {
+      const existingCode = typeof resolveMerchantCode === 'function' ? resolveMerchantCode(q) : 0;
+      const safeQ = escXmlStr(q);
+      html += `
+        <div class="px-3 py-2.5 bg-amber-50 hover:bg-amber-100 cursor-pointer flex items-center justify-between text-xs font-extrabold text-amber-950"
+             data-pick-merchant="${safeQ}">
+          <span>➕ تسجيل باسم: "${safeQ}"</span>
+          <span class="px-2 py-0.5 rounded bg-amber-300 text-slate-900 text-[10px]">${existingCode ? `يتبع كود ${existingCode}` : 'تكويد تاجر جديد تلقائياً'}</span>
+        </div>
+      `;
+    }
+
+    suggestBox.innerHTML = html;
+    suggestBox.classList.remove('hidden');
+  }
+
+  // -----------------------------------------------------------------------
+  // 4. إدارة التبديل السريع بين (🚛 حركة ميزان) و (💵 سند تحصيل مديونية فقط)
   // -----------------------------------------------------------------------
   function setMobileEntryModeUI(mode) {
     const isDebtOnly = mode === 'debt_only';
@@ -159,35 +220,8 @@
         : 'grid grid-cols-3 gap-1.5 bg-blue-950 text-white p-2.5 rounded-2xl text-center shadow-inner';
     }
 
-    const hdrIcon = document.getElementById('saleFormHeaderIcon');
-    const hdrTitleTxt = document.getElementById('saleFormTitleActionText');
-    const editId = (document.getElementById('editSaleId') && document.getElementById('editSaleId').value) || '';
-    if (!editId && !activeRecalledPendingId) {
-      if (hdrIcon) hdrIcon.textContent = isDebtOnly ? '💵' : '🚛';
-      if (hdrTitleTxt) {
-        hdrTitleTxt.textContent = isDebtOnly ? 'تسجيل سند تحصيل مديونية' : 'تسجيل حركة جديدة';
-      }
-    }
-
-    const lblScale = document.getElementById('lblScaleOrVoucherNo');
-    if (lblScale) {
-      lblScale.innerHTML = isDebtOnly
-        ? '🔢 رقم السند <span class="text-teal-700 text-[10px]">(تلقائي)</span>'
-        : '🔢 رقم بون الميزان <span class="text-emerald-700 text-[10px]">(تلقائي)</span>';
-    }
-
-    const wrapCar = document.getElementById('wrapCarNoField');
-    if (wrapCar) wrapCar.classList.toggle('hidden', isDebtOnly);
-
-    if (isDebtOnly) {
-      ['inpW1', 'inpW2', 'inpCashSales', 'inpTransferSales', 'inpCreditSales'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-      const selTrSales = document.getElementById('selTransferSalesType');
-      if (selTrSales) selTrSales.value = '';
-    } else if (!editId && !activeRecalledPendingId) {
-      if (typeof applyStickySaleDefaults === 'function') applyStickySaleDefaults();
+    if (typeof window.setSaleEntryFormMode === 'function') {
+      try { window.setSaleEntryFormMode(isDebtOnly ? 'debt_only' : 'sale'); } catch (e) {}
     }
 
     if (typeof updateLiveFormCalculation === 'function') {
@@ -197,26 +231,25 @@
   }
 
   // -----------------------------------------------------------------------
-  // 4. المكون الأول: شريط البطاقات الأفقية للوزنات المؤقتة (Swipeable Pending Cards)
+  // 5. المكون الأول: شريط البطاقات الأفقية للوزنات المؤقتة
   // -----------------------------------------------------------------------
   function renderMobilePendingSwipeCards() {
+    if (typeof appState === 'undefined') return;
     const d = Number(appState.currentDay) || 1;
     const dayObj = (appState.days && appState.days[d]) || { pendingSales: [] };
     const dayLocked = typeof isDayLocked === 'function' && isDayLocked(d);
     const canEditSales = typeof hasPermission === 'function' && hasPermission('sales') && !dayLocked;
 
-    const sec = document.getElementById('pendingWeighInsSection');
     const listContainer = document.getElementById('pendingCardsHorizontalList');
-    const badge = document.getElementById('pendingWeighInsCountBadge');
-    const searchInp = document.getElementById('inpFilterPendingSales');
+    const badge = document.getElementById('mobilePendingCountBadge');
+    const searchInp = document.getElementById('inpMobileSearchPending');
 
-    if (!sec || !listContainer) return;
+    if (!listContainer) return;
 
-    const rawPending = sortSalesListByScaleNo(dayObj.pendingSales || []);
+    const rawPending = typeof sortSalesListByScaleNo === 'function'
+      ? sortSalesListByScaleNo(dayObj.pendingSales || [])
+      : (dayObj.pendingSales || []);
     if (badge) badge.textContent = `${rawPending.length} سيارة`;
-
-    // إظهار القسم دائماً في واجهة الموبايل
-    sec.classList.remove('hidden');
 
     const q = String((searchInp && searchInp.value) || '').trim().toLowerCase();
     const filteredPending = q
@@ -300,8 +333,7 @@
   }
 
   // -----------------------------------------------------------------------
-  // 5. الزر الذكي في نموذج الموبايل (Smart Touch Primary Button Sync)
-  // يتحول تلقائياً بين (⏳ حفظ مؤقت وزنة 1) و (💾 حفظ نهائي) و (💵 حفظ سند التحصيل)
+  // 6. الزر الذكي في نموذج الموبايل
   // -----------------------------------------------------------------------
   function syncSmartPrimaryActionButton() {
     const btnMain = document.getElementById('btnInlineSaveSale');
@@ -314,16 +346,15 @@
     const mode = (document.getElementById('inpSaleEntryMode') && document.getElementById('inpSaleEntryMode').value) || 'sale';
     const isDebtOnly = mode === 'debt_only';
     const editId = (document.getElementById('editSaleId') && document.getElementById('editSaleId').value) || '';
-    const w1 = parseNum(document.getElementById('inpW1') ? document.getElementById('inpW1').value : 0);
-    const w2 = parseNum(document.getElementById('inpW2') ? document.getElementById('inpW2').value : 0);
+    const w1 = typeof parseNum === 'function' ? parseNum(document.getElementById('inpW1')?.value) : 0;
+    const w2 = typeof parseNum === 'function' ? parseNum(document.getElementById('inpW2')?.value) : 0;
 
-    // تحديث شارة حالة النموذج أعلى الكارت
     if (stateBadge) {
       if (editId) {
         stateBadge.textContent = '✏️ تعديل حركة محفوظة';
         stateBadge.className = 'px-2.5 py-0.5 rounded-full bg-sky-400 text-slate-950 text-[11px] font-extrabold shadow';
         stateBadge.classList.remove('hidden');
-      } else if (activeRecalledPendingId) {
+      } else if (typeof activeRecalledPendingId !== 'undefined' && activeRecalledPendingId) {
         stateBadge.textContent = '🔄 استكمال وزنة 2 لسيارة محجوزة';
         stateBadge.className = 'px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-extrabold shadow';
         stateBadge.classList.remove('hidden');
@@ -343,12 +374,11 @@
 
     if (btnPend) btnPend.classList.remove('hidden');
 
-    // إذا أدخل المندوب وزنة أولى فقط (w1 > 0) ولم يدخل وزنة ثانية بعد (w2 === 0) وليس في وضع تعديل حركة مكتملة
     if (!editId && w1 > 0 && w2 === 0) {
       btnMain.dataset.smartAction = 'save_pending_w1';
       btnMain.className = 'touch-btn w-full py-3.5 px-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-base shadow-lg border-2 border-amber-600 transition flex items-center justify-center gap-2';
       if (btnMainIcon) btnMainIcon.textContent = '⏳';
-      btnMainTxt.textContent = activeRecalledPendingId
+      btnMainTxt.textContent = (typeof activeRecalledPendingId !== 'undefined' && activeRecalledPendingId)
         ? 'تحديث بيانات الوزنة الأولى المؤقتة ⏳'
         : 'حفظ مؤقت للوزنة الأولى (فارغ) ⏳';
     } else {
@@ -357,12 +387,12 @@
       if (btnMainIcon) btnMainIcon.textContent = '💾';
       btnMainTxt.textContent = editId
         ? 'حفظ التعديلات النهائية للحركة ✓'
-        : (activeRecalledPendingId ? 'اعتماد الوزنة الثانية وحفظ الفاتورة ✓' : 'حفظ نهائي للحركة والفاتورة');
+        : ((typeof activeRecalledPendingId !== 'undefined' && activeRecalledPendingId) ? 'اعتماد الوزنة الثانية وحفظ الفاتورة ✓' : 'حفظ نهائي للحركة والفاتورة');
     }
   }
 
   // -----------------------------------------------------------------------
-  // 6. المكون الثالث: بطاقات حركات البيع المسجلة اليوم (Mobile Sale Cards)
+  // 7. المكون الثالث: بطاقات حركات البيع المسجلة اليوم (Mobile Sale Cards)
   // -----------------------------------------------------------------------
   function buildSingleSaleWhatsappText(r, dayNum, dateLabel) {
     const fName = appState.farmName || 'أبوذكري';
@@ -400,14 +430,14 @@
   }
 
   function renderMobileSalesCards() {
+    if (typeof appState === 'undefined' || typeof computeDaySummary !== 'function') return;
     const d = Number(appState.currentDay) || 1;
-    const summary = typeof computeDaySummary === 'function' ? computeDaySummary(d) : null;
+    const summary = computeDaySummary(d);
     if (!summary) return;
 
     const dayLocked = typeof isDayLocked === 'function' && isDayLocked(d);
     const canEditSales = typeof hasPermission === 'function' && hasPermission('sales') && !dayLocked;
 
-    // تحديث شريط الملخص العلوي والسفلي في الموبايل
     const elDayKpiCount = document.getElementById('dayKpiCount');
     if (elDayKpiCount) elDayKpiCount.textContent = fmtInt(summary.countCars);
     const elDayKpiNetW = document.getElementById('dayKpiNetWeight');
@@ -427,19 +457,17 @@
     const footCash = document.getElementById('footMobileSumCashCollected');
     if (footCash) footCash.textContent = `${fmtInt(summary.totalCashBeforeExpenses)} ج.م`;
 
-    // تحديث أزرار الفلتر السريع (الكل / مكتملة / مؤقتة / سندات)
     document.querySelectorAll('#mobileSalesFilterPills [data-card-filter]').forEach(btn => {
       const fKey = btn.getAttribute('data-card-filter');
       const isActive = fKey === mobileActiveCardFilter;
-      if (isActive) {
-        btn.className = 'py-1.5 px-2 rounded-xl bg-blue-900 text-amber-300 font-extrabold shadow-sm border border-blue-950';
-      } else {
-        btn.className = 'py-1.5 px-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200';
-      }
+      btn.className = isActive
+        ? 'py-1.5 px-2 rounded-xl bg-blue-900 text-amber-300 font-extrabold shadow-sm border border-blue-950'
+        : 'py-1.5 px-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200';
     });
 
     const allRows = summary.allOrderedRows || summary.rows || [];
-    const q = String((document.getElementById('inpFilterDailySales') && document.getElementById('inpFilterDailySales').value) || '').trim().toLowerCase();
+    const searchEl = document.getElementById('inpMobileSearchDailySales');
+    const q = String((searchEl && searchEl.value) || '').trim().toLowerCase();
 
     const filteredRows = allRows.filter(r => {
       if (mobileActiveCardFilter === 'completed' && (r.isPending || r.isDebtCollectionOnly)) return false;
@@ -496,7 +524,6 @@
           ? `<span class="px-2 py-0.5 rounded-lg bg-teal-700 text-white text-[10px] font-extrabold">💵 سند تحصيل مديونية</span>`
           : `<span class="px-2 py-0.5 rounded-lg bg-blue-900 text-amber-300 text-[10px] font-extrabold">🚛 بون #${safeScale}</span>`);
 
-      // السطر الثاني للبطاقة حسب نوع الحركة
       let bodyMetricsHtml = '';
       if (r.isPending) {
         bodyMetricsHtml = `
@@ -558,7 +585,6 @@
 
       const auditBadge = typeof renderAuditTrailBadgeHtml === 'function' ? renderAuditTrailBadgeHtml(r) : '';
 
-      // أزرار الإجراءات السريعة أو شريط تأكيد الحذف المضمن (بدون window.confirm)
       let actionsFooterHtml = '';
       if (isAskingDelete && canEditSales) {
         actionsFooterHtml = `
@@ -598,10 +624,10 @@
             </div>
 
             <div class="flex items-center gap-1">
-              <button type="button" data-mobile-share-wa="${safeId}" class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-extrabold text-xs flex items-center gap-1" title="مشاركة البون عبر واتساب">
+              <button type="button" data-mobile-share-wa="${safeId}" class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-extrabold text-xs flex items-center gap-1">
                 <span>📲</span><span>واتساب</span>
               </button>
-              <button type="button" data-mobile-print-receipt="${safeId}" class="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-extrabold text-xs flex items-center gap-1" title="طباعة كارتة الميزان">
+              <button type="button" data-mobile-print-receipt="${safeId}" class="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-extrabold text-xs flex items-center gap-1">
                 <span>🖨️</span><span>بون</span>
               </button>
             </div>
@@ -611,7 +637,6 @@
 
       return `
         <article class="rounded-2xl border-2 ${borderCls} p-3 shadow-sm space-y-2 transition">
-          <!-- السطر الأول: الترقيم + اسم التاجر وكوده + نوع الحركة ورقم السيارة -->
           <div class="flex items-center justify-between gap-1.5 flex-wrap">
             <div class="flex items-center gap-1.5 min-w-0">
               <span class="w-6 h-6 rounded-full bg-slate-800 text-white text-[11px] font-extrabold flex items-center justify-center shrink-0">
@@ -627,14 +652,8 @@
               ${typeBadgeHtml}
             </div>
           </div>
-
-          <!-- السطر الثاني: الأوزان والمبالغ المالية -->
           ${bodyMetricsHtml}
-
-          <!-- شارة الرقابة الزمنية (إن كانت مفعلة) -->
           ${auditBadge ? `<div class="pt-0.5">${auditBadge}</div>` : ''}
-
-          <!-- السطر الثالث: أزرار التحكم اللمسية -->
           ${actionsFooterHtml}
         </article>
       `;
@@ -642,24 +661,22 @@
   }
 
   // -----------------------------------------------------------------------
-  // 7. دوال الاسترجاع، التعديل، الحذف، وتفريغ النموذج على الموبايل
+  // 8. دوال الاسترجاع، التعديل، وتفريغ النموذج
   // -----------------------------------------------------------------------
   function recallPendingCarIntoMobileForm(pendId) {
-    const d = Number(appState.currentDay) || 1;
-    if (typeof isDayLocked === 'function' && isDayLocked(d)) {
-      showToast(`🔒 عفواً، (يوم ${d}) مقفل ومعتمد محاسبياً!`, '🔒');
+    if (typeof window.recallPendingWeighIn === 'function') {
+      window.recallPendingWeighIn(pendId);
+      renderMobilePendingSwipeCards();
+      syncSmartPrimaryActionButton();
       return;
     }
+    const d = Number(appState.currentDay) || 1;
     const pendingList = (appState.days[d] && appState.days[d].pendingSales) || [];
     const item = pendingList.find(x => String(x.id) === String(pendId));
     if (!item) return;
 
     activeRecalledPendingId = item.id;
-    const recInput = document.getElementById('activeRecalledPendingIdInput');
-    if (recInput) recInput.value = item.id;
-    const editIdEl = document.getElementById('editSaleId');
-    if (editIdEl) editIdEl.value = '';
-
+    document.getElementById('editSaleId').value = '';
     setMobileEntryModeUI('sale');
 
     document.getElementById('inpMerchantName').value = item.merchant || '';
@@ -669,38 +686,9 @@
     document.getElementById('inpW2').value = '';
     document.getElementById('inpPrice').value = item.price ? fmtMoney(item.price) : (appState.defaultPrice ? fmtMoney(appState.defaultPrice) : '');
     document.getElementById('inpTip').value = item.tip !== undefined ? fmtMoney(item.tip) : (appState.defaultTip ? fmtMoney(appState.defaultTip) : '');
-    document.getElementById('inpCustodyCash').value = item.custodyCash ? fmtMoney(item.custodyCash) : '';
-    document.getElementById('inpCustodyTransfer').value = item.custodyTransfer ? fmtMoney(item.custodyTransfer) : '';
-    document.getElementById('selCustodyTransferType').value = item.custodyTransferType || '';
-    document.getElementById('inpCashSales').value = item.cashSales ? fmtMoney(item.cashSales) : '';
-    document.getElementById('inpTransferSales').value = item.transferSales ? fmtMoney(item.transferSales) : '';
-    document.getElementById('selTransferSalesType').value = item.transferSalesType || '';
-    document.getElementById('inpCreditSales').value = item.creditSales ? fmtMoney(item.creditSales) : '';
-    document.getElementById('inpDebtCash').value = item.debtCash ? fmtMoney(item.debtCash) : '';
-    document.getElementById('inpDebtTransfer').value = item.debtTransfer ? fmtMoney(item.debtTransfer) : '';
-    document.getElementById('selDebtTransferType').value = item.debtTransferType || '';
-    document.getElementById('inpPrevCash').value = item.prevCash ? fmtMoney(item.prevCash) : '';
-    document.getElementById('inpPrevTransfer').value = item.prevTransfer ? fmtMoney(item.prevTransfer) : '';
-    document.getElementById('selPrevTransferType').value = item.prevTransferType || '';
-    document.getElementById('inpNotes').value = item.notes || '';
-
-    const hdrTitleTxt = document.getElementById('saleFormTitleActionText');
-    if (hdrTitleTxt) hdrTitleTxt.textContent = `استكمال الوزنة الثانية (${item.merchant})`;
-
     if (typeof updateLiveFormCalculation === 'function') updateLiveFormCalculation();
     renderMobilePendingSwipeCards();
     syncSmartPrimaryActionButton();
-
-    const formCard = document.getElementById('saleFormCard');
-    if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => {
-      const inpW2 = document.getElementById('inpW2');
-      if (inpW2) {
-        inpW2.focus();
-        if (typeof inpW2.select === 'function') inpW2.select();
-      }
-    }, 220);
-    showToast(`تم استرجاع سيارة (${item.merchant}) — أدخل الوزنة الثانية (القائم) الآن ⚖️`, '🔄');
   }
 
   function loadCompletedSaleIntoMobileForm(saleId) {
@@ -714,8 +702,6 @@
     if (!row) return;
 
     activeRecalledPendingId = '';
-    const recInput = document.getElementById('activeRecalledPendingIdInput');
-    if (recInput) recInput.value = '';
     document.getElementById('editSaleId').value = row.id;
 
     const comp = computeSaleRow(row);
@@ -743,14 +729,6 @@
     document.getElementById('selPrevTransferType').value = row.prevTransferType || '';
     document.getElementById('inpNotes').value = row.notes || '';
 
-    // فتح قسم المزارع السابقة تلقائياً إذا كانت الحركة تحتوي على قيم سابقة أو ملاحظات
-    if ((Number(row.prevCash) || 0) > 0 || (Number(row.prevTransfer) || 0) > 0 || String(row.notes || '').trim()) {
-      toggleMobilePrevFarmsCollapsible(true);
-    }
-
-    const hdrTitleTxt = document.getElementById('saleFormTitleActionText');
-    if (hdrTitleTxt) hdrTitleTxt.textContent = `تعديل حركة (${row.merchant})`;
-
     if (typeof updateLiveFormCalculation === 'function') updateLiveFormCalculation();
     syncSmartPrimaryActionButton();
 
@@ -760,38 +738,21 @@
   }
 
   function resetMobileSaleFormClean() {
-    activeRecalledPendingId = '';
-    const recInput = document.getElementById('activeRecalledPendingIdInput');
-    if (recInput) recInput.value = '';
-    const editIdEl = document.getElementById('editSaleId');
-    if (editIdEl) editIdEl.value = '';
-    const form = document.getElementById('saleEntryForm');
-    if (form) form.reset();
-
+    if (typeof window.resetSaleFormToCleanState === 'function') {
+      window.resetSaleFormToCleanState();
+    } else {
+      activeRecalledPendingId = '';
+      document.getElementById('editSaleId').value = '';
+      const form = document.getElementById('saleEntryForm');
+      if (form) form.reset();
+    }
     setMobileEntryModeUI('sale');
-    toggleMobilePrevFarmsCollapsible(false);
     if (typeof applyStickySaleDefaults === 'function') applyStickySaleDefaults();
     if (typeof updateLiveFormCalculation === 'function') updateLiveFormCalculation();
     renderMobilePendingSwipeCards();
     syncSmartPrimaryActionButton();
   }
 
-  function toggleMobilePrevFarmsCollapsible(forceOpen) {
-    const body = document.getElementById('prevFarmsCollapsibleBody');
-    const btn = document.getElementById('btnTogglePrevFarmsSection');
-    const icon = document.getElementById('btnTogglePrevFarmsIcon');
-    const txt = document.getElementById('btnTogglePrevFarmsText');
-    if (!body) return;
-    const isNowOpen = forceOpen !== undefined ? Boolean(forceOpen) : body.classList.contains('hidden');
-    body.classList.toggle('hidden', !isNowOpen);
-    if (btn) btn.setAttribute('aria-expanded', isNowOpen ? 'true' : 'false');
-    if (icon) icon.textContent = isNowOpen ? '➖' : '➕';
-    if (txt) txt.textContent = isNowOpen ? 'طيّ ▴' : 'فتح ▾';
-  }
-
-  // -----------------------------------------------------------------------
-  // 8. ربط شامل لدورة الرسم في التطبيق (Hook into renderAll & renderDailyView)
-  // -----------------------------------------------------------------------
   function renderMobileCompanionUI() {
     renderMobileDayPicker();
     renderMobilePendingSwipeCards();
@@ -799,8 +760,10 @@
     syncSmartPrimaryActionButton();
   }
 
+  // -----------------------------------------------------------------------
+  // 9. ربط الأحداث بعد اكتمال تحميل app.js
+  // -----------------------------------------------------------------------
   function attachMobileCompanionEvents() {
-    // اعتراض وتوسيع renderDailyView و renderAll في app.js لتحديث واجهة الموبايل تلقائياً بعد أي حفظ أو مزامنة سحابية
     if (typeof window.renderDailyView === 'function' && !window._mobileRenderDailyHooked) {
       const origRenderDaily = window.renderDailyView;
       window.renderDailyView = function () {
@@ -824,29 +787,34 @@
       window.updateLiveFormCalculation = function () {
         const res = origLiveCalc.apply(this, arguments);
         syncSmartPrimaryActionButton();
-        // فتح قسم المزارع السابقة تلقائياً إذا كان للتاجر مديونية في أرشيف المزارع السابقة
-        const merchantRaw = (document.getElementById('inpMerchantName') && document.getElementById('inpMerchantName').value) || '';
-        const code = typeof resolveMerchantCode === 'function' ? resolveMerchantCode(merchantRaw) : 0;
-        if (code > 0 && typeof computeMerchantCrossFarmDebtReference === 'function') {
-          const crossRef = computeMerchantCrossFarmDebtReference(code, '');
-          const badge = document.getElementById('prevFarmsCollapsedSummaryBadge');
-          if (crossRef && crossRef.otherFarmsDebts && crossRef.otherFarmsDebts.length > 0) {
-            if (badge) {
-              badge.textContent = `⚠️ عليه بأرشيف (${crossRef.otherFarmsDebts[0].farmName}): ${fmtInt(crossRef.totalOtherFarmsDebt)} ج`;
-              badge.className = 'text-[10px] font-extrabold text-amber-950 bg-amber-300 px-2 py-0.5 rounded-lg';
-            }
-            toggleMobilePrevFarmsCollapsible(true);
-          } else if (badge) {
-            badge.textContent = 'مطوي افتراضياً';
-            badge.className = 'text-[10px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-lg';
-          }
-        }
         return res;
       };
       window._mobileLiveCalcHooked = true;
     }
 
-    // 1) اختيار اليوم النشط من القائمة العلوية في الموبايل
+    // زر (👥 التجار ▾) لإظهار قائمة جميع التجار المكودين بلمسة واحدة
+    const btnShowAllMerch = document.getElementById('btnShowAllMerchantsDropdown');
+    if (btnShowAllMerch) {
+      btnShowAllMerch.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const suggestBox = document.getElementById('merchantSuggestBox');
+        if (suggestBox && !suggestBox.classList.contains('hidden')) {
+          suggestBox.classList.add('hidden');
+        } else {
+          renderMerchantSuggestionsPopup(true);
+        }
+      });
+    }
+
+    // ضمان عمل الإكمال التلقائي عند الكتابة أو التركيز في حقل اسم التاجر
+    const inpMerch = document.getElementById('inpMerchantName');
+    if (inpMerch) {
+      inpMerch.addEventListener('input', () => renderMerchantSuggestionsPopup(false));
+      inpMerch.addEventListener('focus', () => renderMerchantSuggestionsPopup(false));
+    }
+
+    // اختيار اليوم النشط
     const selDay = document.getElementById('selMobileCurrentDay');
     if (selDay) {
       selDay.addEventListener('change', (e) => {
@@ -863,42 +831,23 @@
           renderMobileCompanionUI();
           return;
         }
-        const targetDay = Number(val) || 1;
-        appState.currentDay = targetDay;
+        appState.currentDay = Number(val) || 1;
         resetMobileSaleFormClean();
         saveState(false);
         renderAll();
-        showToast(`تم الانتقال إلى (يوم ${targetDay}) 📅`, '📅');
+        showToast(`تم الانتقال إلى (يوم ${appState.currentDay}) 📅`, '📅');
       });
     }
 
-    // 2) أزرار التبديل بين (🚛 حركة ميزان وبيع) و (💵 سند تحصيل مديونية فقط)
+    // أزرار التبديل بين وضع الميزان ووضع سند التحصيل
     const btnScale = document.getElementById('btnModeScaleSale');
     const btnDebt = document.getElementById('btnModeDebtCollectionOnly');
     const btnBackScale = document.getElementById('btnSwitchBackToScaleMode');
-    if (btnScale) {
-      btnScale.addEventListener('click', () => setMobileEntryModeUI('sale'));
-    }
-    if (btnDebt) {
-      btnDebt.addEventListener('click', () => {
-        setMobileEntryModeUI('debt_only');
-        const mInp = document.getElementById('inpMerchantName');
-        const dCash = document.getElementById('inpDebtCash');
-        if (mInp && !mInp.value.trim()) mInp.focus();
-        else if (dCash) dCash.focus();
-      });
-    }
-    if (btnBackScale) {
-      btnBackScale.addEventListener('click', () => setMobileEntryModeUI('sale'));
-    }
+    if (btnScale) btnScale.addEventListener('click', () => setMobileEntryModeUI('sale'));
+    if (btnDebt) btnDebt.addEventListener('click', () => setMobileEntryModeUI('debt_only'));
+    if (btnBackScale) btnBackScale.addEventListener('click', () => setMobileEntryModeUI('sale'));
 
-    // 3) طي وفتح قسم المزارع السابقة والملاحظات
-    const prevHeader = document.getElementById('prevFarmsCollectionHeader');
-    if (prevHeader) {
-      prevHeader.addEventListener('click', () => toggleMobilePrevFarmsCollapsible());
-    }
-
-    // 4) اعتراض ضغطة الزر الذكي الرئيسي إذا كان في وضع (حفظ مؤقت للوزنة الأولى w1 > 0 && w2 === 0)
+    // اعتراض ضغطة الزر الذكي الرئيسي إذا كان في وضع حفظ مؤقت للوزنة الأولى
     const btnMainSave = document.getElementById('btnInlineSaveSale');
     if (btnMainSave) {
       btnMainSave.addEventListener('click', (e) => {
@@ -908,79 +857,24 @@
           const hiddenPendBtn = document.getElementById('btnSavePendingW1');
           if (hiddenPendBtn) hiddenPendBtn.click();
           setTimeout(() => {
-            resetMobileSaleFormClean();
             renderMobileCompanionUI();
           }, 50);
         }
       });
     }
 
-    // ربط زر الحفظ المؤقت الصريح وزر الإلغاء بعد انتهاء معالج app.js
-    const btnInlinePend = document.getElementById('btnInlineSavePendingW1');
-    if (btnInlinePend) {
-      btnInlinePend.addEventListener('click', () => {
-        setTimeout(() => {
-          renderMobileCompanionUI();
-        }, 60);
-      });
-    }
-
-    const btnInlineCancel = document.getElementById('btnInlineCancelSale');
-    if (btnInlineCancel) {
-      btnInlineCancel.addEventListener('click', () => {
-        resetMobileSaleFormClean();
-        showToast('تم تفريغ الحقول وإلغاء الإدخال الحالي ✕', 'ℹ️');
-      });
-    }
-
-    // تحديث البطاقات بعد حفظ النموذج النهائي
-    const saleForm = document.getElementById('saleEntryForm');
-    if (saleForm) {
-      saleForm.addEventListener('submit', (e) => {
-        const mode = (document.getElementById('inpSaleEntryMode') && document.getElementById('inpSaleEntryMode').value) || 'sale';
-        if (mode === 'debt_only') {
-          // التحقق في وضع سند تحصيل مديونية فقط
-          const debtC = parseNum(document.getElementById('inpDebtCash')?.value);
-          const debtT = parseNum(document.getElementById('inpDebtTransfer')?.value);
-          const prevC = parseNum(document.getElementById('inpPrevCash')?.value);
-          const prevT = parseNum(document.getElementById('inpPrevTransfer')?.value);
-          const custC = parseNum(document.getElementById('inpCustodyCash')?.value);
-          const custT = parseNum(document.getElementById('inpCustodyTransfer')?.value);
-
-          // إذا أدخل المندوب المبلغ في شريط العهدة داخل وضع السند، نوجهه تلقائياً لسداد المديونية
-          if ((debtC + debtT + prevC + prevT) === 0 && (custC + custT) > 0) {
-            if (custC > 0 && document.getElementById('inpDebtCash')) {
-              document.getElementById('inpDebtCash').value = fmtMoney(custC);
-            }
-            if (custT > 0 && document.getElementById('inpDebtTransfer')) {
-              document.getElementById('inpDebtTransfer').value = fmtMoney(custT);
-              const cType = document.getElementById('selCustodyTransferType')?.value || '';
-              if (cType && document.getElementById('selDebtTransferType')) {
-                document.getElementById('selDebtTransferType').value = cType;
-              }
-            }
-          }
-        }
-        setTimeout(() => {
-          setMobileEntryModeUI('sale');
-          toggleMobilePrevFarmsCollapsible(false);
-          renderMobileCompanionUI();
-        }, 60);
-      });
-    }
-
-    // 5) البحث والفلترة في شريط البطاقات المؤقتة وبطاقات اليوم
-    const inpSearchPending = document.getElementById('inpFilterPendingSales');
+    // البحث والفلترة في البطاقات
+    const inpSearchPending = document.getElementById('inpMobileSearchPending');
     if (inpSearchPending) {
       inpSearchPending.addEventListener('input', () => renderMobilePendingSwipeCards());
     }
 
-    const inpSearchDaily = document.getElementById('inpFilterDailySales');
+    const inpSearchDaily = document.getElementById('inpMobileSearchDailySales');
     if (inpSearchDaily) {
       inpSearchDaily.addEventListener('input', () => renderMobileSalesCards());
     }
 
-    const btnClearDaily = document.getElementById('btnClearDailySalesFilters');
+    const btnClearDaily = document.getElementById('btnMobileClearSalesFilter');
     if (btnClearDaily) {
       btnClearDaily.addEventListener('click', () => {
         mobileActiveCardFilter = 'all';
@@ -999,17 +893,14 @@
       });
     }
 
-    // 6) تفويض الأحداث الموحد لبطاقات المؤقت وبطاقات المبيعات (استكمال، تعديل، حذف، واتساب، طباعة بون)
+    // تفويض أحداث البطاقات
     document.body.addEventListener('click', (e) => {
-      // أ. استرجاع وزنة أولى مؤقتة
       const recallBtn = e.target.closest('[data-mobile-recall-pending]');
       if (recallBtn) {
-        const pid = recallBtn.getAttribute('data-mobile-recall-pending');
-        recallPendingCarIntoMobileForm(pid);
+        recallPendingCarIntoMobileForm(recallBtn.getAttribute('data-mobile-recall-pending'));
         return;
       }
 
-      // ب. حذف وزنة مؤقتة من الشريط الأفقي
       const delPendQuickBtn = e.target.closest('[data-mobile-del-pending]');
       if (delPendQuickBtn) {
         const pid = delPendQuickBtn.getAttribute('data-mobile-del-pending');
@@ -1029,15 +920,12 @@
         return;
       }
 
-      // ج. تعديل حركة مكتملة
       const editSaleBtn = e.target.closest('[data-mobile-edit-sale]');
       if (editSaleBtn) {
-        const sid = editSaleBtn.getAttribute('data-mobile-edit-sale');
-        loadCompletedSaleIntoMobileForm(sid);
+        loadCompletedSaleIntoMobileForm(editSaleBtn.getAttribute('data-mobile-edit-sale'));
         return;
       }
 
-      // د. طلب تأكيد حذف بطاقة (بدون window.confirm)
       const askDelBtn = e.target.closest('[data-mobile-ask-del]');
       if (askDelBtn) {
         mobilePendingDeleteConfirmId = String(askDelBtn.getAttribute('data-mobile-ask-del') || '');
@@ -1045,7 +933,6 @@
         return;
       }
 
-      // هـ. إلغاء تأكيد الحذف
       const cancelDelBtn = e.target.closest('[data-mobile-cancel-del]');
       if (cancelDelBtn) {
         mobilePendingDeleteConfirmId = '';
@@ -1053,7 +940,6 @@
         return;
       }
 
-      // و. تنفيذ الحذف النهائي بعد التأكيد
       const confirmDelBtn = e.target.closest('[data-mobile-confirm-del]');
       if (confirmDelBtn) {
         const targetId = String(confirmDelBtn.getAttribute('data-mobile-confirm-del') || '');
@@ -1077,7 +963,6 @@
         return;
       }
 
-      // ز. مشاركة تفاصيل الحركة أو السند عبر واتساب
       const shareWaBtn = e.target.closest('[data-mobile-share-wa]');
       if (shareWaBtn) {
         const sid = String(shareWaBtn.getAttribute('data-mobile-share-wa') || '');
@@ -1089,13 +974,11 @@
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(waText).catch(() => {});
         }
-        const waUrl = `https://wa.me/?text=${encodeURIComponent(waText)}`;
-        window.open(waUrl, '_blank', 'noopener,noreferrer');
+        window.open(`https://wa.me/?text=${encodeURIComponent(waText)}`, '_blank', 'noopener,noreferrer');
         showToast('تم نسخ البون وفتح واتساب للمشاركة 📲', '📲');
         return;
       }
 
-      // ح. طباعة كارتة / بون الميزان للحركة
       const printReceiptBtn = e.target.closest('[data-mobile-print-receipt]');
       if (printReceiptBtn) {
         const sid = String(printReceiptBtn.getAttribute('data-mobile-print-receipt') || '');
@@ -1106,32 +989,10 @@
       }
     });
 
-    // 7) دعم الانتقال السلس بمفتاح Enter في وضع سند التحصيل على الموبايل
-    const inpMerch = document.getElementById('inpMerchantName');
-    if (inpMerch) {
-      inpMerch.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          const mode = (document.getElementById('inpSaleEntryMode') && document.getElementById('inpSaleEntryMode').value) || 'sale';
-          if (mode === 'debt_only') {
-            e.preventDefault();
-            const suggestBox = document.getElementById('merchantSuggestBox');
-            if (suggestBox) suggestBox.classList.add('hidden');
-            const debtCashEl = document.getElementById('inpDebtCash');
-            if (debtCashEl) {
-              debtCashEl.focus();
-              if (typeof debtCashEl.select === 'function') debtCashEl.select();
-            }
-          }
-        }
-      });
-    }
-
     renderMobileCompanionUI();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', attachMobileCompanionEvents);
-  } else {
-    attachMobileCompanionEvents();
-  }
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(attachMobileCompanionEvents, 20);
+  });
 })();
