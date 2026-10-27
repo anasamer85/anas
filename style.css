@@ -2097,3 +2097,267 @@ body.lite-field-mode-active #btnInlineSavePendingW1 {
 .lite-pending-card:active {
   transform: scale(0.98);
 }
+
+/* =========================================================================
+   8. UNIVERSAL STICKY HEADERS, FOOTERS & KEY COLUMNS ENGINE (v54)
+      تثبيت رأس الجدول، صف الإجماليات، وعمود البيان/اسم التاجر وعمود الإجراءات في جميع جداول الموقع الـ 12
+   ========================================================================= */
+@media screen {
+  .table-scroll-wrapper {
+    position: relative !important;
+    max-height: 73vh !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    scroll-behavior: smooth;
+    border-radius: 0 0 14px 14px;
+  }
+
+  #merchantDrillDownModal .table-scroll-wrapper {
+    max-height: 55vh !important;
+  }
+
+  #fullJsonBackupAndAuditCard .table-scroll-wrapper {
+    max-height: 60vh !important;
+  }
+
+  /* استخدام border-separate مع border-spacing: 0 لضمان ثبات حدود الخلايا مع position: sticky في كافة المتصفحات */
+  .table-scroll-wrapper > table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+  }
+
+  /* 1) تثبيت رؤوس جميع الجداول (Sticky Table Headers) عند النزول للأسفل */
+  .table-scroll-wrapper > table > thead > tr > th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 25 !important;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.16), inset 0 -1px 0 #94a3b8 !important;
+  }
+
+  /* ضمان خلفية معتمة لرؤوس الجداول التي تعتمد على تدرج أو لون الصف الأب (tr) */
+  #dailySalesTheadRow > th:not([class*="bg-"]),
+  #dailyExpensesTheadRow > th:not([class*="bg-"]),
+  #usersListTheadRow > th:not([class*="bg-"]),
+  #cloudFarmsTheadRow > th:not([class*="bg-"]),
+  #auditTrailTable > thead > tr > th:not([class*="bg-"]) {
+    background-color: #f1f5f9 !important;
+    color: #1e293b !important;
+  }
+
+  #pendingWeighInsTheadRow > th:not([class*="bg-"]) {
+    background-color: #fef3c7 !important;
+    color: #1e293b !important;
+  }
+
+  #dashTableTheadRow > th:not([class*="bg-"]),
+  #merchantsTheadRow > th:not([class*="bg-"]),
+  #merchantDrillDownTable > thead > tr > th:not([class*="bg-"]) {
+    background-color: #1b365d !important;
+    color: #ffffff !important;
+  }
+
+  #transfersTheadRow > th:not([class*="bg-"]) {
+    background-color: #134e4a !important;
+    color: #ffffff !important;
+  }
+
+  #prevFarmsTheadRow > th:not([class*="bg-"]) {
+    background-color: #3b0764 !important;
+    color: #ffffff !important;
+  }
+
+  #expSummaryTheadRow > th:not([class*="bg-"]) {
+    background-color: #4c0519 !important;
+    color: #ffffff !important;
+  }
+
+  /* 2) تثبيت صف الإجماليات السفلي (Sticky Table Footers) أسفل إطار الجدول */
+  .table-scroll-wrapper > table > tfoot > tr > td {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 24 !important;
+    background-color: #fbbf24 !important;
+    color: #0f172a !important;
+    box-shadow: 0 -2px 6px rgba(15, 23, 42, 0.18), inset 0 2px 0 #0f172a !important;
+  }
+
+  /* 3) ضمان خلفية معتمة لخلايا جسم الجدول لعدم تداخل النصوص تحت الأعمدة المثبتة */
+  .table-scroll-wrapper > table > tbody > tr > td {
+    background-color: #ffffff;
+  }
+  .table-scroll-wrapper > table > tbody > tr:nth-child(even) > td {
+    background-color: #f8fafc;
+  }
+  .table-scroll-wrapper > table > tbody > tr.bg-amber-50\/85 > td,
+  .table-scroll-wrapper > table > tbody > tr.bg-amber-50\/90 > td,
+  .table-scroll-wrapper > table > tbody > tr.bg-amber-50 > td {
+    background-color: #fffbeb !important;
+  }
+  .table-scroll-wrapper > table > tbody > tr.bg-emerald-50\/70 > td {
+    background-color: #ecfdf5 !important;
+  }
+  .table-scroll-wrapper > table > tbody > tr:hover > td {
+    background-color: #eff6ff !important;
+  }
+
+  /* 4) تثبيت الأعمدة المحورية يميناً (Sticky Right Key Columns: اسم التاجر / البند / المزرعة / اليوم) عند التمرير لليسار */
+  /* أ. الجداول التي يقع فيها العمود المحوري (اسم التاجر / البيان) في العمود رقم 3:
+        dailySalesTable, merchantsLedgerTable, merchantDrillDownTable */
+  #dailySalesTable > thead > tr > th:nth-child(3),
+  #dailySalesTable > tbody > tr > td:nth-child(3):not([colspan]),
+  #merchantsLedgerTable > thead > tr > th:nth-child(3),
+  #merchantsLedgerTable > tbody > tr > td:nth-child(3):not([colspan]),
+  #merchantDrillDownTable > thead > tr > th:nth-child(3),
+  #merchantDrillDownTable > tbody > tr > td:nth-child(3):not([colspan]) {
+    position: sticky !important;
+    right: 0 !important;
+    box-shadow: -3px 0 8px rgba(15, 23, 42, 0.14), inset 1px 0 0 #cbd5e1 !important;
+  }
+
+  #dailySalesTable > tbody > tr > td:nth-child(3):not([colspan]),
+  #merchantsLedgerTable > tbody > tr > td:nth-child(3):not([colspan]),
+  #merchantDrillDownTable > tbody > tr > td:nth-child(3):not([colspan]) {
+    z-index: 15 !important;
+  }
+
+  #dailySalesTable > thead > tr > th:nth-child(3),
+  #merchantsLedgerTable > thead > tr > th:nth-child(3),
+  #merchantDrillDownTable > thead > tr > th:nth-child(3) {
+    z-index: 35 !important;
+  }
+
+  /* ب. الجداول التي يقع فيها العمود المحوري (اسم التاجر / البند / التاريخ) في العمود رقم 2:
+        pendingWeighInsTable, dailyExpensesTable, dashSummaryTable, transfersTable, prevFarmsTable, expSummaryTable */
+  #pendingWeighInsTable > thead > tr > th:nth-child(2),
+  #pendingWeighInsTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #dailyExpensesTable > thead > tr > th:nth-child(2),
+  #dailyExpensesTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #dashSummaryTable > thead > tr > th:nth-child(2),
+  #dashSummaryTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #transfersTable > thead > tr > th:nth-child(2),
+  #transfersTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #prevFarmsTable > thead > tr > th:nth-child(2),
+  #prevFarmsTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #expSummaryTable > thead > tr > th:nth-child(2),
+  #expSummaryTable > tbody > tr > td:nth-child(2):not([colspan]) {
+    position: sticky !important;
+    right: 0 !important;
+    box-shadow: -3px 0 8px rgba(15, 23, 42, 0.14), inset 1px 0 0 #cbd5e1 !important;
+  }
+
+  #pendingWeighInsTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #dailyExpensesTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #dashSummaryTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #transfersTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #prevFarmsTable > tbody > tr > td:nth-child(2):not([colspan]),
+  #expSummaryTable > tbody > tr > td:nth-child(2):not([colspan]) {
+    z-index: 15 !important;
+  }
+
+  #pendingWeighInsTable > thead > tr > th:nth-child(2),
+  #dailyExpensesTable > thead > tr > th:nth-child(2),
+  #dashSummaryTable > thead > tr > th:nth-child(2),
+  #transfersTable > thead > tr > th:nth-child(2),
+  #prevFarmsTable > thead > tr > th:nth-child(2),
+  #expSummaryTable > thead > tr > th:nth-child(2) {
+    z-index: 35 !important;
+  }
+
+  /* ج. الجداول التي يقع فيها العمود المحوري (الاسم الكامل / اسم المزرعة) في العمود رقم 1:
+        usersListTable, cloudFarmsTable */
+  #usersListTable > thead > tr > th:nth-child(1),
+  #usersListTable > tbody > tr > td:nth-child(1):not([colspan]),
+  #cloudFarmsTable > thead > tr > th:nth-child(1),
+  #cloudFarmsTable > tbody > tr > td:nth-child(1):not([colspan]) {
+    position: sticky !important;
+    right: 0 !important;
+    box-shadow: -3px 0 8px rgba(15, 23, 42, 0.14), inset 1px 0 0 #cbd5e1 !important;
+  }
+
+  #usersListTable > tbody > tr > td:nth-child(1):not([colspan]),
+  #cloudFarmsTable > tbody > tr > td:nth-child(1):not([colspan]) {
+    z-index: 15 !important;
+  }
+
+  #usersListTable > thead > tr > th:nth-child(1),
+  #cloudFarmsTable > thead > tr > th:nth-child(1) {
+    z-index: 35 !important;
+  }
+
+  /* د. جدول سجل الرقابة الزمني (auditTrailTable): تثبيت عمود البيان (التاجر / السيارة / المصروف) رقم 4 يميناً */
+  #auditTrailTable > thead > tr > th:nth-child(4),
+  #auditTrailTable > tbody > tr > td:nth-child(4):not([colspan]) {
+    position: sticky !important;
+    right: 0 !important;
+    box-shadow: -3px 0 8px rgba(15, 23, 42, 0.14), inset 1px 0 0 #cbd5e1 !important;
+  }
+  #auditTrailTable > tbody > tr > td:nth-child(4):not([colspan]) {
+    z-index: 15 !important;
+  }
+  #auditTrailTable > thead > tr > th:nth-child(4) {
+    z-index: 35 !important;
+  }
+
+  /* هـ. تثبيت الخلية الأولى في صف الإجماليات (tfoot) يميناً لتظل عنوان الإجمالي ظاهراً دائماً عند التمرير لليسار */
+  .table-scroll-wrapper > table > tfoot > tr > td:first-child {
+    position: sticky !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 34 !important;
+    box-shadow: -3px 0 8px rgba(15, 23, 42, 0.18), 0 -2px 6px rgba(15, 23, 42, 0.18), inset 0 2px 0 #0f172a !important;
+  }
+
+  /* 5) تثبيت عمود الإجراءات يساراً (Sticky Left Action Column) على شاشات اللابتوب والكمبيوتر (>= 1024px) لسهولة الوصول لأزرار التعديل والاستكمال */
+  @media screen and (min-width: 1024px) {
+    #dailySalesTable > thead > tr > th:last-child,
+    #dailySalesTable > tbody > tr > td:last-child:not([colspan]),
+    #pendingWeighInsTable > thead > tr > th:last-child,
+    #pendingWeighInsTable > tbody > tr > td:last-child:not([colspan]),
+    #merchantsLedgerTable > thead > tr > th:last-child,
+    #merchantsLedgerTable > tbody > tr > td:last-child:not([colspan]),
+    #merchantDrillDownTable > thead > tr > th:last-child,
+    #merchantDrillDownTable > tbody > tr > td:last-child:not([colspan]),
+    #cloudFarmsTable > thead > tr > th:last-child,
+    #cloudFarmsTable > tbody > tr > td:last-child:not([colspan]),
+    #usersListTable > thead > tr > th:last-child,
+    #usersListTable > tbody > tr > td:last-child:not([colspan]) {
+      position: sticky !important;
+      left: 0 !important;
+      box-shadow: 3px 0 8px rgba(15, 23, 42, 0.12), inset -1px 0 0 #cbd5e1 !important;
+    }
+
+    #dailySalesTable > tbody > tr > td:last-child:not([colspan]),
+    #pendingWeighInsTable > tbody > tr > td:last-child:not([colspan]),
+    #merchantsLedgerTable > tbody > tr > td:last-child:not([colspan]),
+    #merchantDrillDownTable > tbody > tr > td:last-child:not([colspan]),
+    #cloudFarmsTable > tbody > tr > td:last-child:not([colspan]),
+    #usersListTable > tbody > tr > td:last-child:not([colspan]) {
+      z-index: 14 !important;
+    }
+
+    #dailySalesTable > thead > tr > th:last-child,
+    #pendingWeighInsTable > thead > tr > th:last-child,
+    #merchantsLedgerTable > thead > tr > th:last-child,
+    #merchantDrillDownTable > thead > tr > th:last-child,
+    #cloudFarmsTable > thead > tr > th:last-child,
+    #usersListTable > thead > tr > th:last-child {
+      z-index: 34 !important;
+    }
+  }
+}
+
+/* إلغاء التثبيت والارتفاع المحدد عند الطباعة الرسمية لضمان طباعة كافة الصفوف والأعمدة كاملة */
+@media print {
+  .table-scroll-wrapper {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .table-scroll-wrapper > table {
+    border-collapse: collapse !important;
+  }
+  .table-scroll-wrapper > table th,
+  .table-scroll-wrapper > table td {
+    position: static !important;
+    box-shadow: none !important;
+  }
+}

@@ -9798,7 +9798,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v53-lite-pending-search') {
+          if (k !== 'farm-sales-committee-v54-sticky-headers-and-columns') {
             caches.delete(k).catch(() => {});
           }
         });
