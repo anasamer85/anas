@@ -109,6 +109,7 @@ function getDefaultState(customFarmName = 'أبوذكري') {
     webhookUrl: getEmbeddedWebhookUrl() || '',
     updatedAt: '',
     farmResetAt: 0,
+    factoryZeroWipeAt: 0,
     lastBulkImportAt: 0,
     defaultPrice: 0,
     defaultTip: 0,
@@ -546,21 +547,24 @@ function applyParsedStateObject(parsed) {
 
 function unifyGlobalMerchantsRegistry() {
   const delSet = new Set(((appState.deletedIds && appState.deletedIds.merchants) || []).map(Number));
-  const baseDefaults = getDefaultState().merchants || [];
+  const isFactoryZeroWiped = Number(appState.factoryZeroWipeAt) > 0;
+  const baseDefaults = isFactoryZeroWiped ? [] : (getDefaultState().merchants || []);
   if (!Array.isArray(appState.merchants)) appState.merchants = [];
 
-  // 1. ضمان وجود جميع التجار الأساسيين (101..118) دائماً حتى لو كانت المصفوفة تحتوي على عنصر واحد فقط
-  baseDefaults.forEach(dm => {
-    const c = Number(dm.code);
-    const n = String(dm.name || '').trim();
-    if (c >= 100 && n && !delSet.has(c)) {
-      if (!appState.merchants.some(m => m && (Number(m.code) === c || isSameMerchantIdentity(m.name, n)))) {
-        appState.merchants.push({ code: c, name: n });
+  // 1. ضمان وجود التجار الأساسيين (101..118) إلا إذا كان الموقع في وضع التصفير الجذري الشامل (factoryZeroWipeAt > 0)
+  if (!isFactoryZeroWiped) {
+    baseDefaults.forEach(dm => {
+      const c = Number(dm.code);
+      const n = String(dm.name || '').trim();
+      if (c >= 100 && n && !delSet.has(c)) {
+        if (!appState.merchants.some(m => m && (Number(m.code) === c || isSameMerchantIdentity(m.name, n)))) {
+          appState.merchants.push({ code: c, name: n });
+        }
       }
-    }
-  });
+    });
+  }
 
-  // 2. دمج أي تجار مكودين في أرشيف المزارع (farmsArchive)
+  // 2. دمج أي تجار مكودين في أرشيف المزارع (farmsArchive) غير محذوفين
   if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
     Object.values(appState.farmsArchive).forEach(fObj => {
       if (fObj && Array.isArray(fObj.merchants)) {
@@ -577,9 +581,9 @@ function unifyGlobalMerchantsRegistry() {
     });
   }
 
-  // 3. إذا تم بالخطأ حذف جميع التجار، نعيد التجار الأساسيين الـ 18 تلقائياً لضمان عدم بقاء الدليل فارغاً أبداً
+  // 3. إذا تم بالخطأ حذف جميع التجار (ولم يكن الموقع في وضع التصفير الجذري الشامل Mode 3)، نعيد التجار الأساسيين الـ 18 تلقائياً
   const validNow = appState.merchants.filter(m => m && m.code && m.name && !delSet.has(Number(m.code)));
-  if (validNow.length === 0) {
+  if (validNow.length === 0 && !isFactoryZeroWiped) {
     if (appState.deletedIds) appState.deletedIds.merchants = [];
     if (appState.deletedTimestamps) appState.deletedTimestamps.merchants = {};
     delSet.clear();
@@ -1152,6 +1156,117 @@ function clearAllSiteMovementsAndArchiveKeepMerchants(customMsg = '', customIcon
   renderAll();
   showToast(
     customMsg || `🧨 تم التصفير الشامل للموقع بالكامل (مسح حركات المزرعة النشطة + مسح أرشيف المزارع) مع بقاء دليل التجار والمستخدمين وإعدادات السحابة!`,
+    customIcon
+  );
+  return true;
+}
+
+function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️') {
+  if (!hasPermission('farms') && !hasPermission('admin')) {
+    showToast('عفواً، المسح الجذري الشامل للموقع والسحابة متاح لمدير الموقع والمستخدمين المصرح لهم فقط.', '🔒');
+    return false;
+  }
+  const nowTs = getSyncedNow() + 500;
+  const defaultFarm = 'أبوذكري';
+
+  // 1. تسجيل جميع حركات المزرعة النشطة في سجل المحذوفات (Tombstones) لضمان مسحها من أي جهاز آخر متصل
+  for (let d = 1; d <= 10; d++) {
+    if (appState.days && appState.days[d]) {
+      recordDayItemsAsDeleted(appState.days[d]);
+    }
+  }
+
+  // 2. تسجيل جميع حركات وأسماء المزارع والتجار في الأرشيف داخل سجل المحذوفات
+  if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
+    Object.keys(appState.farmsArchive).forEach(fKey => {
+      const fObj = appState.farmsArchive[fKey];
+      if (fObj && fObj.days && typeof fObj.days === 'object') {
+        for (let d = 1; d <= 10; d++) {
+          if (fObj.days[d]) recordDayItemsAsDeleted(fObj.days[d]);
+        }
+      }
+      if (fObj && Array.isArray(fObj.merchants)) {
+        fObj.merchants.forEach(fm => {
+          if (fm && fm.code) recordDeletedItem('merchants', Number(fm.code), nowTs);
+        });
+      }
+      if (fKey !== defaultFarm) {
+        recordDeletedItem('farms', fKey, nowTs);
+      }
+    });
+  }
+
+  // 3. تسجيل جميع التجار الحاليين + التجار الافتراضيين الـ 18 (101..118) كمحذوفين بطابع زمني حديث حتى لا يعود أي تاجر من السحابة أو الأجهزة الأخرى
+  const allMerchantCodesToWipe = new Set([
+    ...((appState.merchants || []).map(m => Number(m && m.code)).filter(Boolean)),
+    ...((getDefaultState().merchants || []).map(m => Number(m.code)).filter(Boolean))
+  ]);
+  allMerchantCodesToWipe.forEach(code => {
+    recordDeletedItem('merchants', code, nowTs);
+  });
+
+  // 4. تسجيل جميع المستخدمين الإضافيين (غير حساب admin الأساسي) كمحذوفين
+  (appState.users || []).forEach(u => {
+    if (u && u.id && u.id !== 'admin' && !u.isSystem) {
+      recordDeletedItem('users', String(u.id), nowTs);
+    }
+  });
+  const adminExisting = (appState.users || []).find(u => u && u.id === 'admin') || getDefaultState().users[0];
+  appState.users = [JSON.parse(JSON.stringify(adminExisting))];
+  appState.activeUserId = 'admin';
+
+  // 5. تصفير كافة الأيام (1..10) والمزرعة والأرشيف والتجار بالكامل (0 تاجر، 0 حركة، 0 مصروف، 0 أرشيف)
+  for (let d = 1; d <= 10; d++) {
+    appState.days[d] = {
+      dayNumber: d,
+      dateLabel: `اليوم ${d}`,
+      sales: [],
+      pendingSales: [],
+      expenses: [],
+      deliveredCash: 0,
+      deliveredCashUpdatedAt: nowTs,
+      carriedForwardCash: 0,
+      carriedForwardCashUpdatedAt: nowTs,
+      isLocked: false,
+      lockedBy: '',
+      lockedAtTxt: '',
+      lockUpdatedAt: nowTs,
+      clearedAt: nowTs
+    };
+  }
+
+  activeRecalledPendingId = '';
+  appState.farmName = defaultFarm;
+  appState.lastFarmSwitchAt = nowTs;
+  appState.currentDay = 1;
+  appState.visibleDays = [1];
+  appState.defaultPrice = 0;
+  appState.defaultTip = 0;
+  appState.lastScaleNo = 0;
+  appState.farmResetAt = nowTs;
+  appState.factoryZeroWipeAt = nowTs;
+  appState.lastBulkImportAt = 0;
+  appState.merchants = [];
+  appState.farmsArchive = {};
+  appState.hasLocalEdits = true;
+
+  unrecordDeletedItem('farms', defaultFarm);
+  syncActiveFarmIntoArchive();
+
+  const saleForm = document.getElementById('saleEntryForm');
+  if (saleForm) saleForm.reset();
+  const editSaleIdEl = document.getElementById('editSaleId');
+  if (editSaleIdEl) editSaleIdEl.value = '';
+  const expForm = document.getElementById('expenseEntryForm');
+  if (expForm) expForm.reset();
+  const editExpIdEl = document.getElementById('editExpenseId');
+  if (editExpIdEl) editExpIdEl.value = '';
+
+  // 6. رفع التصفير الجذري الشامل فوراً للسحابة مع تخطي الجلب المسبق (skipCloudPreMerge = true) لمسح السحابة بالكامل واعتماد حالة الصفر
+  saveState(true, true);
+  renderAll(true);
+  showToast(
+    customMsg || '☢️ تم التصفير الجذري الشامل للموقع والسحابة بالكامل (0 تجار، 0 حركات، 0 مصروفات، 0 أرشيف) — الموقع الآن جديد تماماً بدون أي بيانات!',
     customIcon
   );
   return true;
@@ -2059,6 +2174,9 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   const localBulkImportAt = Number(appState.lastBulkImportAt) || 0;
   const cloudBulkImportAt = Number(cloudData.lastBulkImportAt) || 0;
   appState.lastBulkImportAt = Math.max(localBulkImportAt, cloudBulkImportAt);
+  const localFactoryWipeAt = Number(appState.factoryZeroWipeAt) || 0;
+  const cloudFactoryWipeAt = Number(cloudData.factoryZeroWipeAt) || 0;
+  appState.factoryZeroWipeAt = Math.max(localFactoryWipeAt, cloudFactoryWipeAt);
 
   const countMovements = (daysMap) => {
     if (!daysMap || typeof daysMap !== 'object') return 0;
@@ -2368,6 +2486,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       farmName: appState.farmName,
       lastFarmSwitchAt: Number(appState.lastFarmSwitchAt) || 0,
       farmResetAt: Number(appState.farmResetAt) || 0,
+      factoryZeroWipeAt: Number(appState.factoryZeroWipeAt) || 0,
       lastBulkImportAt: Number(appState.lastBulkImportAt) || 0,
       currentDay: appState.currentDay,
       visibleDays: appState.visibleDays,
@@ -9920,7 +10039,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v56-fix-active-farm-switch') {
+          if (k !== 'farm-sales-committee-v57-factory-zero-cloud-reset') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -13691,14 +13810,17 @@ function initFarmSalesApp() {
     showToast('✅ تم تحميل ملف index.html الشامل مدمجاً به رابط السحابة! يعمل مباشرة على GitHub Pages و Google Sites وكل الأجهزة.', '📥');
   });
 
-  // Smart Dual-Mode Reset Inline Box Handlers (#btnResetDemoData & #smartResetInlineBox)
+  // Smart Triple-Mode Reset Inline Box Handlers (#btnResetDemoData & #smartResetInlineBox)
   const smartResetBox = document.getElementById('smartResetInlineBox');
   const radResetActive = document.getElementById('radResetModeActiveFarm');
   const radResetFull = document.getElementById('radResetModeFullSite');
+  const radResetFactoryZero = document.getElementById('radResetModeFactoryZero');
   const lblResetActive = document.getElementById('lblResetModeActiveFarm');
   const lblResetFull = document.getElementById('lblResetModeFullSite');
+  const lblResetFactoryZero = document.getElementById('lblResetModeFactoryZero');
   const badgeResetActive = document.getElementById('smartResetActiveFarmBadge');
   const badgeResetAll = document.getElementById('smartResetAllFarmsCountBadge');
+  const badgeResetFactoryZero = document.getElementById('smartResetFactoryZeroBadge');
   const summaryResetWarn = document.getElementById('smartResetWarningSummary');
   const btnConfirmSmartReset = document.getElementById('btnConfirmExecuteSmartReset');
   const btnConfirmSmartResetTxt = document.getElementById('btnConfirmExecuteSmartResetTxt');
@@ -13707,32 +13829,54 @@ function initFarmSalesApp() {
     const fName = appState.farmName || 'أبوذكري';
     syncActiveFarmIntoArchive();
     const farmsCount = Object.keys(appState.farmsArchive || {}).length;
+    const merchCount = (appState.merchants || []).length;
     if (badgeResetActive) badgeResetActive.textContent = `مزرعة ${fName}`;
     if (badgeResetAll) badgeResetAll.textContent = `${farmsCount} مزرعة بالأرشيف`;
+    if (badgeResetFactoryZero) badgeResetFactoryZero.textContent = `مسح ${farmsCount} مزرعة + ${merchCount} تاجر + السحابة`;
 
-    const isFullMode = Boolean(radResetFull && radResetFull.checked);
-    if (lblResetActive && lblResetFull) {
-      if (isFullMode) {
-        lblResetActive.className = 'cursor-pointer rounded-xl border-2 border-slate-300 bg-white hover:bg-amber-50/50 p-3 flex items-start gap-2.5 transition shadow-sm';
-        lblResetFull.className = 'cursor-pointer rounded-xl border-2 border-rose-600 bg-rose-100/80 p-3 flex items-start gap-2.5 transition shadow-md';
-      } else {
-        lblResetActive.className = 'cursor-pointer rounded-xl border-2 border-amber-500 bg-amber-50/90 p-3 flex items-start gap-2.5 transition shadow-md';
-        lblResetFull.className = 'cursor-pointer rounded-xl border-2 border-slate-300 bg-white hover:bg-rose-50/60 p-3 flex items-start gap-2.5 transition shadow-sm';
-      }
+    const isFactoryZeroMode = Boolean(radResetFactoryZero && radResetFactoryZero.checked);
+    const isFullMode = Boolean(!isFactoryZeroMode && radResetFull && radResetFull.checked);
+
+    const inactiveCardCls = 'cursor-pointer rounded-xl border-2 border-slate-300 bg-white hover:bg-slate-50 p-3 flex items-start gap-2.5 transition shadow-sm';
+    if (lblResetActive) {
+      lblResetActive.className = (!isFullMode && !isFactoryZeroMode)
+        ? 'cursor-pointer rounded-xl border-2 border-amber-500 bg-amber-50/90 p-3 flex items-start gap-2.5 transition shadow-md'
+        : inactiveCardCls;
     }
+    if (lblResetFull) {
+      lblResetFull.className = isFullMode
+        ? 'cursor-pointer rounded-xl border-2 border-rose-600 bg-rose-100/80 p-3 flex items-start gap-2.5 transition shadow-md'
+        : inactiveCardCls;
+    }
+    if (lblResetFactoryZero) {
+      lblResetFactoryZero.className = isFactoryZeroMode
+        ? 'cursor-pointer rounded-xl border-2 border-slate-950 bg-rose-200/90 p-3 flex items-start gap-2.5 transition shadow-lg ring-2 ring-rose-500'
+        : inactiveCardCls;
+    }
+
     if (summaryResetWarn) {
-      if (isFullMode) {
-        summaryResetWarn.textContent = `🚨 تحذير: سيتم مسح حركات (${fName}) + مسح جميع المزارع الـ (${farmsCount}) من الأرشيف والسحابة نهائياً (مع بقاء التجار والمستخدمين)!`;
+      if (isFactoryZeroMode) {
+        summaryResetWarn.textContent = `☢️ تحذير قصوى (الوضع الثالث): سيتم مسح كل شيء نهائياً في الموقع والسحابة (مسح الـ ${merchCount} تاجر بالكامل + مسح الـ ${farmsCount} مزرعة والأرشيف + مسح جميع الحركات والمصروفات) ليعود الموقع جديداً تماماً بدون أي بيانات!`;
+        summaryResetWarn.className = 'text-[11px] font-extrabold text-amber-300 bg-slate-900 border-2 border-rose-500 px-3 py-1.5 rounded-lg shadow-sm';
+      } else if (isFullMode) {
+        summaryResetWarn.textContent = `🚨 تحذير (الوضع الثاني): سيتم مسح حركات (${fName}) + مسح جميع المزارع الـ (${farmsCount}) من الأرشيف والسحابة نهائياً (مع بقاء دليل التجار والمستخدمين)!`;
         summaryResetWarn.className = 'text-[11px] font-extrabold text-rose-950 bg-rose-200 border border-rose-400 px-3 py-1 rounded-lg';
       } else {
-        summaryResetWarn.textContent = `📌 محدد حالياً: تصفير حركات مزرعة (${fName}) فقط وإعادتها لـ (يوم 1) دون المساس بباقي المزارع في الأرشيف`;
+        summaryResetWarn.textContent = `📌 محدد حالياً (الوضع الأول): تصفير حركات مزرعة (${fName}) فقط وإعادتها لـ (يوم 1) دون المساس بباقي المزارع في الأرشيف`;
         summaryResetWarn.className = 'text-[11px] font-extrabold text-amber-950 bg-amber-100 border border-amber-300 px-3 py-1 rounded-lg';
       }
     }
-    if (btnConfirmSmartResetTxt) {
-      btnConfirmSmartResetTxt.textContent = isFullMode
-        ? `تأكيد التصفير الشامل للموقع بالكامل (${farmsCount} مزرعة)`
-        : `تأكيد تصفير حركات مزرعة (${fName}) فقط`;
+    if (btnConfirmSmartReset && btnConfirmSmartResetTxt) {
+      if (isFactoryZeroMode) {
+        btnConfirmSmartReset.className = 'px-4 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-300 border-2 border-rose-500 font-extrabold text-xs shadow-lg transition flex items-center gap-1.5';
+        btnConfirmSmartResetTxt.textContent = `☢️ تأكيد المسح الجذري الشامل لكل شيء (الموقع + السحابة + التجار)`;
+      } else if (isFullMode) {
+        btnConfirmSmartReset.className = 'px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-extrabold text-xs shadow-lg transition flex items-center gap-1.5';
+        btnConfirmSmartResetTxt.textContent = `🧨 تأكيد تصفير جميع المزارع (${farmsCount} مزرعة) مع بقاء التجار`;
+      } else {
+        btnConfirmSmartReset.className = 'px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-extrabold text-xs shadow-lg transition flex items-center gap-1.5';
+        btnConfirmSmartResetTxt.textContent = `🧹 تأكيد تصفير حركات مزرعة (${fName}) فقط`;
+      }
     }
   }
 
@@ -13747,6 +13891,7 @@ function initFarmSalesApp() {
     }
     if (radResetActive) radResetActive.checked = true;
     if (radResetFull) radResetFull.checked = false;
+    if (radResetFactoryZero) radResetFactoryZero.checked = false;
     updateSmartResetModeSelectionUI();
     smartResetBox.classList.remove('hidden');
     smartResetBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -13754,6 +13899,7 @@ function initFarmSalesApp() {
 
   if (radResetActive) radResetActive.addEventListener('change', updateSmartResetModeSelectionUI);
   if (radResetFull) radResetFull.addEventListener('change', updateSmartResetModeSelectionUI);
+  if (radResetFactoryZero) radResetFactoryZero.addEventListener('change', updateSmartResetModeSelectionUI);
 
   ['btnCancelSmartResetBox', 'btnCancelSmartResetBox2'].forEach(cid => {
     const cancelEl = document.getElementById(cid);
@@ -13766,8 +13912,13 @@ function initFarmSalesApp() {
 
   if (btnConfirmSmartReset) {
     btnConfirmSmartReset.addEventListener('click', () => {
-      const isFullMode = Boolean(radResetFull && radResetFull.checked);
-      if (isFullMode) {
+      const isFactoryZeroMode = Boolean(radResetFactoryZero && radResetFactoryZero.checked);
+      const isFullMode = Boolean(!isFactoryZeroMode && radResetFull && radResetFull.checked);
+      if (isFactoryZeroMode) {
+        if (clearEverythingToFactoryZeroState()) {
+          if (smartResetBox) smartResetBox.classList.add('hidden');
+        }
+      } else if (isFullMode) {
         if (clearAllSiteMovementsAndArchiveKeepMerchants()) {
           if (smartResetBox) smartResetBox.classList.add('hidden');
         }

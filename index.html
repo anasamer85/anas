@@ -23,7 +23,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=56" />
+  <link rel="stylesheet" href="./style.css?v=57" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -2155,14 +2155,14 @@
           </div>
         </div>
 
-        <!-- Smart Dual-Mode Reset Confirmation Inline Box (لوحة التأكيد المدمجة للتصفير الذكي بوضعين) -->
+        <!-- Smart Triple-Mode Reset Confirmation Inline Box (لوحة التأكيد المدمجة للتصفير الذكي بـ 3 أوضاع) -->
         <div id="smartResetInlineBox" class="hidden bg-rose-50/90 border-2 border-rose-500 rounded-2xl p-4 space-y-3.5 shadow-md">
           <div class="flex flex-wrap items-center justify-between gap-2 border-b border-rose-200 pb-2.5">
             <div class="flex items-center gap-2">
               <span class="text-lg">⚠️</span>
               <div>
-                <h3 class="text-xs md:text-sm font-extrabold text-rose-950">لوحة التصفير الذكي — اختر نطاق التصفير المطلوب بدقة:</h3>
-                <p class="text-[11px] font-bold text-slate-600">في كلا الوضعين يتم الحفاظ الكامل على <strong class="text-emerald-800">دليل التجار وأكوادهم الموحدة، حسابات المستخدمين والصلاحيات، وإعدادات ربط السحابة</strong>.</p>
+                <h3 class="text-xs md:text-sm font-extrabold text-rose-950">لوحة التصفير الذكي (3 أوضاع) — اختر نطاق التصفير المطلوب بدقة:</h3>
+                <p class="text-[11px] font-bold text-slate-600">اختر بين <strong class="text-amber-900">تصفير المزرعة النشطة فقط (1)</strong>، أو <strong class="text-rose-800">تصفير جميع المزارع مع بقاء التجار (2)</strong>، أو <strong class="text-slate-950 underline">المسح الجذري الشامل لكل شيء بما فيه السحابة والتجار (3)</strong>.</p>
               </div>
             </div>
             <button type="button" id="btnCancelSmartResetBox" class="px-3 py-1 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-extrabold">
@@ -2170,31 +2170,45 @@
             </button>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <!-- Mode 1: Active Farm Only (Default) -->
             <label id="lblResetModeActiveFarm" class="cursor-pointer rounded-xl border-2 border-amber-500 bg-amber-50/90 p-3 flex items-start gap-2.5 transition shadow-sm">
-              <input type="radio" name="smartResetMode" id="radResetModeActiveFarm" value="active_farm" class="mt-1 w-4 h-4 text-amber-600" checked />
+              <input type="radio" name="smartResetMode" id="radResetModeActiveFarm" value="active_farm" class="mt-1 w-4 h-4 text-amber-600 shrink-0" checked />
               <div class="space-y-1 text-right">
                 <div class="text-xs font-extrabold text-amber-950 flex items-center gap-1.5 flex-wrap">
                   <span>🧹 الوضع الأول (الافتراضي): تصفير حركات المزرعة النشطة فقط</span>
                   <span id="smartResetActiveFarmBadge" class="px-2 py-0.5 rounded-full bg-amber-300 text-slate-950 text-[10px] font-extrabold">أبوذكري</span>
                 </div>
                 <p class="text-[11px] font-bold text-slate-700 leading-relaxed">
-                  يمسح جميع الوزنات والمبيعات والوزنات المؤقتة والمصروفات والنقدية المسلمة في المزرعة المفتوحة حالياً فقط ويعيدها إلى <strong>(يوم 1)</strong>، <strong class="text-emerald-800 underline">دون المساس بأي مزرعة أخرى محفوظة في سجل المزارع (farmsArchive)</strong>.
+                  يمسح جميع الوزنات والمبيعات والوزنات المؤقتة والمصروفات والنقدية المسلمة في المزرعة المفتوحة حالياً فقط ويعيدها إلى <strong>(يوم 1)</strong>، <strong class="text-emerald-800 underline">دون المساس بأي مزرعة أخرى في الأرشيف</strong>.
                 </p>
               </div>
             </label>
 
-            <!-- Mode 2: Full Site Reset (All Farms & Archive) -->
+            <!-- Mode 2: Full Site Reset (All Farms & Archive, Keep Merchants) -->
             <label id="lblResetModeFullSite" class="cursor-pointer rounded-xl border-2 border-slate-300 bg-white hover:bg-rose-50/60 p-3 flex items-start gap-2.5 transition shadow-sm">
-              <input type="radio" name="smartResetMode" id="radResetModeFullSite" value="full_site" class="mt-1 w-4 h-4 text-rose-700" />
+              <input type="radio" name="smartResetMode" id="radResetModeFullSite" value="full_site" class="mt-1 w-4 h-4 text-rose-700 shrink-0" />
               <div class="space-y-1 text-right">
                 <div class="text-xs font-extrabold text-rose-950 flex items-center gap-1.5 flex-wrap">
-                  <span>🧨 الوضع الثاني: تصفير شامل للموقع بالكامل (جميع المزارع والأرشيف)</span>
+                  <span>🧨 الوضع الثاني: تصفير جميع المزارع والأرشيف (مع بقاء التجار)</span>
                   <span id="smartResetAllFarmsCountBadge" class="px-2 py-0.5 rounded-full bg-rose-200 text-rose-950 text-[10px] font-extrabold">كل المزارع</span>
                 </div>
                 <p class="text-[11px] font-bold text-slate-700 leading-relaxed">
-                  يمسح حركات المزرعة النشطة <strong>+ يمسح أرشيف المزارع بالكامل (farmsArchive)</strong> في الجهاز والسحابة معاً ليعود الموقع جديداً تماماً من الصفر، مع <strong class="text-emerald-800">بقاء دليل التجار الموحد والمستخدمين وإعدادات السحابة</strong>.
+                  يمسح حركات المزرعة النشطة <strong>+ يمسح أرشيف المزارع بالكامل (farmsArchive)</strong> في الجهاز والسحابة معاً، مع <strong class="text-emerald-800">بقاء دليل التجار الموحد والمستخدمين وإعدادات السحابة</strong>.
+                </p>
+              </div>
+            </label>
+
+            <!-- Mode 3: Factory Zero Wipe (Everything including Merchants, Farms, Archive & Cloud) -->
+            <label id="lblResetModeFactoryZero" class="cursor-pointer rounded-xl border-2 border-slate-300 bg-white hover:bg-slate-900/5 p-3 flex items-start gap-2.5 transition shadow-sm">
+              <input type="radio" name="smartResetMode" id="radResetModeFactoryZero" value="factory_zero" class="mt-1 w-4 h-4 text-slate-950 shrink-0" />
+              <div class="space-y-1 text-right">
+                <div class="text-xs font-extrabold text-slate-950 flex items-center gap-1.5 flex-wrap">
+                  <span>☢️ الوضع الثالث: تصفير جذري شامل لكل شيء (الموقع + السحابة + التجار)</span>
+                  <span id="smartResetFactoryZeroBadge" class="px-2 py-0.5 rounded-full bg-slate-900 text-amber-300 text-[10px] font-extrabold">موقع جديد تماماً (0 بيانات)</span>
+                </div>
+                <p class="text-[11px] font-bold text-slate-700 leading-relaxed">
+                  يمسح <strong>كل شيء نهائياً في الموقع والسحابة معاً</strong>: <strong class="text-rose-800 underline">لا تجار (0 تاجر)، ولا حركات، ولا مصروفات، ولا أرشيف مزارع، ولا مستخدمين إضافيين</strong>، ليعود الموقع جديداً تماماً كأول مرة بدون أي بيانات!
                 </p>
               </div>
             </label>
@@ -2564,7 +2578,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=56"></script>
-  <script src="./app.js?v=56"></script>
+  <script src="./excel-template.js?v=57"></script>
+  <script src="./app.js?v=57"></script>
 </body>
 </html>
