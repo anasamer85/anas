@@ -23,7 +23,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=58" />
+  <link rel="stylesheet" href="./style.css?v=59" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -547,7 +547,7 @@
                 اسم التاجر / عهدة السيارة <span class="text-blue-700 font-normal">(اكتب حرفين للإكمال التلقائي)</span>
               </label>
               <input id="inpMerchantName" type="text" enterkeyhint="next" autocomplete="off" required
-                placeholder="مثال: رضا المنياوى أو كرنك 1 أو كرنك 2..."
+                placeholder="اكتب اسم التاجر أو عهدة السيارة..."
                 class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600" />
               <!-- Instant Custom Auto-Suggest Box (No arrow needed!) -->
               <div id="merchantSuggestBox" class="hidden absolute z-30 w-full mt-1 bg-white border-2 border-blue-700 rounded-xl shadow-xl max-h-52 overflow-y-auto"></div>
@@ -562,13 +562,13 @@
 
             <div class="sm:col-span-2">
               <label id="lblScaleOrVoucherNo" class="block text-xs font-extrabold text-slate-700 mb-1">ميزان رقم <span class="text-emerald-700 font-normal">(متسلسل تلقائي)</span></label>
-              <input id="inpScaleNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="5222"
+              <input id="inpScaleNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="0"
                 class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl text-center focus:ring-2 focus:ring-blue-600" />
             </div>
 
             <div id="wrapCarNoField" class="sm:col-span-2">
               <label id="lblCarNoField" class="block text-xs font-extrabold text-slate-700 mb-1">رقم السيارة</label>
-              <input id="inpCarNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="6923"
+              <input id="inpCarNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="0"
                 class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl text-center focus:ring-2 focus:ring-blue-600" />
             </div>
           </div>
@@ -587,12 +587,12 @@
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">السعر (ج.م / كجم) <span class="text-emerald-700 font-normal">(ثابت وقابل للتعديل)</span></label>
-              <input id="inpPrice" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="78.02"
+              <input id="inpPrice" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
                 class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">الإكرامية (ج.م) <span class="text-emerald-700 font-normal">(ثابتة وقابلة للتعديل)</span></label>
-              <input id="inpTip" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="250"
+              <input id="inpTip" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
                 class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
             </div>
             <div id="weightValidationAlert" class="hidden col-span-2 sm:col-span-4 p-2.5 rounded-xl bg-rose-100 border-2 border-rose-500 text-rose-900 text-xs font-extrabold flex items-center gap-2">
@@ -653,12 +653,12 @@
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div>
                 <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">عهدة نقدية دفعها التاجر <span class="text-[10px] text-emerald-800 font-bold">(تُوزع للخزنة تلقائياً — Enter ⚡)</span></label>
-                <input id="inpCustodyCash" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="مثال: 200000"
+                <input id="inpCustodyCash" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
                   class="w-full px-2.5 py-1.5 text-sm font-extrabold border-2 border-amber-400 rounded-lg bg-white text-emerald-900 focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
                 <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">عهدة تحويل دفعها التاجر <span class="text-[10px] text-blue-800 font-bold">(تُوزع للتحويلات تلقائياً — Enter ⚡)</span></label>
-                <input id="inpCustodyTransfer" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="مثال: 50000"
+                <input id="inpCustodyTransfer" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
                   class="w-full px-2.5 py-1.5 text-sm font-extrabold border-2 border-amber-400 rounded-lg bg-white text-blue-900 focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
@@ -2651,7 +2651,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=58"></script>
-  <script src="./app.js?v=58"></script>
+  <script src="./excel-template.js?v=59"></script>
+  <script src="./app.js?v=59"></script>
 </body>
 </html>

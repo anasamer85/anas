@@ -1167,7 +1167,6 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
     return false;
   }
   const nowTs = getSyncedNow() + 500;
-  const defaultFarm = 'أبوذكري';
 
   // 1. تسجيل جميع حركات المزرعة النشطة في سجل المحذوفات (Tombstones) لضمان مسحها من أي جهاز آخر متصل
   for (let d = 1; d <= 10; d++) {
@@ -1175,6 +1174,10 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
       recordDayItemsAsDeleted(appState.days[d]);
     }
   }
+  if (appState.farmName && String(appState.farmName).trim()) {
+    recordDeletedItem('farms', String(appState.farmName).trim(), nowTs);
+  }
+  recordDeletedItem('farms', 'أبوذكري', nowTs);
 
   // 2. تسجيل جميع حركات وأسماء المزارع والتجار في الأرشيف داخل سجل المحذوفات
   if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
@@ -1190,8 +1193,8 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
           if (fm && fm.code) recordDeletedItem('merchants', Number(fm.code), nowTs);
         });
       }
-      if (fKey !== defaultFarm) {
-        recordDeletedItem('farms', fKey, nowTs);
+      if (fKey && String(fKey).trim()) {
+        recordDeletedItem('farms', String(fKey).trim(), nowTs);
       }
     });
   }
@@ -1215,7 +1218,7 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
   appState.users = [JSON.parse(JSON.stringify(adminExisting))];
   appState.activeUserId = 'admin';
 
-  // 5. تصفير كافة الأيام (1..10) والمزرعة والأرشيف والتجار بالكامل (0 تاجر، 0 حركة، 0 مصروف، 0 أرشيف)
+  // 5. تصفير كافة الأيام (1..10) واسم المزرعة والأرشيف والتجار بالكامل (0 مزرعة، 0 تاجر، 0 حركة، 0 مصروف، 0 أرشيف)
   for (let d = 1; d <= 10; d++) {
     appState.days[d] = {
       dayNumber: d,
@@ -1236,7 +1239,7 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
   }
 
   activeRecalledPendingId = '';
-  appState.farmName = defaultFarm;
+  appState.farmName = '';
   appState.lastFarmSwitchAt = nowTs;
   appState.currentDay = 1;
   appState.visibleDays = [1];
@@ -1250,13 +1253,17 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
   appState.farmsArchive = {};
   appState.hasLocalEdits = true;
 
-  unrecordDeletedItem('farms', defaultFarm);
-  syncActiveFarmIntoArchive();
-
   const saleForm = document.getElementById('saleEntryForm');
   if (saleForm) saleForm.reset();
   const editSaleIdEl = document.getElementById('editSaleId');
   if (editSaleIdEl) editSaleIdEl.value = '';
+  const suggestBoxEl = document.getElementById('merchantSuggestBox');
+  if (suggestBoxEl) {
+    suggestBoxEl.innerHTML = '';
+    suggestBoxEl.classList.add('hidden');
+  }
+  const dispCodeEl = document.getElementById('dispMerchantCode');
+  if (dispCodeEl) dispCodeEl.textContent = 'يُحدد تلقائياً';
   const expForm = document.getElementById('expenseEntryForm');
   if (expForm) expForm.reset();
   const editExpIdEl = document.getElementById('editExpenseId');
@@ -1266,7 +1273,7 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
   saveState(true, true);
   renderAll(true);
   showToast(
-    customMsg || '☢️ تم التصفير الجذري الشامل للموقع والسحابة بالكامل (0 تجار، 0 حركات، 0 مصروفات، 0 أرشيف) — الموقع الآن جديد تماماً بدون أي بيانات!',
+    customMsg || '☢️ تم التصفير الجذري الشامل للموقع والسحابة بالكامل (0 مزارع، 0 تجار، 0 حركات، 0 مصروفات) — الموقع الآن جديد تماماً بدون أي بيانات!',
     customIcon
   );
   return true;
@@ -1509,7 +1516,11 @@ function syncActiveFarmIntoArchive() {
     appState.farmsArchive = {};
   }
   unifyGlobalMerchantsRegistry();
-  const fName = appState.farmName || 'أبوذكري';
+  const rawName = String(appState.farmName ?? '').trim();
+  if (!rawName && Number(appState.factoryZeroWipeAt) > 0) {
+    return;
+  }
+  const fName = rawName || 'أبوذكري';
   appState.farmsArchive[fName] = {
     farmName: fName,
     updatedAt: new Date(getSyncedNow()).toISOString(),
@@ -2166,8 +2177,11 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
 
   // 3. حفظ المزرعة المحلية الحالية في الأرشيف أولاً قبل الدمج حتى لا تضيع بيانات أي مزرعة أخرى
   syncActiveFarmIntoArchive();
-  const localFarmName = appState.farmName || 'أبوذكري';
-  const cloudFarmName = cloudData.farmName || localFarmName;
+  const localFactoryWipeAt = Number(appState.factoryZeroWipeAt) || 0;
+  const cloudFactoryWipeAt = Number(cloudData.factoryZeroWipeAt) || 0;
+  const isZeroWiped = (localFactoryWipeAt > 0 || cloudFactoryWipeAt > 0);
+  const localFarmName = String(appState.farmName ?? '').trim() || (isZeroWiped ? '' : 'أبوذكري');
+  const cloudFarmName = String(cloudData.farmName ?? '').trim() || localFarmName;
   const sameActiveFarm = (localFarmName === cloudFarmName);
   const rawLocalResetAt = Number(appState.farmResetAt) || 0;
   const rawCloudResetAt = Number(cloudData.farmResetAt) || 0;
@@ -2712,10 +2726,14 @@ function updateTopCloudFarmDropdownUI() {
   const farmNames = Object.keys(archive);
   const selTop = document.getElementById('selTopCloudFarm');
   if (selTop && document.activeElement !== selTop) {
-    selTop.innerHTML = farmNames.map(fn => {
-      const safeFn = escXmlStr(fn);
-      return `<option value="${safeFn}" ${fn === appState.farmName ? 'selected' : ''}>☁️ ${safeFn}</option>`;
-    }).join('');
+    if (farmNames.length === 0) {
+      selTop.innerHTML = `<option value="" selected>☁️ بدون مزرعة (0)</option>`;
+    } else {
+      selTop.innerHTML = farmNames.map(fn => {
+        const safeFn = escXmlStr(fn);
+        return `<option value="${safeFn}" ${fn === appState.farmName ? 'selected' : ''}>☁️ ${safeFn}</option>`;
+      }).join('');
+    }
   }
 }
 
@@ -2729,6 +2747,15 @@ function renderCloudDatabaseHub() {
   const tbody = document.getElementById('cloudFarmsTbody');
   if (tbody) tbody.innerHTML = '';
 
+  if (farmNames.length === 0 && tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="p-5 text-center text-slate-500 font-extrabold">
+          لا توجد أي مزارع مسجلة حالياً (0 مزرعة) — اكتب اسم المزرعة في الخانة أعلاه واضغط <strong>"➕ إنشاء مزرعة جديدة بالسحابة"</strong> للبدء.
+        </td>
+      </tr>
+    `;
+  }
   farmNames.forEach(fn => {
     const fObj = archive[fn];
     const savedDays = fObj.days || {};
@@ -2830,14 +2857,20 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
 }
 
 function setFarmName(newName) {
-  const cleaned = String(newName || '').trim() || 'أبوذكري';
+  const cleaned = String(newName ?? '').trim();
   appState.farmName = cleaned;
-  document.getElementById('inpTopFarmName').value = cleaned;
-  document.getElementById('inpSettingsFarmName').value = cleaned;
-  document.getElementById('headerFarmBadge').textContent = cleaned;
-  document.getElementById('dailyFarmNameBadge').textContent = cleaned;
-  document.getElementById('dashFarmNameTitle').textContent = cleaned;
-  document.title = `نظام محاضر لجان بيع المزارع - ${cleaned}`;
+  if (cleaned) {
+    unrecordDeletedItem('farms', cleaned);
+  }
+  const dispName = cleaned || 'بدون مزرعة';
+  const topInp = document.getElementById('inpTopFarmName');
+  if (topInp && document.activeElement !== topInp) topInp.value = cleaned;
+  const setInp = document.getElementById('inpSettingsFarmName');
+  if (setInp && document.activeElement !== setInp) setInp.value = cleaned;
+  document.getElementById('headerFarmBadge').textContent = dispName;
+  document.getElementById('dailyFarmNameBadge').textContent = dispName;
+  document.getElementById('dashFarmNameTitle').textContent = dispName;
+  document.title = cleaned ? `نظام محاضر لجان بيع المزارع - ${cleaned}` : 'نظام محاضر لجان بيع المزارع';
   saveState(true);
 }
 
@@ -3170,12 +3203,15 @@ function updateConnectionAndSyncUI() {
   const badge = document.getElementById('connStatusBadge');
   document.getElementById('pendingCountTxt').textContent = appState.pendingChanges || 0;
 
-  const fName = appState.farmName || 'أبوذكري';
-  document.getElementById('inpTopFarmName').value = fName;
-  document.getElementById('inpSettingsFarmName').value = fName;
-  document.getElementById('headerFarmBadge').textContent = fName;
-  document.getElementById('dailyFarmNameBadge').textContent = fName;
-  document.getElementById('dashFarmNameTitle').textContent = fName;
+  const rawFarmName = String(appState.farmName ?? '').trim();
+  const dispFarmName = rawFarmName || 'بدون مزرعة';
+  const topInp = document.getElementById('inpTopFarmName');
+  if (topInp && document.activeElement !== topInp) topInp.value = rawFarmName;
+  const setInp = document.getElementById('inpSettingsFarmName');
+  if (setInp && document.activeElement !== setInp) setInp.value = rawFarmName;
+  document.getElementById('headerFarmBadge').textContent = dispFarmName;
+  document.getElementById('dailyFarmNameBadge').textContent = dispFarmName;
+  document.getElementById('dashFarmNameTitle').textContent = dispFarmName;
 
   if (liveExcelFileHandle) {
     document.getElementById('linkedExcelNameTxt').textContent = `مرتبط مباشرة بملف: ${liveExcelFileHandle.name}`;
@@ -10431,7 +10467,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v58-farm-full-trial-balance') {
+          if (k !== 'farm-sales-committee-v59-complete-zero-wipe-clean') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -11645,10 +11681,10 @@ function initFarmSalesApp() {
       codeDisp.textContent = 'يُحدد تلقائياً';
     }
 
+    const hasKarnak104 = Array.isArray(appState.merchants) && appState.merchants.some(m => m && Number(m.code) === 104 && String(m.name || '').includes('كرنك'));
     const candidates = [
-      ...appState.merchants.map(m => ({ label: m.name, code: m.code })),
-      { label: 'كرنك 1', code: 104 },
-      { label: 'كرنك 2', code: 104 }
+      ...(appState.merchants || []).map(m => ({ label: m.name, code: m.code })),
+      ...(hasKarnak104 ? [{ label: 'كرنك 1', code: 104 }, { label: 'كرنك 2', code: 104 }] : [])
     ];
     const filtered = val
       ? candidates.filter(c => c.label.includes(val) || String(c.code).includes(val))
