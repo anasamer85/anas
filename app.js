@@ -10465,7 +10465,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v60-login-syntax-hotfix') {
+          if (k !== 'farm-sales-committee-v61-single-merchant-name-per-code') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -11679,13 +11679,14 @@ function initFarmSalesApp() {
       codeDisp.textContent = 'يُحدد تلقائياً';
     }
 
-    const hasKarnak104 = Array.isArray(appState.merchants) && appState.merchants.some(m => m && Number(m.code) === 104 && String(m.name || '').includes('كرنك'));
-    const candidates = [
-      ...(appState.merchants || []).map(m => ({ label: m.name, code: m.code })),
-      ...(hasKarnak104 ? [{ label: 'كرنك 1', code: 104 }, { label: 'كرنك 2', code: 104 }] : [])
-    ];
+    const candidates = (appState.merchants || []).map(m => ({ label: m.name, code: m.code }));
+    const cleanedVal = cleanMerchantBaseName(val);
     const filtered = val
-      ? candidates.filter(c => c.label.includes(val) || String(c.code).includes(val))
+      ? candidates.filter(c =>
+          c.label.includes(val) ||
+          (cleanedVal && c.label.includes(cleanedVal)) ||
+          String(c.code).includes(val)
+        )
       : candidates;
 
     if (filtered.length === 0) {
@@ -12410,7 +12411,8 @@ function initFarmSalesApp() {
         if (suggestBox && !suggestBox.classList.contains('hidden')) {
           const firstPick = suggestBox.querySelector('[data-pick-merchant]');
           const curVal = inpMerch.value.trim();
-          if (firstPick && curVal && !appState.merchants.some(m => m.name === curVal)) {
+          const hasSubCarNum = /\d+/.test(curVal) && resolveMerchantCode(curVal) > 0;
+          if (firstPick && curVal && !hasSubCarNum && !appState.merchants.some(m => m.name === curVal)) {
             inpMerch.value = firstPick.getAttribute('data-pick-merchant');
           }
           suggestBox.classList.add('hidden');
