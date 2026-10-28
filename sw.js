@@ -1,5 +1,5 @@
 // Service Worker - نظام محاضر لجان بيع المزارع (يعمل بدون إنترنت على GitHub Pages)
-const CACHE_NAME = "farm-sales-committee-v65-accounting-stress-test-hardened";
+const CACHE_NAME = "farm-sales-committee-v66-sync-and-concurrency-hardened";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -34,6 +34,7 @@ const ASSETS_TO_CACHE = [
   "./style.css?v=63",
   "./style.css?v=64",
   "./style.css?v=65",
+  "./style.css?v=66",
   "./excel-template.js",
   "./excel-template.js?v=45",
   "./excel-template.js?v=46",
@@ -56,6 +57,7 @@ const ASSETS_TO_CACHE = [
   "./excel-template.js?v=63",
   "./excel-template.js?v=64",
   "./excel-template.js?v=65",
+  "./excel-template.js?v=66",
   "./app.js",
   "./app.js?v=27",
   "./app.js?v=28",
@@ -87,6 +89,7 @@ const ASSETS_TO_CACHE = [
   "./app.js?v=63",
   "./app.js?v=64",
   "./app.js?v=65",
+  "./app.js?v=66",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",

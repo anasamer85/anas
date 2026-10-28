@@ -146,7 +146,9 @@ let lastLocalMutationAt = 0;
 const CLOCK_SKEW_BUFFER_MS = 60 * 60 * 1000;
 let cloudClockOffsetMs = 0;
 
-// معايرة فرق التوقيت مع السحابة تلقائياً بالاتجاهين لتعويض تأخر أو تقديم ساعة هاتف المندوب (Bidirectional Clock Skew Calibration)
+// معايرة فرق التوقيت مع السحابة بأمان (Safe Monotonic Clock Skew Calibration):
+// نظراً لأن cloudUpdatedAtIso يمثل وقت آخر حفظ بالسحابة (وليس ساعة حية للسيرفر)، لا يجوز أبداً إرجاع ساعة الجهاز للماضي عندما يكون آخر حفظ قديماً (diff < 0)،
+// بل نعاير للأمام فقط إذا كان ختم السحابة متقدماً على ساعة الجهاز المحلي (تأخر ساعة هاتف المندوب) وبحد أقصى هامش CLOCK_SKEW_BUFFER_MS (60 دقيقة) لمنع أي جهاز ساعته مختلة بساعات من تلويث التوقيت.
 function calibrateCloudClockOffset(cloudUpdatedAtIso) {
   if (!cloudUpdatedAtIso) return;
   try {
@@ -154,9 +156,10 @@ function calibrateCloudClockOffset(cloudUpdatedAtIso) {
     if (!isNaN(cloudMs) && cloudMs > 0) {
       const localMs = Date.now();
       const diff = cloudMs - localMs;
-      // تعويض الانحراف الزمني بالاتجاهين (تأخر الساعة diff > 5s أو تقديم الساعة diff < -5s حتى 24 ساعة) لضمان دقة وعدالة المقارنات الزمنية
-      if (Math.abs(diff) > 5000 && Math.abs(diff) < 24 * 60 * 60 * 1000) {
-        cloudClockOffsetMs = diff;
+      if (diff > 5000 && diff <= CLOCK_SKEW_BUFFER_MS) {
+        cloudClockOffsetMs = Math.max(Number(cloudClockOffsetMs) || 0, diff);
+      } else if (diff <= 5000 && cloudClockOffsetMs < 0) {
+        cloudClockOffsetMs = 0;
       }
     }
   } catch (e) {}
@@ -1839,7 +1842,7 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
   const safeCloud = Array.isArray(cloudArr) ? cloudArr : [];
   const result = [];
 
-  // دمج نسختين لنفس السجل (نفس الـ id) مع الاعتماد المباشر والحاسم على رقم إصدار التعديل (editVersion) ثم أحدث طابع زمني (updatedAt) بدون تعطيله بهامش CLOCK_SKEW_BUFFER_MS
+  // دمج نسختين لنفس السجل (نفس الـ id) مع الاعتماد الحاسم على أحدث ختم زمني (updatedAt) أولاً، ثم رقم إصدار التعديل (editVersion) ككاسر تعادل، مع الحفاظ التام على بيانات المنشئ الأصلي (createdBy)
   const mergeSameRecordVersions = (localItem, cloudItem) => {
     if (!localItem) return { ...cloudItem };
     if (!cloudItem) return { ...localItem };
@@ -1860,10 +1863,10 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
       : (cloudItem.createdTimeTxt || localItem.createdTimeTxt);
 
     let localWins;
-    if (lVer !== cVer) {
-      localWins = lVer > cVer;
-    } else if (lUpdated > 0 && cUpdated > 0 && lUpdated !== cUpdated) {
+    if (lUpdated > 0 && cUpdated > 0 && lUpdated !== cUpdated) {
       localWins = lUpdated > cUpdated;
+    } else if (lVer !== cVer) {
+      localWins = lVer > cVer;
     } else if (lEdited !== cEdited) {
       localWins = lEdited;
     } else if (lUpdated > 0 && cUpdated === 0) {
@@ -1876,9 +1879,10 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
 
     const maxUpdated = Math.max(lUpdated, cUpdated);
     const maxVer = Math.max(lVer, cVer);
+    const maxImported = Math.max(Number(localItem.importedAt) || 0, Number(cloudItem.importedAt) || 0);
     const mergedObj = localWins
-      ? { ...cloudItem, ...localItem, ...(maxUpdated > 0 ? { updatedAt: maxUpdated } : {}), ...(maxVer > 0 ? { editVersion: maxVer } : {}) }
-      : { ...localItem, ...cloudItem, ...(maxUpdated > 0 ? { updatedAt: maxUpdated } : {}), ...(maxVer > 0 ? { editVersion: maxVer } : {}) };
+      ? { ...cloudItem, ...localItem, ...(maxUpdated > 0 ? { updatedAt: maxUpdated } : {}), ...(maxVer > 0 ? { editVersion: maxVer } : {}), ...(maxImported > 0 ? { importedAt: maxImported } : {}) }
+      : { ...localItem, ...cloudItem, ...(maxUpdated > 0 ? { updatedAt: maxUpdated } : {}), ...(maxVer > 0 ? { editVersion: maxVer } : {}), ...(maxImported > 0 ? { importedAt: maxImported } : {}) };
 
     if (origCreatedBy) mergedObj.createdBy = origCreatedBy;
     if (earliestCreatedAt) mergedObj.createdAt = earliestCreatedAt;
@@ -1897,7 +1901,7 @@ function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCl
         return true;
       }).sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
       mergedObj.editHistory = combinedHist.slice(-20);
-      if (!mergedObj.lastEditDiffText && mergedObj.editHistory.length > 0) {
+      if (mergedObj.editHistory.length > 0) {
         mergedObj.lastEditDiffText = mergedObj.editHistory[mergedObj.editHistory.length - 1].diffText;
       }
     }
@@ -2136,11 +2140,14 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
           (dayObj[cat] || []).forEach(rec => {
             if (!rec || rec.id === undefined || rec.id === null) return;
             const idStr = String(rec.id);
-            const ownRecTs = Math.max(extractTimestampFromRecord(rec), Number(rec.importedAt) || 0);
-            const recTs = ownRecTs > 0 ? ownRecTs : Math.max(fBulkTs || 0, dayAdded || 0);
-            const isImported = Boolean(Number(rec.importedAt) > 0 || (ownRecTs === 0 && fBulkTs > 0));
+            const impTs = Number(rec.importedAt) || 0;
+            const ownRecTs = Math.max(extractTimestampFromRecord(rec), impTs);
+            const isImported = Boolean(impTs > 0 || (ownRecTs === 0 && fBulkTs > 0));
+            const recTs = isImported
+              ? Math.max(ownRecTs, fBulkTs || 0, dayAdded || 0)
+              : (ownRecTs > 0 ? ownRecTs : Math.max(fBulkTs || 0, dayAdded || 0));
             if (!meta[cat][idStr] || recTs > meta[cat][idStr].ts) {
-              meta[cat][idStr] = { ts: recTs, isImported };
+              meta[cat][idStr] = { ts: recTs, impTs: Math.max(impTs, isImported ? (fBulkTs || 0) : 0), isImported };
             }
           });
         });
@@ -2168,31 +2175,31 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
       const lDelTs = Number(localDelTsMap[cat] && localDelTsMap[cat][idStr]) || 0;
       const cDelTs = Number(cloudDelTsMap[cat] && cloudDelTsMap[cat][idStr]) || 0;
 
-      // الحالة أ: المعرف محذوف محلياً فقط (تاريخياً) لكنه موجود حيّاً في السحابة (ولم تحذفه السحابة)
-      if (inLocalDel && !inCloudDel && cloudLive[cat][idStr]) {
+      // الحالة أ: السجل موجود حيّاً في السحابة وتم استيراده أو تحديثه بختم زمني أحدث من ختم الحذف المحلي
+      if (inLocalDel && cloudLive[cat][idStr]) {
         const cRec = cloudLive[cat][idStr];
-        const effectiveLocalDelTs = lDelTs || localResetTs || 0;
-        // 1) إذا تم استيراد بيانات السحابة من الإكسيل أو تحديث السجل في السحابة بعد وقت الحذف المحلي -> نبطل الحذف القديم فوراً!
-        if (cRec.ts > 0 && effectiveLocalDelTs > 0 && cRec.ts > effectiveLocalDelTs) {
+        const effectiveLocalDelTs = Math.max(lDelTs, cDelTs, !lDelTs ? localResetTs : 0);
+        // 1) إذا تم استيراد السجل من الإكسيل أو تحديثه في السحابة بعد وقت الحذف (cRec.ts > effectiveLocalDelTs) -> نبطل الحذف القديم فوراً!
+        if (cRec.ts > 0 && effectiveLocalDelTs > 0 && (cRec.ts > effectiveLocalDelTs || cRec.impTs > effectiveLocalDelTs)) {
           delete mergedDeletedTimestamps[cat][idStr];
           return false;
         }
         // 2) إذا كان سجل الحذف المحلي قديماً بلا طابع زمني (effectiveLocalDelTs === 0) والسجل في السحابة مستورد من إكسيل أو له طابع زمني حديث -> نبطل الحذف الشبح!
-        if (effectiveLocalDelTs === 0 && (cRec.isImported || cRec.ts > 0 || cloudBulkTs > 0)) {
+        if (effectiveLocalDelTs === 0 && !inCloudDel && (cRec.isImported || cRec.ts > 0 || cloudBulkTs > 0)) {
           delete mergedDeletedTimestamps[cat][idStr];
           return false;
         }
       }
 
-      // الحالة ب: المعرف محذوف في السحابة قديماً لكن تم إعادة استيراده أو تحديثه محلياً بوقت أحدث
-      if (inCloudDel && !inLocalDel && localLive[cat][idStr]) {
+      // الحالة ب: السجل موجود حيّاً محلياً وتم إعادة استيراده أو تحديثه محلياً بختم زمني أحدث من ختم الحذف في السحابة
+      if (inCloudDel && localLive[cat][idStr]) {
         const lRec = localLive[cat][idStr];
-        const effectiveCloudDelTs = cDelTs || cloudResetTs || 0;
-        if (lRec.ts > 0 && effectiveCloudDelTs > 0 && lRec.ts > effectiveCloudDelTs) {
+        const effectiveCloudDelTs = Math.max(cDelTs, lDelTs, !cDelTs ? cloudResetTs : 0);
+        if (lRec.ts > 0 && effectiveCloudDelTs > 0 && (lRec.ts > effectiveCloudDelTs || lRec.impTs > effectiveCloudDelTs)) {
           delete mergedDeletedTimestamps[cat][idStr];
           return false;
         }
-        if (effectiveCloudDelTs === 0 && (lRec.isImported || localBulkTs > 0)) {
+        if (effectiveCloudDelTs === 0 && !inLocalDel && (lRec.isImported || localBulkTs > 0)) {
           delete mergedDeletedTimestamps[cat][idStr];
           return false;
         }
@@ -2361,11 +2368,11 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   const cloudMaxAddedAt = Math.max(getMaxAddedAcrossDays(cloudData.days, rawCloudResetAt), cloudBulkImportAt);
   const localMaxAddedAt = Math.max(getMaxAddedAcrossDays(appState.days, rawLocalResetAt), localBulkImportAt);
 
-  // إبطال أي تصفير قديم (Stale Reset Neutralization) إذا كانت هناك بيانات مستوردة أو مضافة أحدث منه على الطرف الآخر
-  const localResetAt = (rawLocalResetAt > 0 && cloudMovementsCount > 0 && (cloudBulkImportAt >= rawLocalResetAt || cloudMaxAddedAt >= rawLocalResetAt))
+  // إبطال أي تصفير قديم (Stale Reset Neutralization) مع احترام هامش التفاوت الزمني للساعات (CLOCK_SKEW_BUFFER_MS = 60 دقيقة)
+  const localResetAt = (rawLocalResetAt > 0 && cloudMovementsCount > 0 && !isTimestampSignificantlyNewer(rawLocalResetAt, Math.max(cloudBulkImportAt, cloudMaxAddedAt), CLOCK_SKEW_BUFFER_MS))
     ? 0
     : rawLocalResetAt;
-  const cloudResetAt = (rawCloudResetAt > 0 && localMovementsCount > 0 && (localBulkImportAt >= rawCloudResetAt || localMaxAddedAt >= rawCloudResetAt))
+  const cloudResetAt = (rawCloudResetAt > 0 && localMovementsCount > 0 && !isTimestampSignificantlyNewer(rawCloudResetAt, Math.max(localBulkImportAt, localMaxAddedAt), CLOCK_SKEW_BUFFER_MS))
     ? 0
     : rawCloudResetAt;
 
@@ -2381,8 +2388,8 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     const cArchMovCnt = countMovements(cArch.days);
     const lArchMaxAdded = Math.max(getMaxAddedAcrossDays(lArch.days, rawLArchReset), lArchBulk);
     const cArchMaxAdded = Math.max(getMaxAddedAcrossDays(cArch.days, rawCArchReset), cArchBulk);
-    const lArchReset = (rawLArchReset > 0 && cArchMovCnt > 0 && (cArchBulk >= rawLArchReset || cArchMaxAdded >= rawLArchReset)) ? 0 : rawLArchReset;
-    const cArchReset = (rawCArchReset > 0 && lArchMovCnt > 0 && (lArchBulk >= rawCArchReset || lArchMaxAdded >= rawCArchReset)) ? 0 : rawCArchReset;
+    const lArchReset = (rawLArchReset > 0 && cArchMovCnt > 0 && !isTimestampSignificantlyNewer(rawLArchReset, Math.max(cArchBulk, cArchMaxAdded), CLOCK_SKEW_BUFFER_MS)) ? 0 : rawLArchReset;
+    const cArchReset = (rawCArchReset > 0 && lArchMovCnt > 0 && !isTimestampSignificantlyNewer(rawCArchReset, Math.max(lArchBulk, lArchMaxAdded), CLOCK_SKEW_BUFFER_MS)) ? 0 : rawCArchReset;
     const lUpdMs = Date.parse(String(lArch.updatedAt || '')) || lArchMaxAdded || 0;
     const cUpdMs = Date.parse(String(cArch.updatedAt || '')) || cArchMaxAdded || 0;
     const cWinsMeta = (cUpdMs > lUpdMs) || (cUpdMs === lUpdMs && preferCloud);
@@ -9698,11 +9705,14 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                   createdAt: Number(matchedOldPend.createdAt) || masterImportTs,
                   createdBy: matchedOldPend.createdBy || getActiveUserShortLabel(),
                   createdTimeTxt: matchedOldPend.createdTimeTxt || formatAuditTimeArabic(masterImportTs),
-                  updatedAt: Number(matchedOldPend.updatedAt) || masterImportTs,
+                  updatedAt: Math.max(Number(matchedOldPend.updatedAt) || 0, masterImportTs),
                   updatedBy: matchedOldPend.updatedBy || getActiveUserShortLabel(),
                   updatedTimeTxt: matchedOldPend.updatedTimeTxt || formatAuditTimeArabic(masterImportTs),
-                  importedAt: Number(matchedOldPend.importedAt) || masterImportTs,
-                  isEdited: Boolean(matchedOldPend.isEdited)
+                  importedAt: masterImportTs,
+                  isEdited: Boolean(matchedOldPend.isEdited),
+                  editVersion: Number(matchedOldPend.editVersion) || 0,
+                  lastEditDiffText: matchedOldPend.lastEditDiffText || '',
+                  editHistory: Array.isArray(matchedOldPend.editHistory) ? [...matchedOldPend.editHistory] : []
                 });
                 unchangedSalesCount++;
               } else {
@@ -9771,11 +9781,14 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                   createdAt: Number(matchedOldSale.createdAt) || masterImportTs,
                   createdBy: matchedOldSale.createdBy || getActiveUserShortLabel(),
                   createdTimeTxt: matchedOldSale.createdTimeTxt || formatAuditTimeArabic(masterImportTs),
-                  updatedAt: Number(matchedOldSale.updatedAt) || masterImportTs,
+                  updatedAt: Math.max(Number(matchedOldSale.updatedAt) || 0, masterImportTs),
                   updatedBy: matchedOldSale.updatedBy || getActiveUserShortLabel(),
                   updatedTimeTxt: matchedOldSale.updatedTimeTxt || formatAuditTimeArabic(masterImportTs),
-                  importedAt: Number(matchedOldSale.importedAt) || masterImportTs,
-                  isEdited: Boolean(matchedOldSale.isEdited)
+                  importedAt: masterImportTs,
+                  isEdited: Boolean(matchedOldSale.isEdited),
+                  editVersion: Number(matchedOldSale.editVersion) || 0,
+                  lastEditDiffText: matchedOldSale.lastEditDiffText || '',
+                  editHistory: Array.isArray(matchedOldSale.editHistory) ? [...matchedOldSale.editHistory] : []
                 });
                 unchangedSalesCount++;
               } else {
@@ -9831,11 +9844,14 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                 createdAt: Number(matchedOldExp.createdAt) || masterImportTs,
                 createdBy: matchedOldExp.createdBy || getActiveUserShortLabel(),
                 createdTimeTxt: matchedOldExp.createdTimeTxt || formatAuditTimeArabic(masterImportTs),
-                updatedAt: Number(matchedOldExp.updatedAt) || masterImportTs,
+                updatedAt: Math.max(Number(matchedOldExp.updatedAt) || 0, masterImportTs),
                 updatedBy: matchedOldExp.updatedBy || getActiveUserShortLabel(),
                 updatedTimeTxt: matchedOldExp.updatedTimeTxt || formatAuditTimeArabic(masterImportTs),
-                importedAt: Number(matchedOldExp.importedAt) || masterImportTs,
-                isEdited: Boolean(matchedOldExp.isEdited)
+                importedAt: masterImportTs,
+                isEdited: Boolean(matchedOldExp.isEdited),
+                editVersion: Number(matchedOldExp.editVersion) || 0,
+                lastEditDiffText: matchedOldExp.lastEditDiffText || '',
+                editHistory: Array.isArray(matchedOldExp.editHistory) ? [...matchedOldExp.editHistory] : []
               });
             } else {
               expObj.id = generateRecordUUID(`imp_exp_d${dayNum}`);
@@ -10699,7 +10715,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v65-accounting-stress-test-hardened') {
+          if (k !== 'farm-sales-committee-v66-sync-and-concurrency-hardened') {
             caches.delete(k).catch(() => {});
           }
         });
