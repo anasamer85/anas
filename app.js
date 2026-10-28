@@ -1413,7 +1413,12 @@ function activateFarmFromArchive(targetFarm) {
   if (!targetFarm || !appState.farmsArchive || !appState.farmsArchive[targetFarm]) return false;
   syncActiveFarmIntoArchive();
   const fObj = appState.farmsArchive[targetFarm];
+  const nowSwitchTs = getSyncedNow();
   appState.farmName = targetFarm;
+  appState.lastFarmSwitchAt = nowSwitchTs;
+  appState.hasLocalEdits = true;
+  localMutationEpoch++;
+  lastLocalMutationAt = Date.now();
   appState.farmResetAt = Number(fObj.farmResetAt) || 0;
   appState.lastBulkImportAt = Number(fObj.lastBulkImportAt) || 0;
   appState.days = JSON.parse(JSON.stringify(fObj.days || {}));
@@ -1424,7 +1429,9 @@ function activateFarmFromArchive(targetFarm) {
   // الكود الموحد واسم التاجر الأساسي ثابت وموحد دائماً في جميع المزارع
   deduplicateAllDaysInState(appState);
   unifyGlobalMerchantsRegistry();
+  syncActiveFarmIntoArchive();
   appState.currentDay = 1;
+  activeRecalledPendingId = '';
   const saleForm = document.getElementById('saleEntryForm');
   if (saleForm) saleForm.reset();
   const editIdEl = document.getElementById('editSaleId');
@@ -2158,7 +2165,9 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
       Number(appState.pendingChanges) > 0
     )
   );
-  const isLocalEffectivelyFresh = (localMovementsCount === 0) && !hasRecentLocalDeletions && (
+  const archiveFarmsCount = Object.keys(appState.farmsArchive || {}).length;
+  // لا نعتبر المتصفح جديداً/فارغاً إذا كان المستخدم يمتلك أرشيف مزارع متعددة أو قام بالتبديل اليدوي بين المزارع!
+  const isLocalEffectivelyFresh = (localMovementsCount === 0) && !hasRecentLocalDeletions && archiveFarmsCount <= 1 && !Number(appState.lastFarmSwitchAt) && (
     !appState.hasLocalEdits ||
     localResetAt === 0 ||
     (cloudMovementsCount > 0 && !isTimestampSignificantlyNewer(localResetAt, Math.max(cloudResetAt, cloudMaxAddedAt), CLOCK_SKEW_BUFFER_MS))
@@ -2250,7 +2259,16 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     appState.farmsArchive[cloudFarmName] = existingCloudArch
       ? mergeFarmSnapshots(existingCloudArch, incomingCloudArch, cloudFarmName)
       : incomingCloudArch;
-    if (preferCloud && !mergedDeletedIds.farms.includes(cloudFarmName)) {
+    // Also merge our currently active local farm with its counterpart inside cloudData.farmsArchive (if present) so its data stays 100% up-to-date without switching away from it!
+    if (cloudData.farmsArchive && cloudData.farmsArchive[localFarmName] && appState.farmsArchive[localFarmName]) {
+      const mergedActiveSnap = mergeFarmSnapshots(appState.farmsArchive[localFarmName], cloudData.farmsArchive[localFarmName], localFarmName);
+      appState.farmsArchive[localFarmName] = mergedActiveSnap;
+      appState.days = JSON.parse(JSON.stringify(mergedActiveSnap.days || appState.days));
+      appState.visibleDays = Array.isArray(mergedActiveSnap.visibleDays) && mergedActiveSnap.visibleDays.length > 0 ? [...mergedActiveSnap.visibleDays] : [1];
+    }
+    // Never hijack or overwrite the user's active farm selection during background sync if the user has local edits or multiple farms in archive!
+    const userExplicitlySelectedFarm = Boolean(appState.hasLocalEdits || Number(appState.lastFarmSwitchAt) > 0 || Object.keys(appState.farmsArchive || {}).length > 1);
+    if (preferCloud && !userExplicitlySelectedFarm && !mergedDeletedIds.farms.includes(cloudFarmName)) {
       activateFarmFromArchive(cloudFarmName);
     }
   }
@@ -2348,6 +2366,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       updatedAt: nowIso,
       hasLocalEdits: true,
       farmName: appState.farmName,
+      lastFarmSwitchAt: Number(appState.lastFarmSwitchAt) || 0,
       farmResetAt: Number(appState.farmResetAt) || 0,
       lastBulkImportAt: Number(appState.lastBulkImportAt) || 0,
       currentDay: appState.currentDay,
@@ -9901,7 +9920,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v55-customizable-sticky-tables') {
+          if (k !== 'farm-sales-committee-v56-fix-active-farm-switch') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -10197,9 +10216,16 @@ function initFarmSalesApp() {
   document.getElementById('selTopCloudFarm').addEventListener('change', (e) => {
     const targetFarm = e.target.value;
     if (activateFarmFromArchive(targetFarm)) {
-      saveState(false);
-      renderAll();
-      showToast(`تم التبديل إلى قاعدة بيانات مزرعة (${targetFarm})`);
+      if (excelTableState && excelTableState.cloudFarms) {
+        excelTableState.cloudFarms.searchQuery = '';
+        excelTableState.cloudFarms.sortCol = null;
+        excelTableState.cloudFarms.colFilters = {};
+      }
+      const inpCf = document.getElementById('inpFilterCloudFarms');
+      if (inpCf) inpCf.value = '';
+      saveState(true);
+      renderAll(true);
+      showToast(`✅ تم تنشيط وفتح قاعدة بيانات مزرعة (${targetFarm}) في جميع تبويبات الموقع!`);
     }
   });
 
@@ -10240,17 +10266,25 @@ function initFarmSalesApp() {
     for (let d = 1; d <= 10; d++) {
       emptyDays[d] = { dayNumber: d, dateLabel: `اليوم ${d}`, sales: [], pendingSales: [], expenses: [], deliveredCash: 0 };
     }
+    const nowCreateTs = getSyncedNow();
     appState.farmName = newName;
+    appState.lastFarmSwitchAt = nowCreateTs;
+    appState.farmResetAt = 0;
+    appState.lastBulkImportAt = 0;
     appState.days = emptyDays;
     appState.currentDay = 1;
     appState.visibleDays = [1];
     appState.defaultPrice = 0;
     appState.defaultTip = 0;
     appState.lastScaleNo = 0;
+    activeRecalledPendingId = '';
+    unrecordDeletedItem('farms', newName);
     unifyGlobalMerchantsRegistry();
     appState.farmsArchive[newName] = {
       farmName: newName,
-      updatedAt: new Date().toLocaleTimeString('ar-EG'),
+      updatedAt: new Date(nowCreateTs).toISOString(),
+      farmResetAt: 0,
+      lastBulkImportAt: 0,
       visibleDays: [1],
       defaultPrice: 0,
       defaultTip: 0,
@@ -10260,9 +10294,11 @@ function initFarmSalesApp() {
     };
     const saleForm = document.getElementById('saleEntryForm');
     if (saleForm) saleForm.reset();
+    const editIdEl = document.getElementById('editSaleId');
+    if (editIdEl) editIdEl.value = '';
     inp.value = '';
     saveState(true);
-    renderAll();
+    renderAll(true);
     showToast(`تم إنشاء مزرعة (${newName}) جديدة فارغة مع ثبات الكود الموحد وأسماء التجار الأساسيين!`, '☁️');
   });
 
@@ -10279,9 +10315,16 @@ function initFarmSalesApp() {
     if (swBtn) {
       const fn = swBtn.getAttribute('data-switch-farm');
       if (activateFarmFromArchive(fn)) {
-        saveState(false);
-        renderAll();
-        showToast(`تم فتح قاعدة بيانات مزرعة (${fn})`);
+        if (excelTableState && excelTableState.cloudFarms) {
+          excelTableState.cloudFarms.searchQuery = '';
+          excelTableState.cloudFarms.sortCol = null;
+          excelTableState.cloudFarms.colFilters = {};
+        }
+        const inpCf = document.getElementById('inpFilterCloudFarms');
+        if (inpCf) inpCf.value = '';
+        saveState(true);
+        renderAll(true);
+        showToast(`✅ تم تنشيط وفتح قاعدة بيانات مزرعة (${fn}) في جميع تبويبات الموقع!`);
       }
       return;
     }
