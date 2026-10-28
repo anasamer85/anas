@@ -23,7 +23,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=57" />
+  <link rel="stylesheet" href="./style.css?v=58" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -1123,9 +1123,19 @@
             <h2 class="text-base md:text-lg font-extrabold text-slate-900">📊 الملخص التنفيذي — <span id="dashFarmNameTitle" class="text-blue-800">أبوذكري</span></h2>
             <p class="text-xs text-slate-500">يتم عرض الأيام المفتوحة والتي عليها سجل حركات فقط (الأيام غير النشطة تظل مخفية) — اضغط على أي يوم لفتح محضره فوراً</p>
           </div>
-          <span id="dashActiveDaysBadge" class="px-3 py-1 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-extrabold">
-            الأيام النشطة والمفتوحة: 1 يوم
-          </span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button type="button" id="btnJumpFarmTrialBalance" class="px-3 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-400 text-xs font-extrabold transition flex items-center gap-1 shadow-sm">
+              <span>⚖️</span>
+              <span>ميزان المراجعة الكامل للمزرعة</span>
+            </button>
+            <button type="button" data-print-table="farmTrialBalance" class="px-3 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-400 text-xs font-extrabold transition flex items-center gap-1 shadow-sm" title="طباعة ميزان المراجعة والتصفية الكامل لجميع أيام المزرعة">
+              <span>🖨️</span>
+              <span>طباعة ميزان المزرعة الكامل</span>
+            </button>
+            <span id="dashActiveDaysBadge" class="px-3 py-1 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-extrabold">
+              الأيام النشطة والمفتوحة: 1 يوم
+            </span>
+          </div>
         </div>
 
         <!-- 7 Executive KPI Cards -->
@@ -1178,6 +1188,69 @@
             <tbody id="dashTableTbody" class="divide-y divide-slate-200"></tbody>
             <tfoot id="dashTableTfoot" class="bg-amber-400 text-slate-950 font-extrabold border-t-2 border-slate-900"></tfoot>
           </table>
+        </div>
+      </div>
+
+      <!-- Full Farm Cumulative Trial Balance (ميزان المراجعة والتصفية الكامل لجميع أيام المزرعة - الركائز الثلاث) -->
+      <div id="farmTrialBalanceCard" class="bg-white rounded-2xl shadow-sm border-2 border-slate-800 overflow-hidden">
+        <div class="bg-slate-900 text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm md:text-base font-extrabold">⚖️ ميزان المراجعة والتصفية الكامل لجميع أيام المزرعة (<span id="farmTbTitle">مزرعة أبوذكري</span>)</h3>
+            <p class="text-[11px] text-slate-300 font-semibold mt-0.5">المطابقة الوزنية والمحاسبية والنقدية الشاملة على مدار الدورة بالكامل (<span id="farmTbActiveDaysSub">1 يوم نشط</span>)</p>
+          </div>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button type="button" data-print-table="farmTrialBalance" class="px-3 py-1 rounded-lg gold-badge hover:opacity-95 text-slate-950 text-xs font-extrabold flex items-center gap-1 shadow-md border border-amber-300" title="طباعة ميزان المراجعة والتصفية الشامل لجميع أيام المزرعة">
+              <span>🖨️</span>
+              <span>طباعة ميزان المزرعة الكامل</span>
+            </button>
+            <button type="button" id="btnExportFarmTbImage" class="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-600 text-white text-xs font-extrabold flex items-center gap-1 shadow-sm border border-teal-400" title="حفظ ميزان المراجعة الكامل للمزرعة كصورة PNG عالية الدقة">
+              <span>🖼️</span>
+              <span>صورة PNG</span>
+            </button>
+            <button type="button" id="btnExportFarmTbPdf" class="px-2.5 py-1 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-extrabold flex items-center gap-1 shadow-sm border border-rose-400" title="حفظ ميزان المراجعة الكامل للمزرعة كملف PDF جاهز للطباعة والمشاركة">
+              <span>📄</span>
+              <span>ملف PDF</span>
+            </button>
+            <button type="button" id="btnShareWhatsappFarmSummary" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow-sm">
+              <span>📲</span>
+              <span>نسخ ملخص المزرعة للواتساب</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="p-3.5 grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+          <!-- Pillar 1: Cumulative Weight Audit across All Days -->
+          <div class="border border-slate-300 rounded-xl overflow-hidden flex flex-col justify-between">
+            <div>
+              <div class="bg-sky-900 text-white px-3 py-2 text-xs font-extrabold text-center">
+                أولاً: ميزان مراجعة الأوزان والحركات التراكمي (جميع الأيام)
+              </div>
+              <div class="p-2.5 space-y-2 text-xs" id="farmTbPillar1"></div>
+            </div>
+          </div>
+
+          <!-- Pillar 2: Cumulative Sales, Credit, Accrual Debt Reconciliation & All Transfers Audit -->
+          <div class="border border-slate-300 rounded-xl overflow-hidden flex flex-col justify-between">
+            <div>
+              <div class="bg-indigo-900 text-white px-3 py-2 text-xs font-extrabold text-center">
+                ثانياً: ميزان المبيعات وحركة الذمم والتحويلات التراكمي للمزرعة
+              </div>
+              <div class="p-2.5 space-y-2 text-xs" id="farmTbPillar2"></div>
+            </div>
+          </div>
+
+          <!-- Pillar 3: Cumulative Treasury & Physical Cash Box Audit across All Days -->
+          <div class="border border-slate-300 rounded-xl overflow-hidden flex flex-col justify-between">
+            <div>
+              <div class="bg-emerald-900 text-white px-3 py-2 text-xs font-extrabold text-center">
+                ثالثاً: ميزان الخزينة النقدية التراكمي للمزرعة (جميع الأيام)
+              </div>
+              <div class="p-2.5 space-y-2 text-xs">
+                <div id="farmTbPillar3" class="space-y-1.5"></div>
+                <div id="farmTbCashDiffBox" class="p-2.5 rounded-lg font-extrabold flex flex-col gap-1 text-xs mt-2"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -2578,7 +2651,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=57"></script>
-  <script src="./app.js?v=57"></script>
+  <script src="./excel-template.js?v=58"></script>
+  <script src="./app.js?v=58"></script>
 </body>
 </html>

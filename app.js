@@ -3713,6 +3713,257 @@ function getOpenAndActiveDashSummaries() {
   return rows;
 }
 
+function computeFarmCumulativeTrialBalance(summariesList = null) {
+  const list = Array.isArray(summariesList) ? summariesList : getOpenAndActiveDashSummaries();
+  let activeDaysCount = list.length;
+  let lockedDaysCount = 0;
+  let countCars = 0;
+  let countDebtVouchers = 0;
+  let pendingCarsCount = 0;
+  let sumW1 = 0, sumW2 = 0, sumNetW = 0, sumBase = 0, sumTip = 0, sumTotalWithTip = 0;
+  let sumCashSales = 0, sumTransferSales = 0, sumCreditSales = 0;
+  let sumDebtCash = 0, sumDebtTransfer = 0;
+  let sumPrevCash = 0, sumPrevTransfer = 0;
+  let sumPaidAndCredit = 0, sumInvoiceDiff = 0;
+  let sumExpenses = 0, sumDeliveredCash = 0;
+  let latestDayWithCarry = 0, lastDayCarriedForwardCash = 0;
+
+  list.forEach(s => {
+    if (isDayLocked(s.dayNum)) lockedDaysCount++;
+    countCars += (Number(s.countCars) || 0);
+    countDebtVouchers += (Number(s.countDebtVouchers) || 0);
+    pendingCarsCount += (Number(s.pendingCarsCount) || 0);
+    sumW1 += (Number(s.sumW1) || 0);
+    sumW2 += (Number(s.sumW2) || 0);
+    sumNetW += (Number(s.sumNetW) || 0);
+    sumBase += (Number(s.sumBase) || 0);
+    sumTip += (Number(s.sumTip) || 0);
+    sumTotalWithTip += (Number(s.sumTotalWithTip) || 0);
+    sumCashSales += (Number(s.sumCashSales) || 0);
+    sumTransferSales += (Number(s.sumTransferSales) || 0);
+    sumCreditSales += (Number(s.sumCreditSales) || 0);
+    sumDebtCash += (Number(s.sumDebtCash) || 0);
+    sumDebtTransfer += (Number(s.sumDebtTransfer) || 0);
+    sumPrevCash += (Number(s.sumPrevCash) || 0);
+    sumPrevTransfer += (Number(s.sumPrevTransfer) || 0);
+    sumPaidAndCredit += (Number(s.sumPaidAndCredit) || 0);
+    sumInvoiceDiff += (Number(s.sumInvoiceDiff) || 0);
+    sumExpenses += (Number(s.sumExpenses) || 0);
+    sumDeliveredCash += (Number(s.deliveredCash) || 0);
+    if (s.dayNum >= latestDayWithCarry) {
+      latestDayWithCarry = s.dayNum;
+      lastDayCarriedForwardCash = Number(s.carriedForwardCash) || 0;
+    }
+  });
+
+  const avgPrice = sumNetW > 0 ? (sumBase / sumNetW) : 0;
+  const avgCarWeight = countCars > 0 ? Math.round(sumNetW / countCars) : 0;
+  const weightAuditDiff = sumNetW - (sumW2 - sumW1);
+
+  const currentFarmTransfers = sumTransferSales + sumDebtTransfer;
+  const totalAllTransfers = currentFarmTransfers + sumPrevTransfer;
+  const totalDebtCollected = sumDebtCash + sumDebtTransfer;
+  const closingFarmDebt = sumCreditSales - totalDebtCollected;
+
+  // إجمالي النقدية التراكمية التي دخلت خزنة المزرعة عبر كل الأيام (بدون ازدواج الرصيد المرحّل بين الأيام)
+  const totalCashInflowBeforeExpenses = sumCashSales + sumDebtCash + sumPrevCash;
+  const netCumulativeCashInBox = totalCashInflowBeforeExpenses - sumExpenses;
+  // إجمالي ما تم توريده للإدارة عبر كل الأيام + الرصيد المتبقي المرحّل في خزنة آخر يوم نشط
+  const totalSettledAndFinalCarry = sumDeliveredCash + lastDayCarriedForwardCash;
+  const cumulativeCashBoxDiff = netCumulativeCashInBox - totalSettledAndFinalCarry;
+
+  return {
+    activeDaysCount,
+    lockedDaysCount,
+    countCars,
+    countDebtVouchers,
+    pendingCarsCount,
+    avgCarWeight,
+    sumW1,
+    sumW2,
+    sumNetW,
+    avgPrice,
+    sumBase,
+    sumTip,
+    sumTotalWithTip,
+    sumCashSales,
+    sumTransferSales,
+    sumCreditSales,
+    sumDebtCash,
+    sumDebtTransfer,
+    totalDebtCollected,
+    closingFarmDebt,
+    sumPrevCash,
+    sumPrevTransfer,
+    currentFarmTransfers,
+    totalAllTransfers,
+    sumPaidAndCredit,
+    sumInvoiceDiff,
+    sumExpenses,
+    totalCashInflowBeforeExpenses,
+    netCumulativeCashInBox,
+    sumDeliveredCash,
+    latestDayWithCarry,
+    lastDayCarriedForwardCash,
+    totalSettledAndFinalCarry,
+    cumulativeCashBoxDiff,
+    weightAuditDiff
+  };
+}
+
+function renderFarmCumulativeTrialBalanceUI(summariesList) {
+  const ftb = computeFarmCumulativeTrialBalance(summariesList);
+  const fName = appState.farmName || 'أبوذكري';
+
+  const titleEl = document.getElementById('farmTbTitle');
+  if (titleEl) titleEl.textContent = `${fName} — ${ftb.activeDaysCount} يوم نشط`;
+  const subEl = document.getElementById('farmTbActiveDaysSub');
+  if (subEl) {
+    subEl.textContent = `${ftb.activeDaysCount} يوم نشط/مفتوح${ftb.lockedDaysCount > 0 ? ` (منها ${ftb.lockedDaysCount} يوم معتمد ومقفل 🔒)` : ''}`;
+  }
+
+  const p1El = document.getElementById('farmTbPillar1');
+  if (p1El) {
+    const pendHtml = ftb.pendingCarsCount > 0
+      ? `<span class="px-2 py-0.5 rounded bg-amber-200 text-rose-900 border border-rose-400 font-extrabold">⚠️ ${fmtInt(ftb.pendingCarsCount)} سيارة مؤقتة تحت التحميل!</span>`
+      : `<strong class="text-emerald-800">0 سيارة (لا توجد سيارات معلقة ✓)</strong>`;
+    p1El.innerHTML = `
+      <div class="flex justify-between py-1 border-b">
+        <span>إجمالي الأيام النشطة (والمعتمدة):</span>
+        <strong>${fmtInt(ftb.activeDaysCount)} يوم <span class="text-[11px] text-emerald-800">(${fmtInt(ftb.lockedDaysCount)} يوم معتمد 🔒)</span></strong>
+      </div>
+      <div class="flex justify-between py-1 border-b">
+        <span>إجمالي السيارات المكتملة (متوسط السيارة):</span>
+        <strong>${fmtInt(ftb.countCars)} سيارة <span class="text-[11px] text-slate-500">(${fmtInt(ftb.avgCarWeight)} كجم)</span></strong>
+      </div>
+      <div class="flex justify-between items-center py-1 border-b ${ftb.pendingCarsCount > 0 ? 'bg-amber-50 px-1.5 rounded border-amber-300' : ''}">
+        <span>إجمالي السيارات المؤقتة بالمزرعة:</span>
+        ${pendHtml}
+      </div>
+      <div class="flex justify-between py-1 border-b"><span>إجمالي الوزنة الثانية (القائم التراكمي):</span><strong>${fmtInt(ftb.sumW2)} كجم</strong></div>
+      <div class="flex justify-between py-1 border-b"><span>(-) إجمالي الوزنة الأولى (الفارغ التراكمي):</span><strong>${fmtInt(ftb.sumW1)} كجم</strong></div>
+      <div class="flex justify-between py-1.5 border-b bg-sky-50/80 px-1.5 rounded font-extrabold text-sky-950">
+        <span>(=) إجمالي الوزن الصافي التراكمي للمزرعة:</span>
+        <strong>${fmtInt(ftb.sumNetW)} كجم</strong>
+      </div>
+      <div class="flex justify-between py-1 border-b text-indigo-950">
+        <span>متوسط سعر الكيلو المرجح للمزرعة:</span>
+        <strong>${fmtDec(ftb.avgPrice)} ج.م/كجم <span class="text-[10px] text-slate-500">(إكراميات: ${fmtInt(ftb.sumTip)})</span></strong>
+      </div>
+      <div class="flex justify-between p-1.5 rounded ${ftb.weightAuditDiff === 0 ? 'bg-emerald-100 text-emerald-950' : 'bg-rose-100 text-rose-900'} font-extrabold">
+        <span>فرق ميزان الأوزان التراكمي (جميع الأيام):</span>
+        <span>${fmtInt(ftb.weightAuditDiff)} (${ftb.weightAuditDiff === 0 ? 'أوزان المزرعة مطابقة ✓' : 'راجع الأوزان!'})</span>
+      </div>
+    `;
+  }
+
+  const p2El = document.getElementById('farmTbPillar2');
+  if (p2El) {
+    const invBalancedOk = Math.abs(ftb.sumInvoiceDiff) <= 1;
+    p2El.innerHTML = `
+      <div class="flex justify-between py-1.5 border-b bg-amber-50 px-1.5 rounded font-extrabold text-amber-950">
+        <span>إجمالي مبيعات المزرعة شامل الإكرامية:</span>
+        <span>${fmtDec(ftb.sumTotalWithTip)} ج.م</span>
+      </div>
+      <div class="flex justify-between py-1 border-b">
+        <span>إجمالي النقدي يوم البيع + غير النقدي (آجل+تحويل):</span>
+        <strong>نقدي: ${fmtInt(ftb.sumCashSales)} | غير نقدي: ${fmtInt(ftb.sumCreditSales + ftb.sumTransferSales)}</strong>
+      </div>
+      <div class="flex justify-between py-1 border-b text-teal-900">
+        <span>تحويلات المزرعة الحالية (مبيعات ${fmtInt(ftb.sumTransferSales)} + مديونيات ${fmtInt(ftb.sumDebtTransfer)}):</span>
+        <strong>${fmtInt(ftb.currentFarmTransfers)} ج.م</strong>
+      </div>
+      <div class="flex justify-between py-1 border-b text-purple-900">
+        <span>تحويلات مزارع سابقة (لا تخصم من الحالية):</span>
+        <strong>${fmtInt(ftb.sumPrevTransfer)} ج.م</strong>
+      </div>
+      <div class="flex justify-between p-1.5 rounded bg-emerald-100 text-emerald-950 font-extrabold">
+        <span>إجمالي جميع التحويلات والشيكات بالمزرعة:</span>
+        <span>${fmtInt(ftb.totalAllTransfers)} ج.م</span>
+      </div>
+      <div class="flex justify-between p-1.5 rounded border ${invBalancedOk ? 'bg-slate-50 border-slate-200 text-emerald-900' : 'bg-rose-50 border-rose-300 text-rose-900'} font-extrabold text-[11px]">
+        <span>مطابقة توازن فواتير المزرعة (المسدد والآجل - الفواتير):</span>
+        <span>${fmtDec(ftb.sumInvoiceDiff)} ج.م (${invBalancedOk ? 'فواتير متزنة ✓' : '⚠️ فرق توازن!'})</span>
+      </div>
+      <!-- معادلة المطابقة الاستحقاقية التراكمية لذمم ومديونية المزرعة عبر كل الأيام -->
+      <div class="mt-1.5 p-2 rounded-xl bg-indigo-50/80 border border-indigo-200 space-y-1 text-[11px]">
+        <div class="font-extrabold text-indigo-950 border-b border-indigo-200 pb-1 flex items-center justify-between">
+          <span>📌 الخلاصة التراكمية لذمم ومديونية المزرعة:</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900 text-amber-300">شامل كل الأيام</span>
+        </div>
+        <div class="flex justify-between text-amber-950">
+          <span>(+) إجمالي آجل الفواتير المسجل بكل الأيام:</span>
+          <strong>${fmtInt(ftb.sumCreditSales)} ج.م</strong>
+        </div>
+        <div class="flex justify-between text-teal-900">
+          <span>(-) إجمالي المسدد من المديونية (نقدي ${fmtInt(ftb.sumDebtCash)} + تحويل ${fmtInt(ftb.sumDebtTransfer)}):</span>
+          <strong>${fmtInt(ftb.totalDebtCollected)} ج.م</strong>
+        </div>
+        <div class="flex justify-between pt-1 border-t border-indigo-200 font-extrabold text-indigo-950 text-xs">
+          <span>(=) صافي مديونية المزرعة المتبقية لدى التجار:</span>
+          <span>${fmtInt(ftb.closingFarmDebt)} ج.م</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const p3El = document.getElementById('farmTbPillar3');
+  if (p3El) {
+    p3El.innerHTML = `
+      <div class="flex justify-between py-1 border-b">
+        <span>(+) إجمالي نقدي المبيعات (جميع الأيام):</span>
+        <strong>${fmtInt(ftb.sumCashSales)} ج.م</strong>
+      </div>
+      <div class="flex justify-between py-1 border-b">
+        <span>(+) إجمالي نقدي تحصيل مديونيات المزرعة الحالية:</span>
+        <strong>${fmtInt(ftb.sumDebtCash)} ج.م</strong>
+      </div>
+      <div class="flex justify-between py-1 border-b text-purple-900">
+        <span>(+) إجمالي نقدي مزارع سابقة (للخزنة فقط):</span>
+        <strong>${fmtInt(ftb.sumPrevCash)} ج.م</strong>
+      </div>
+      <div class="flex justify-between py-1 px-1.5 rounded bg-amber-100 text-slate-950 font-extrabold">
+        <span>(=) إجمالي وارد النقدية التراكمي (قبل المصاريف):</span>
+        <span>${fmtInt(ftb.totalCashInflowBeforeExpenses)} ج.م</span>
+      </div>
+      <div class="flex justify-between py-1 border-b text-rose-800 font-bold">
+        <span>(-) يخصم: إجمالي المصروفات والمكافآت (جميع الأيام):</span>
+        <span>${fmtInt(ftb.sumExpenses)} ج.م</span>
+      </div>
+      <div class="flex justify-between py-1.5 px-2 rounded-lg bg-emerald-100 border border-emerald-400 text-emerald-950 font-extrabold">
+        <span>(=) صافي النقدية التراكمية بالخزنة (بعد المصاريف):</span>
+        <span>${fmtInt(ftb.netCumulativeCashInBox)} ج.م</span>
+      </div>
+      <div class="flex justify-between py-1 border-b text-blue-950 font-extrabold mt-1">
+        <span>(-) إجمالي النقدية الموردة للإدارة (عبر كل الأيام):</span>
+        <span>${fmtInt(ftb.sumDeliveredCash)} ج.م</span>
+      </div>
+      <div class="flex justify-between py-1 border-b text-teal-900 font-bold">
+        <span>(-) الرصيد النقدي المرحّل بآخر يوم نشط${ftb.latestDayWithCarry > 0 ? ` (يوم ${ftb.latestDayWithCarry})` : ''}:</span>
+        <span>${fmtInt(ftb.lastDayCarriedForwardCash)} ج.م</span>
+      </div>
+    `;
+  }
+
+  const diffBox = document.getElementById('farmTbCashDiffBox');
+  if (diffBox) {
+    const statusTxt = ftb.cumulativeCashBoxDiff === 0
+      ? 'خزينة المزرعة مطابقة تماماً ✓'
+      : (ftb.cumulativeCashBoxDiff < 0 ? 'زيادة توريد تراكمية' : 'متبقي بالخزنة غير مورد / عجز');
+    diffBox.className = `p-2.5 rounded-lg font-extrabold flex flex-col gap-1 text-xs mt-2 ${
+      ftb.cumulativeCashBoxDiff === 0
+        ? 'bg-emerald-100 text-emerald-950 border border-emerald-300'
+        : 'bg-rose-100 text-rose-900 border border-rose-300'
+    }`;
+    diffBox.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span>فرق الخزينة التراكمي للمزرعة (صافي النقدية - المورد والمرحّل):</span>
+        <span>${fmtInt(ftb.cumulativeCashBoxDiff)} ج.م (${statusTxt})</span>
+      </div>
+    `;
+  }
+}
+
 function checkConditionFilter(rawVal, dispVal, colType, op, targetStr) {
   if (!op || targetStr === '' || targetStr === null || targetStr === undefined) return true;
   const tClean = String(targetStr).replace(/,/g, '').trim();
@@ -4263,6 +4514,8 @@ function renderDashboardView() {
       <td class="p-2 border text-center">الأيام النشطة متزنة ✓</td>
     </tr>
   `;
+
+  renderFarmCumulativeTrialBalanceUI(filteredSummaries);
 
   // الرسم البياني يعرض الأيام المفتوحة والتي عليها سجل حركات فقط (الأيام غير النشطة تظل مخفية)
   const chartDays = filteredSummaries;
@@ -5028,6 +5281,142 @@ function cleanPrintCellText(cellEl) {
   return (clone.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
+function renderFarmTrialBalancePrintView() {
+  const printContainer = ensureMerchantPrintDomElements();
+  if (!printContainer) return false;
+  const openActiveSummaries = getOpenAndActiveDashSummaries();
+  const filteredSummaries = applyExcelSortAndFilter(openActiveSummaries, DASH_COLUMNS, 'dash');
+  const ftb = computeFarmCumulativeTrialBalance(filteredSummaries);
+  const fName = appState.farmName || 'أبوذكري';
+  const printDateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+  const statusTxt = ftb.cumulativeCashBoxDiff === 0
+    ? 'خزينة المزرعة مطابقة تماماً ✓'
+    : (ftb.cumulativeCashBoxDiff < 0 ? 'زيادة توريد تراكمية' : 'متبقي بالخزنة غير مورد / عجز');
+  const diffBg = ftb.cumulativeCashBoxDiff === 0 ? '#d1fae5' : '#ffe4e6';
+  const diffColor = ftb.cumulativeCashBoxDiff === 0 ? '#064e3b' : '#881337';
+
+  printContainer.innerHTML = `
+    <div style="border:2px solid #1b365d; border-radius:6px; padding:8px 10px; background:#ffffff; color:#0f172a; font-family:'Cairo',sans-serif;">
+      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:5px; margin-bottom:8px;">
+        <div>
+          <div style="font-size:14px; font-weight:800; color:#1b365d;">
+            ⚖️ ميزان المراجعة والتصفية الكامل لجميع أيام المزرعة — مزرعة <span style="color:#b45309;">${escXmlStr(fName)}</span>
+          </div>
+          <div style="font-size:9.5px; font-weight:700; color:#475569; margin-top:2px;">
+            المطابقة الوزنية والمحاسبية والنقدية التراكمية الشاملة على مدار (${ftb.activeDaysCount} يوم نشط/مفتوح — منها ${ftb.lockedDaysCount} يوم معتمد 🔒)
+          </div>
+        </div>
+        <div style="text-align:left; font-size:9px; font-weight:700; color:#334155;">
+          <div>نظام محاضر لجان بيع المزارع</div>
+          <div>تاريخ الطباعة: ${printDateStr}</div>
+        </div>
+      </div>
+
+      <table id="merchantPrintTable" dir="rtl" style="width:100%; max-width:100%; table-layout:fixed; border-collapse:collapse;">
+        <colgroup>
+          <col style="width:23.0%;" />
+          <col style="width:10.3%;" />
+          <col style="width:23.0%;" />
+          <col style="width:10.3%;" />
+          <col style="width:23.0%;" />
+          <col style="width:10.4%;" />
+        </colgroup>
+        <thead>
+          <tr style="background:#1b365d; color:#ffffff; font-weight:800; text-align:center;">
+            <th colspan="2" style="background:#0c4a6e; font-size:10px; padding:5px;">أولاً: ميزان مراجعة الأوزان والحركات التراكمي (كجم)</th>
+            <th colspan="2" style="background:#312e81; font-size:10px; padding:5px;">ثانياً: ميزان المبيعات وحركة الذمم والتحويلات التراكمي</th>
+            <th colspan="2" style="background:#064e3b; font-size:10px; padding:5px;">ثالثاً: ميزان الخزينة النقدية التراكمي للمزرعة</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">عدد الأيام النشطة | السيارات المكتملة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">${fmtInt(ftb.activeDaysCount)} يوم | ${fmtInt(ftb.countCars)} سيارة (${fmtInt(ftb.avgCarWeight)} كجم)</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#fffbeb;">إجمالي مبيعات المزرعة شامل الإكرامية:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#fffbeb;">${fmtDec(ftb.sumTotalWithTip)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#f0fdfa;">(+) إجمالي نقدي المبيعات (جميع الأيام):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#f0fdfa;">${fmtInt(ftb.sumCashSales)} ج.م</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">إجمالي السيارات المؤقتة (تحت التحميل):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; color:${ftb.pendingCarsCount > 0 ? '#9f1239' : '#065f46'};">${ftb.pendingCarsCount > 0 ? `⚠️ ${fmtInt(ftb.pendingCarsCount)} سيارة مؤقتة` : '0 سيارة (مكتمل ✓)'}</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">تحويلات المزرعة الحالية + تحويلات سابقة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">حالية: ${fmtInt(ftb.currentFarmTransfers)} | سابقة: ${fmtInt(ftb.sumPrevTransfer)}</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">(+) نقدي مديونيات الحالية + نقدي مزارع سابقة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">مديونيات: ${fmtInt(ftb.sumDebtCash)} | سابقة: ${fmtInt(ftb.sumPrevCash)}</td>
+          </tr>
+          <tr>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">إجمالي الوزنة الثانية (القائم) - الأولى (الفارغ):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">${fmtInt(ftb.sumW2)} - ${fmtInt(ftb.sumW1)} كجم</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">إجمالي جميع التحويلات والشيكات بالمزرعة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">${fmtInt(ftb.totalAllTransfers)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#fef3c7;">(=) إجمالي وارد النقدية التراكمي (قبل المصاريف):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#fef3c7;">${fmtInt(ftb.totalCashInflowBeforeExpenses)} ج.م</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#eff6ff;">(=) إجمالي الوزن الصافي التراكمي للمزرعة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#eff6ff;">${fmtInt(ftb.sumNetW)} كجم</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px; color:#115e59;">(+) إجمالي آجل الفواتير (${fmtInt(ftb.sumCreditSales)}) - مسدد المديونية (${fmtInt(ftb.totalDebtCollected)}):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; color:#115e59;">مسدد: ${fmtInt(ftb.totalDebtCollected)} ج.م</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px; color:#9f1239;">(-) يخصم: إجمالي المصروفات والمكافآت (كل الأيام):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; color:#9f1239;">${fmtInt(ftb.sumExpenses)} ج.م</td>
+          </tr>
+          <tr>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">متوسط سعر الكيلو المرجح للمزرعة:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">${fmtDec(ftb.avgPrice)} ج.م/كجم (إكراميات: ${fmtInt(ftb.sumTip)})</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#eef2ff; color:#1e1b4b;">(=) صافي مديونية المزرعة المتبقية لدى التجار:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#eef2ff; color:#1e1b4b;">${fmtInt(ftb.closingFarmDebt)} ج.م</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">(=) صافي النقدية التراكمية بالخزنة (بعد المصاريف):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">${fmtInt(ftb.netCumulativeCashInBox)} ج.م</td>
+          </tr>
+          <tr style="background:#f8fafc;">
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">فرق ميزان الأوزان التراكمي:</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#d1fae5; color:#064e3b;">${fmtInt(ftb.weightAuditDiff)} (${ftb.weightAuditDiff === 0 ? 'مطابق ✓' : 'راجع الوزن!'})</td>
+            <td style="text-align:right; font-weight:700; font-size:9px; padding:4px;">مطابقة توازن الفواتير (المسدد والآجل - الفواتير):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px;">${fmtDec(ftb.sumInvoiceDiff)} ج.م (${Math.abs(ftb.sumInvoiceDiff) <= 1 ? 'متزنة ✓' : 'فرق توازن!'})</td>
+            <td style="text-align:right; font-weight:800; font-size:9px; padding:4px; background:#eff6ff;">(-) إجمالي المورد للإدارة (${fmtInt(ftb.sumDeliveredCash)}) + مرحّل (${fmtInt(ftb.lastDayCarriedForwardCash)}):</td>
+            <td style="text-align:center; font-weight:800; font-size:9px; padding:4px; background:#eff6ff;">${fmtInt(ftb.totalSettledAndFinalCarry)} ج.م</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="background:${diffBg}; color:${diffColor}; font-weight:800;">
+            <td colspan="4" style="text-align:left; font-size:10px; padding:5px;">فرق الخزينة التراكمي للمزرعة (صافي النقدية التراكمية بعد المصاريف - [إجمالي النقدية الموردة للإدارة + الرصيد المرحّل بآخر يوم]):</td>
+            <td colspan="2" style="text-align:center; font-size:10.5px; padding:5px;">${fmtInt(ftb.cumulativeCashBoxDiff)} ج.م (${statusTxt})</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-top:8px; text-align:center; font-size:9px;">
+        <tbody>
+          <tr>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:16px;">مشرف الميزان والوزن</div>
+              <div style="color:#475569; font-weight:700;">الاسم والتوقيع: ........................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:16px;">أعضاء لجنة البيع</div>
+              <div style="color:#475569; font-weight:700;">الاسم والتوقيع: ........................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#f8fafc;">
+              <div style="font-weight:800; color:#1b365d; margin-bottom:16px;">محاسب الموقع والمراجعة</div>
+              <div style="color:#475569; font-weight:700;">الاسم والتوقيع: ........................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#ecfdf5;">
+              <div style="font-weight:800; color:#064e3b; margin-bottom:16px;">أمين الخزينة المستلم</div>
+              <div style="color:#065f46; font-weight:700;">الاسم والتوقيع: ........................</div>
+            </td>
+            <td style="border:1px solid #334155; padding:6px 4px; background:#fffbeb;">
+              <div style="font-weight:800; color:#78350f; margin-bottom:16px;">يعتمد ،، مدير المزرعة</div>
+              <div style="color:#92400e; font-weight:700;">التوقيع والختم: ........................</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+  return true;
+}
+
 function renderDailyTrialBalancePrintView() {
   const printContainer = ensureMerchantPrintDomElements();
   if (!printContainer) return false;
@@ -5696,6 +6085,9 @@ function renderGenericTablePrintView(tableKey) {
   }
   if (tableKey === 'dailyTrialBalance') {
     return renderDailyTrialBalancePrintView();
+  }
+  if (tableKey === 'farmTrialBalance') {
+    return renderFarmTrialBalancePrintView();
   }
   if (tableKey === 'officialDaySettlement') {
     return renderOfficialDaySettlementReportPrintView(appState.currentDay);
@@ -10039,7 +10431,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v57-factory-zero-cloud-reset') {
+          if (k !== 'farm-sales-committee-v58-farm-full-trial-balance') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -13329,6 +13721,57 @@ function initFarmSalesApp() {
       showToast(`تم حذف التاجر (${mObj ? mObj.name : code}) من قائمة التكويد`, '🗑️');
     }
   });
+
+  // Quick Jump & Export/Share Handlers for Full Farm Cumulative Trial Balance in Executive Summary
+  const btnJumpFarmTb = document.getElementById('btnJumpFarmTrialBalance');
+  if (btnJumpFarmTb) {
+    btnJumpFarmTb.addEventListener('click', () => {
+      const card = document.getElementById('farmTrialBalanceCard');
+      if (card) card.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+  const btnExpFarmTbImg = document.getElementById('btnExportFarmTbImage');
+  if (btnExpFarmTbImg) {
+    btnExpFarmTbImg.addEventListener('click', () => {
+      const fName = appState.farmName || 'أبوذكري';
+      exportPrintTargetAsImageOrPdf('farmTrialBalance', 'png', `ميزان_مراجعة_المزرعة_الكامل_${fName}`);
+    });
+  }
+  const btnExpFarmTbPdf = document.getElementById('btnExportFarmTbPdf');
+  if (btnExpFarmTbPdf) {
+    btnExpFarmTbPdf.addEventListener('click', () => {
+      const fName = appState.farmName || 'أبوذكري';
+      exportPrintTargetAsImageOrPdf('farmTrialBalance', 'pdf', `ميزان_مراجعة_المزرعة_الكامل_${fName}`);
+    });
+  }
+  const btnShareWaFarm = document.getElementById('btnShareWhatsappFarmSummary');
+  if (btnShareWaFarm) {
+    btnShareWaFarm.addEventListener('click', () => {
+      const openActiveSummaries = getOpenAndActiveDashSummaries();
+      const filteredSummaries = applyExcelSortAndFilter(openActiveSummaries, DASH_COLUMNS, 'dash');
+      const ftb = computeFarmCumulativeTrialBalance(filteredSummaries);
+      const statusTxt = ftb.cumulativeCashBoxDiff === 0
+        ? 'خزينة المزرعة مطابقة ✓'
+        : (ftb.cumulativeCashBoxDiff < 0 ? 'زيادة توريد' : 'متبقي غير مورد / عجز');
+      const text = [
+        `⚖️ *ميزان المراجعة والتصفية الكامل لمزرعة ${appState.farmName}*`,
+        `📅 عدد الأيام النشطة: ${fmtInt(ftb.activeDaysCount)} يوم (منها ${fmtInt(ftb.lockedDaysCount)} يوم معتمد 🔒)`,
+        `🚛 إجمالي السيارات المكتملة: ${fmtInt(ftb.countCars)} سيارة (متوسط: ${fmtInt(ftb.avgCarWeight)} كجم)`,
+        `⚖️ إجمالي الوزن الصافي التراكمي: *${fmtInt(ftb.sumNetW)} كجم* (قائم: ${fmtInt(ftb.sumW2)} - فارغ: ${fmtInt(ftb.sumW1)})`,
+        `📈 متوسط سعر الكيلو المرجح للمزرعة: ${fmtDec(ftb.avgPrice)} ج.م/كجم (إجمالي الإكراميات: ${fmtInt(ftb.sumTip)} ج.م)`,
+        `💰 *إجمالي المبيعات شامل الإكرامية: ${fmtDec(ftb.sumTotalWithTip)} ج.م*`,
+        `💳 إجمالي التحويلات والشيكات: ${fmtInt(ftb.totalAllTransfers)} ج.م (حالية: ${fmtInt(ftb.currentFarmTransfers)} + سابقة: ${fmtInt(ftb.sumPrevTransfer)})`,
+        `📌 *الخلاصة التراكمية لمديونية المزرعة:* إجمالي الآجل (${fmtInt(ftb.sumCreditSales)}) - إجمالي المسدد من المديونية (${fmtInt(ftb.totalDebtCollected)}) = *صافي مديونية المزرعة المتبقية: ${fmtInt(ftb.closingFarmDebt)} ج.م*`,
+        `💵 إجمالي وارد النقدية التراكمي (قبل المصاريف): ${fmtInt(ftb.totalCashInflowBeforeExpenses)} ج.م (نقدي مبيعات: ${fmtInt(ftb.sumCashSales)} + نقدي مديونيات: ${fmtInt(ftb.sumDebtCash)} + نقدي سابقة: ${fmtInt(ftb.sumPrevCash)})`,
+        `💸 (-) يخصم إجمالي المصروفات والمكافآت: ${fmtInt(ftb.sumExpenses)} ج.م`,
+        `✅ *صافي النقدية التراكمية بالخزنة (بعد المصاريف): ${fmtInt(ftb.netCumulativeCashInBox)} ج.م*`,
+        `🏦 إجمالي النقدية الموردة للإدارة: ${fmtInt(ftb.sumDeliveredCash)} ج.م${ftb.lastDayCarriedForwardCash > 0 ? ` | مرحّل بآخر يوم: ${fmtInt(ftb.lastDayCarriedForwardCash)} ج.م` : ''}`,
+        `📊 فرق الخزينة التراكمي: ${fmtInt(ftb.cumulativeCashBoxDiff)} ج.م (${statusTxt})`
+      ].join('\n');
+      copyTextToClipboardReliable(text);
+      showToast('تم نسخ ميزان المراجعة الكامل للمزرعة للحافظة — جاهز للصق في واتساب! 📲');
+    });
+  }
 
   // Copy WhatsApp Daily Summary
   document.getElementById('btnShareWhatsappSummary').addEventListener('click', () => {
