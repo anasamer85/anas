@@ -1,9 +1,11 @@
 // =========================================================================
 // 1. INITIAL GROUNDED DATA & STATE (WITH DYNAMIC FARM NAME & FULL SYNC)
 // =========================================================================
-const STORAGE_KEY = 'farm_sales_committee_v67_clean_slate_state';
-const LEGACY_STORAGE_KEYS = [];
+const STORAGE_KEY = 'farm_sales_committee_v68_clean_slate_state';
+const LEGACY_STORAGE_KEYS = ['farm_sales_committee_v67_clean_slate_state'];
 const EMBEDDED_CLOUD_WEBHOOK_URL = '';
+const EMBEDDED_DEFAULT_FARM_NAME = '';
+let isInitialCloudPullPending = false;
 
 function getEmbeddedWebhookUrl() {
   try {
@@ -25,6 +27,23 @@ function getEmbeddedWebhookUrl() {
   } catch (e) {}
   return String(EMBEDDED_CLOUD_WEBHOOK_URL || '').trim();
 }
+
+function getEmbeddedDefaultFarmName() {
+  try {
+    if (typeof window !== 'undefined' && window.EMBEDDED_DEFAULT_FARM_NAME && String(window.EMBEDDED_DEFAULT_FARM_NAME).trim()) {
+      return String(window.EMBEDDED_DEFAULT_FARM_NAME).trim();
+    }
+    if (typeof document !== 'undefined') {
+      const metaFarmEl = document.getElementById('metaEmbeddedDefaultFarmName');
+      if (metaFarmEl) {
+        const content = String(metaFarmEl.getAttribute('content') || '').trim();
+        if (content) return content;
+      }
+    }
+  } catch (e) {}
+  return String(EMBEDDED_DEFAULT_FARM_NAME || '').trim();
+}
+
 function countMovementsInDays(daysMap) {
   if (!daysMap || typeof daysMap !== 'object') return 0;
   let cnt = 0;
@@ -34,6 +53,16 @@ function countMovementsInDays(daysMap) {
     cnt += (dm.sales ? dm.sales.length : 0) + (dm.pendingSales ? dm.pendingSales.length : 0) + (dm.expenses ? dm.expenses.length : 0);
   }
   return cnt;
+}
+
+function hasMeaningfulLocalData() {
+  if (!appState) return false;
+  const hasFarm = Boolean(String(appState.farmName ?? '').trim()) || Object.keys(appState.farmsArchive || {}).length > 0 || Number(appState.lastFarmSwitchAt) > 0;
+  const hasMerchants = Array.isArray(appState.merchants) && appState.merchants.length > 0;
+  const hasMovements = countMovementsInDays(appState.days) > 0;
+  const hasExtraUsers = Array.isArray(appState.users) && appState.users.length > 1;
+  const hasResets = Number(appState.farmResetAt) > 0 || Number(appState.factoryZeroWipeAt) > 0;
+  return Boolean(appState.hasLocalEdits && (hasFarm || hasMerchants || hasMovements || hasExtraUsers || hasResets || Number(appState.pendingChanges) > 0));
 }
 
 let liveExcelFileHandle = null;
@@ -86,13 +115,28 @@ function ensureDaysSchemaIntact(daysObj) {
 }
 
 function getDefaultState(customFarmName = '') {
-  // نسخة بيضاء / صفرية (Clean Slate Version): مصفوفة التجار وسجل الأيام وأرشيف المزارع فارغة تماماً
+  // نسخة بيضاء / صفرية (Clean Slate Version): مصفوفة التجار وسجل الأيام وأرشيف المزارع فارغة تماماً مع دعم اسم المزرعة المدمج إن وُجد
+  const initialFarm = String(customFarmName || getEmbeddedDefaultFarmName() || '').trim();
   const merchants = [];
-  const days = {};
+  const days = ensureDaysSchemaIntact({});
   const farmsArchive = {};
+  if (initialFarm) {
+    farmsArchive[initialFarm] = {
+      farmName: initialFarm,
+      updatedAt: new Date().toISOString(),
+      farmResetAt: 0,
+      lastBulkImportAt: 0,
+      visibleDays: [1],
+      defaultPrice: 0,
+      defaultTip: 0,
+      lastScaleNo: 0,
+      merchants: [],
+      days: JSON.parse(JSON.stringify(days))
+    };
+  }
 
   return {
-    farmName: customFarmName,
+    farmName: initialFarm,
     lastExcelSync: '',
     currentDay: 1,
     visibleDays: [1],
@@ -2579,10 +2623,27 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
       appState.visibleDays = Array.isArray(mergedActiveSnap.visibleDays) && mergedActiveSnap.visibleDays.length > 0 ? [...mergedActiveSnap.visibleDays] : [1];
     }
     // Never hijack or overwrite the user's active farm selection during background sync if the user has local edits or multiple farms in archive!
-    const userExplicitlySelectedFarm = Boolean(appState.hasLocalEdits || Number(appState.lastFarmSwitchAt) > 0 || Object.keys(appState.farmsArchive || {}).length > 1);
-    if (preferCloud && !userExplicitlySelectedFarm && !mergedDeletedIds.farms.includes(cloudFarmName)) {
+    const userExplicitlySelectedFarm = Boolean((appState.hasLocalEdits && localFarmName) || Number(appState.lastFarmSwitchAt) > 0 || Object.keys(appState.farmsArchive || {}).length > 1);
+    if ((preferCloud || !localFarmName) && !userExplicitlySelectedFarm && cloudFarmName && !mergedDeletedIds.farms.includes(cloudFarmName)) {
       activateFarmFromArchive(cloudFarmName);
     }
+  }
+
+  // إذا كان المتصفح المحلي بدون اسم مزرعة نشطة (جهاز جديد أو بعد مسح الكاش)، نعتمد اسم المزرعة القادم من السحابة أو الأرشيف فوراً
+  if (!String(appState.farmName ?? '').trim()) {
+    const candCloudFarm = String(cloudData.farmName ?? '').trim();
+    const archKeys = Object.keys(appState.farmsArchive || {}).filter(k => k && String(k).trim() && !mergedDeletedIds.farms.includes(k));
+    if (candCloudFarm && !mergedDeletedIds.farms.includes(candCloudFarm)) {
+      appState.farmName = candCloudFarm;
+      if (appState.farmsArchive && appState.farmsArchive[candCloudFarm]) {
+        activateFarmFromArchive(candCloudFarm);
+      }
+    } else if (archKeys.length > 0) {
+      activateFarmFromArchive(archKeys[0]);
+    }
+  }
+  if (String(appState.farmName ?? '').trim()) {
+    appState.factoryZeroWipeAt = 0;
   }
   deduplicateAllDaysInState(appState);
   syncActiveFarmIntoArchive();
@@ -2624,10 +2685,11 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       (appState.deletedIds.farms && appState.deletedIds.farms.length > 0)
     )
   );
-  const isExplicitFarmReset = Boolean(skipPreFetchMerge && Number(appState.farmResetAt) > 0 && localMovCntNow === 0);
-  if (!isExplicitFarmReset && (!appState.hasLocalEdits || (localMovCntNow === 0 && Number(appState.farmResetAt) === 0 && !hasRecordedDeletions && Number(appState.pendingChanges) === 0))) {
+  const hasActiveOrArchivedFarm = Boolean(String(appState.farmName ?? '').trim()) || Object.keys(appState.farmsArchive || {}).length > 0;
+  const isExplicitFarmReset = Boolean(skipPreFetchMerge && (Number(appState.farmResetAt) > 0 || Number(appState.factoryZeroWipeAt) > 0 || hasActiveOrArchivedFarm) && localMovCntNow === 0);
+  if (!forcePush && !isExplicitFarmReset && (!appState.hasLocalEdits || (!hasActiveOrArchivedFarm && localMovCntNow === 0 && Number(appState.farmResetAt) === 0 && !hasRecordedDeletions && Number(appState.pendingChanges) === 0))) {
     const pulled = await pullDatabaseFromCloud(silent, true);
-    if (pulled && countMovementsInDays(appState.days) > 0) {
+    if (pulled && (countMovementsInDays(appState.days) > 0 || Boolean(String(appState.farmName ?? '').trim()))) {
       return true;
     }
   }
@@ -8502,8 +8564,19 @@ function restoreFullJsonBackupFromText(rawText, sourceFileName = '') {
 function checkAndEnforceNewFarmCreationModal() {
   const overlay = document.getElementById('forceCreateFarmOverlay');
   if (!overlay) return;
+  if (!String(appState.farmName ?? '').trim() && Number(appState.factoryZeroWipeAt) === 0) {
+    const embeddedFarm = getEmbeddedDefaultFarmName();
+    const delFarms = (appState.deletedIds && Array.isArray(appState.deletedIds.farms)) ? appState.deletedIds.farms : [];
+    const archiveKeys = Object.keys(appState.farmsArchive || {}).filter(k => k && String(k).trim() && !delFarms.includes(k));
+    if (embeddedFarm && !delFarms.includes(embeddedFarm)) {
+      appState.farmName = embeddedFarm;
+      syncActiveFarmIntoArchive();
+    } else if (archiveKeys.length > 0) {
+      activateFarmFromArchive(archiveKeys[0]);
+    }
+  }
   const hasActiveFarm = Boolean(String(appState.farmName ?? '').trim());
-  const shouldForceCreate = Boolean(appState.isLoggedIn && !hasActiveFarm);
+  const shouldForceCreate = Boolean(appState.isLoggedIn && !hasActiveFarm && !isInitialCloudPullPending);
   overlay.classList.toggle('hidden', !shouldForceCreate);
   if (shouldForceCreate) {
     const inp = document.getElementById('inpForceNewFarmName');
@@ -10624,6 +10697,10 @@ function initFarmSalesApp() {
   window.__farmAppInitialized = true;
   const loadedFromLocal = loadState();
   unifyGlobalMerchantsRegistry();
+  const hasWebhookNow = Boolean((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine);
+  if (hasWebhookNow && !String(appState.farmName || '').trim()) {
+    isInitialCloudPullPending = true;
+  }
   renderAll(true);
   if (!loadedFromLocal) {
     loadFromIndexedDBAsync().then((idbState) => {
@@ -10638,19 +10715,41 @@ function initFarmSalesApp() {
         renderAll();
       }
       if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
-        pullDatabaseFromCloud(true, true);
+        isInitialCloudPullPending = !String(appState.farmName || '').trim();
+        pullDatabaseFromCloud(true, true).finally(() => {
+          isInitialCloudPullPending = false;
+          checkAndEnforceNewFarmCreationModal();
+          renderAll(true);
+        });
+      } else {
+        isInitialCloudPullPending = false;
+        checkAndEnforceNewFarmCreationModal();
       }
       window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
-  startLiveRealtimeSyncEngine();
+      startLiveRealtimeSyncEngine();
     }).catch(() => {
       if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
-        pullDatabaseFromCloud(true, true);
+        pullDatabaseFromCloud(true, true).finally(() => {
+          isInitialCloudPullPending = false;
+          checkAndEnforceNewFarmCreationModal();
+          renderAll(true);
+        });
+      } else {
+        isInitialCloudPullPending = false;
+        checkAndEnforceNewFarmCreationModal();
       }
       startLiveRealtimeSyncEngine();
     });
   } else {
     if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
-      pullDatabaseFromCloud(true, true);
+      pullDatabaseFromCloud(true, true).finally(() => {
+        isInitialCloudPullPending = false;
+        checkAndEnforceNewFarmCreationModal();
+        renderAll(true);
+      });
+    } else {
+      isInitialCloudPullPending = false;
+      checkAndEnforceNewFarmCreationModal();
     }
     startLiveRealtimeSyncEngine();
   }
@@ -10977,9 +11076,19 @@ function initFarmSalesApp() {
       applyAutoLiteFieldModeOnLoginOrSwitch();
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
-      renderAll(true);
       if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
-        pullDatabaseFromCloud(true, true);
+        if (!String(appState.farmName || '').trim()) {
+          isInitialCloudPullPending = true;
+        }
+        renderAll(true);
+        pullDatabaseFromCloud(true, true).finally(() => {
+          isInitialCloudPullPending = false;
+          checkAndEnforceNewFarmCreationModal();
+          renderAll(true);
+        });
+      } else {
+        isInitialCloudPullPending = false;
+        renderAll(true);
       }
       startLiveRealtimeSyncEngine();
       showToast(`مرحباً بك (${adminObj.name || 'مدير الموقع'})! تم تسجيل الدخول بصلاحيات المدير الكاملة 👑`);
@@ -11001,9 +11110,19 @@ function initFarmSalesApp() {
       applyAutoLiteFieldModeOnLoginOrSwitch();
       switchActiveTabUI(appState.activeTab || 'daily');
       saveState(false);
-      renderAll(true);
       if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
-        pullDatabaseFromCloud(true, true);
+        if (!String(appState.farmName || '').trim()) {
+          isInitialCloudPullPending = true;
+        }
+        renderAll(true);
+        pullDatabaseFromCloud(true, true).finally(() => {
+          isInitialCloudPullPending = false;
+          checkAndEnforceNewFarmCreationModal();
+          renderAll(true);
+        });
+      } else {
+        isInitialCloudPullPending = false;
+        renderAll(true);
       }
       startLiveRealtimeSyncEngine();
       showToast(`مرحباً بك (${matchedUser.name})! تم تسجيل الدخول بنجاح`, '👤');
@@ -11137,6 +11256,8 @@ function initFarmSalesApp() {
     appState.farmName = newName;
     appState.lastFarmSwitchAt = nowCreateTs;
     appState.farmResetAt = 0;
+    appState.factoryZeroWipeAt = 0;
+    appState.hasLocalEdits = true;
     appState.lastBulkImportAt = 0;
     appState.days = emptyDays;
     appState.currentDay = 1;
@@ -13682,6 +13803,8 @@ function initFarmSalesApp() {
       appState.farmName = newName;
       appState.lastFarmSwitchAt = nowCreateTs;
       appState.farmResetAt = 0;
+      appState.factoryZeroWipeAt = 0;
+      appState.hasLocalEdits = true;
       appState.currentDay = 1;
       appState.visibleDays = [1];
       appState.days = emptyDays;
@@ -14440,7 +14563,7 @@ function initFarmSalesApp() {
       return;
     }
     if (appState.webhookUrl || getEmbeddedWebhookUrl()) {
-      const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
+      const hadMeaningfulLocalEdits = hasMeaningfulLocalData();
       if (!hadMeaningfulLocalEdits) {
         const pulled = await pullDatabaseFromCloud(false, true);
         if (!pulled) {
@@ -14470,7 +14593,7 @@ function initFarmSalesApp() {
 
   document.getElementById('btnSaveWebhook').addEventListener('click', async () => {
     const enteredUrl = document.getElementById('inpCloudWebhookUrl').value.trim();
-    const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
+    const hadMeaningfulLocalEdits = hasMeaningfulLocalData();
     appState.webhookUrl = enteredUrl;
     if (enteredUrl) {
       window.EMBEDDED_CLOUD_WEBHOOK_URL = enteredUrl;
@@ -14630,8 +14753,10 @@ function initFarmSalesApp() {
       cloneDoc.querySelectorAll('head style:not(#criticalPrintStyles):not(#criticalMobileWeighbridgeStyles)').forEach(st => st.remove());
     }
 
-    // 2. Embed the Webhook URL cleanly in <meta id="metaEmbeddedCloudWebhookUrl"> and <script id="embeddedWebhookConfigScript">
+    // 2. Embed the Webhook URL and Active Farm Name cleanly in <meta> and <script id="embeddedWebhookConfigScript">
+    const currentActiveFarm = String(appState.farmName || getEmbeddedDefaultFarmName() || '').trim();
     const safeUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const safeFarmName = currentActiveFarm.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     let metaNode = cloneDoc.querySelector('#metaEmbeddedCloudWebhookUrl');
     if (!metaNode) {
       metaNode = document.createElement('meta');
@@ -14641,13 +14766,22 @@ function initFarmSalesApp() {
     }
     metaNode.setAttribute('content', url);
 
+    let metaFarmNode = cloneDoc.querySelector('#metaEmbeddedDefaultFarmName');
+    if (!metaFarmNode) {
+      metaFarmNode = document.createElement('meta');
+      metaFarmNode.id = 'metaEmbeddedDefaultFarmName';
+      metaFarmNode.setAttribute('name', 'default-farm-name');
+      headEl.insertBefore(metaFarmNode, headEl.firstChild);
+    }
+    metaFarmNode.setAttribute('content', currentActiveFarm);
+
     let cfgScript = cloneDoc.querySelector('#embeddedWebhookConfigScript');
     if (!cfgScript) {
       cfgScript = document.createElement('script');
       cfgScript.id = 'embeddedWebhookConfigScript';
       headEl.appendChild(cfgScript);
     }
-    cfgScript.textContent = `\n    // رابط المزامنة السحابية المدمج ليسمع تلقائياً في Google Sites و GitHub Pages\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';\n  `;
+    cfgScript.textContent = `\n    // رابط المزامنة السحابية واسم المزرعة المدمج ليسمع تلقائياً في Google Sites و GitHub Pages\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';\n    window.EMBEDDED_DEFAULT_FARM_NAME = '${safeFarmName}';\n  `;
 
     const cloneInp = cloneDoc.querySelector('#inpCloudWebhookUrl');
     if (cloneInp) {
@@ -14695,6 +14829,10 @@ function initFarmSalesApp() {
       cloneLogin.classList.remove('hidden');
       cloneLogin.removeAttribute('style');
     }
+    const cloneForceCreateFarm = cloneDoc.querySelector('#forceCreateFarmOverlay');
+    if (cloneForceCreateFarm) {
+      cloneForceCreateFarm.classList.add('hidden');
+    }
     const cloneLoginUser = cloneDoc.querySelector('#inpLoginUsername');
     if (cloneLoginUser) cloneLoginUser.setAttribute('value', '');
     const cloneLoginPass = cloneDoc.querySelector('#inpLoginPassword');
@@ -14731,7 +14869,7 @@ function initFarmSalesApp() {
   }
 
   document.getElementById('btnCopyHtmlWithWebhook').addEventListener('click', async () => {
-    const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
+    const hadMeaningfulLocalEdits = hasMeaningfulLocalData();
     await preloadExternalAssetsForGoogleSitesEmbed();
     const { rawHtml, url } = buildEmbeddedGoogleSitesHtml(true);
 
@@ -14797,7 +14935,7 @@ function initFarmSalesApp() {
   }
 
   document.getElementById('btnDownloadHtmlWithWebhook').addEventListener('click', async () => {
-    const hadMeaningfulLocalEdits = Boolean(appState.hasLocalEdits && (countMovementsInDays(appState.days) > 0 || Number(appState.farmResetAt) > 0));
+    const hadMeaningfulLocalEdits = hasMeaningfulLocalData();
     await preloadExternalAssetsForGoogleSitesEmbed();
     const { rawHtml, url } = buildEmbeddedGoogleSitesHtml(true);
     const blob = new Blob([rawHtml], { type: 'text/html;charset=utf-8' });
