@@ -118,6 +118,12 @@ function getDefaultState(customFarmName = 'أبوذكري') {
     showAuditMetadata: true,
     liteFieldMode: false,
     autoLiteFieldOnMobile: true,
+    stickyTableOptions: {
+      headers: true,
+      footers: true,
+      rightCols: true,
+      leftCols: true
+    },
     activeUserId: 'admin',
     users: [
       { id: 'admin', username: 'admin', password: 'admin', name: 'مدير الموقع (كامل الصلاحيات)', phone: '', jobTitle: 'مدير عام المزرعة', isSystem: true, perms: { sales: true, expenses: true, merchants: true, farms: true, admin: true, liteFieldMode: false, showSyncExcel: true, showSyncCloud: true, showSyncWebhook: true } }
@@ -489,6 +495,30 @@ function applyParsedStateObject(parsed) {
   } catch (e) {
     appState.liteFieldMode = Boolean(appState.liteFieldMode);
     if (appState.autoLiteFieldOnMobile === undefined) appState.autoLiteFieldOnMobile = true;
+  }
+  try {
+    const defaultSticky = { headers: true, footers: true, rightCols: true, leftCols: true };
+    const savedStickyRaw = localStorage.getItem(STORAGE_KEY + '_sticky_table_options');
+    if (savedStickyRaw) {
+      const parsedSticky = JSON.parse(savedStickyRaw);
+      appState.stickyTableOptions = {
+        headers: parsedSticky.headers !== undefined ? Boolean(parsedSticky.headers) : true,
+        footers: parsedSticky.footers !== undefined ? Boolean(parsedSticky.footers) : true,
+        rightCols: parsedSticky.rightCols !== undefined ? Boolean(parsedSticky.rightCols) : true,
+        leftCols: parsedSticky.leftCols !== undefined ? Boolean(parsedSticky.leftCols) : true
+      };
+    } else if (appState.stickyTableOptions && typeof appState.stickyTableOptions === 'object') {
+      appState.stickyTableOptions = {
+        headers: appState.stickyTableOptions.headers !== undefined ? Boolean(appState.stickyTableOptions.headers) : true,
+        footers: appState.stickyTableOptions.footers !== undefined ? Boolean(appState.stickyTableOptions.footers) : true,
+        rightCols: appState.stickyTableOptions.rightCols !== undefined ? Boolean(appState.stickyTableOptions.rightCols) : true,
+        leftCols: appState.stickyTableOptions.leftCols !== undefined ? Boolean(appState.stickyTableOptions.leftCols) : true
+      };
+    } else {
+      appState.stickyTableOptions = defaultSticky;
+    }
+  } catch (e) {
+    appState.stickyTableOptions = { headers: true, footers: true, rightCols: true, leftCols: true };
   }
   if (!Array.isArray(appState.users) || appState.users.length === 0) {
     appState.users = getDefaultState().users;
@@ -1539,7 +1569,7 @@ function isUserActivelyTypingInForm() {
   const ae = document.activeElement;
   if (!ae || !ae.tagName) return false;
   if (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA') {
-    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpLiteFilterPendingCards', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm', 'chkShowFloatingActionBar', 'chkShowAuditMetadata', 'inpFilterAuditTrail', 'selFilterAuditType'];
+    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpLiteFilterPendingCards', 'chkStickyTableHeaders', 'chkStickyTableFooters', 'chkStickyTableRightCols', 'chkStickyTableLeftCols', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm', 'chkShowFloatingActionBar', 'chkShowAuditMetadata', 'inpFilterAuditTrail', 'selFilterAuditType'];
     if (!ignoreIds.includes(ae.id)) return true;
   }
   return false;
@@ -6847,6 +6877,78 @@ function setFloatingActionBarVisibility(showFlag, notify = true) {
   }
 }
 
+function ensureStickyTableOptionsStructure() {
+  if (!appState.stickyTableOptions || typeof appState.stickyTableOptions !== 'object') {
+    appState.stickyTableOptions = { headers: true, footers: true, rightCols: true, leftCols: true };
+  }
+  return {
+    headers: appState.stickyTableOptions.headers !== false,
+    footers: appState.stickyTableOptions.footers !== false,
+    rightCols: appState.stickyTableOptions.rightCols !== false,
+    leftCols: appState.stickyTableOptions.leftCols !== false
+  };
+}
+
+function updateStickyTablesOptionsUI() {
+  const opts = ensureStickyTableOptionsStructure();
+  appState.stickyTableOptions = opts;
+
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.classList.toggle('sticky-headers-on', Boolean(opts.headers));
+    document.body.classList.toggle('sticky-footers-on', Boolean(opts.footers));
+    document.body.classList.toggle('sticky-right-cols-on', Boolean(opts.rightCols));
+    document.body.classList.toggle('sticky-left-cols-on', Boolean(opts.leftCols));
+  }
+
+  const chkH = document.getElementById('chkStickyTableHeaders');
+  if (chkH) chkH.checked = Boolean(opts.headers);
+  const chkF = document.getElementById('chkStickyTableFooters');
+  if (chkF) chkF.checked = Boolean(opts.footers);
+  const chkR = document.getElementById('chkStickyTableRightCols');
+  if (chkR) chkR.checked = Boolean(opts.rightCols);
+  const chkL = document.getElementById('chkStickyTableLeftCols');
+  if (chkL) chkL.checked = Boolean(opts.leftCols);
+
+  const activeCount = [opts.headers, opts.footers, opts.rightCols, opts.leftCols].filter(Boolean).length;
+  const badgeEl = document.getElementById('stickyTablesSummaryBadge');
+  if (badgeEl) {
+    if (activeCount === 4) {
+      badgeEl.textContent = '✅ مثبت حالياً: 4 من 4 عناصر (الكل نشط)';
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold';
+    } else if (activeCount === 0) {
+      badgeEl.textContent = '🔓 التثبيت متوقف حالياً (0 من 4)';
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-slate-200 text-slate-800 border border-slate-300 text-xs font-extrabold';
+    } else {
+      badgeEl.textContent = `📌 مثبت حالياً: ${activeCount} من 4 عناصر`;
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-amber-100 text-amber-950 border border-amber-300 text-xs font-extrabold';
+    }
+  }
+
+  const ddPill = document.getElementById('ddStickyTablesCountPill');
+  if (ddPill) {
+    ddPill.textContent = `${activeCount}/4 نشط`;
+    ddPill.className = activeCount > 0
+      ? 'px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-extrabold'
+      : 'px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-bold';
+  }
+}
+
+function setStickyTableOptions(newOptsPartial, notifyMsg = '') {
+  const current = ensureStickyTableOptionsStructure();
+  appState.stickyTableOptions = {
+    ...current,
+    ...newOptsPartial
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY + '_sticky_table_options', JSON.stringify(appState.stickyTableOptions));
+  } catch (e) {}
+  updateStickyTablesOptionsUI();
+  saveState(false);
+  if (notifyMsg) {
+    showToast(notifyMsg, '📐');
+  }
+}
+
 function updateAuditMetadataVisibilityUI() {
   const isVisible = appState.showAuditMetadata !== false;
   if (typeof document !== 'undefined' && document.body) {
@@ -7586,6 +7688,7 @@ function renderAll(forceAllTabs = false, preserveInputs = false) {
   const isSyncTab = (activeTab === 'sync');
   renderUsersAndPermissionsUI(Boolean(forceAllTabs || isSyncTab));
   updateFloatingActionBarVisibilityUI();
+  updateStickyTablesOptionsUI();
   updateAuditMetadataVisibilityUI();
   updateLiteFieldModeUI();
 
@@ -9798,7 +9901,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v54-sticky-headers-and-columns') {
+          if (k !== 'farm-sales-committee-v55-customizable-sticky-tables') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -11413,6 +11516,64 @@ function initFarmSalesApp() {
   if (btnToggleFloatingBarEl) {
     btnToggleFloatingBarEl.addEventListener('click', () => {
       setFloatingActionBarVisibility(appState.showFloatingActionBar === false, true);
+    });
+  }
+
+  // مستمعات خيارات تثبيت الجداول الـ 12 (رؤوس الجداول، الإجماليات السفلية، الأعمدة اليمنى، أعمدة الإجراءات اليسرى)
+  const stickyCheckboxMap = [
+    { id: 'chkStickyTableHeaders', key: 'headers', label: 'رؤوس الجداول (Sticky Headers)' },
+    { id: 'chkStickyTableFooters', key: 'footers', label: 'صفوف الإجماليات السفلية (Sticky Footers)' },
+    { id: 'chkStickyTableRightCols', key: 'rightCols', label: 'الأعمدة المحورية يميناً (اسم التاجر/البيان)' },
+    { id: 'chkStickyTableLeftCols', key: 'leftCols', label: 'أعمدة الإجراءات يساراً (أزرار التعديل والحذف)' }
+  ];
+
+  stickyCheckboxMap.forEach(item => {
+    const chkEl = document.getElementById(item.id);
+    if (chkEl) {
+      chkEl.addEventListener('change', (e) => {
+        const isChecked = Boolean(e.target.checked);
+        setStickyTableOptions(
+          { [item.key]: isChecked },
+          isChecked ? `📌 تم تفعيل تثبيت: ${item.label} في جميع الجداول` : `🔓 تم إيقاف تثبيت: ${item.label}`
+        );
+      });
+    }
+  });
+
+  const btnStickyAllOn = document.getElementById('btnStickyTablesEnableAll');
+  if (btnStickyAllOn) {
+    btnStickyAllOn.addEventListener('click', () => {
+      setStickyTableOptions(
+        { headers: true, footers: true, rightCols: true, leftCols: true },
+        '📌 تم تفعيل تثبيت جميع العناصر الـ 4 (الرؤوس + الإجماليات + الأعمدة اليمنى واليسرى) في كل الجداول!'
+      );
+    });
+  }
+
+  const btnStickyAllOff = document.getElementById('btnStickyTablesDisableAll');
+  if (btnStickyAllOff) {
+    btnStickyAllOff.addEventListener('click', () => {
+      setStickyTableOptions(
+        { headers: false, footers: false, rightCols: false, leftCols: false },
+        '🔓 تم إلغاء تثبيت جميع الرؤوس والأعمدة في الجداول'
+      );
+    });
+  }
+
+  const btnDdStickySettings = document.getElementById('btnDropdownStickyTablesSettings');
+  if (btnDdStickySettings) {
+    btnDdStickySettings.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
+      if (isLiteFieldModeEffective()) {
+        setLiteFieldMode(false, false);
+      }
+      const syncTabBtn = document.querySelector('[data-nav="sync"]');
+      if (syncTabBtn) syncTabBtn.click();
+      setTimeout(() => {
+        const box = document.getElementById('stickyTablesControlBox');
+        if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 90);
     });
   }
 
