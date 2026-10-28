@@ -2179,6 +2179,7 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   syncActiveFarmIntoArchive();
   const localFactoryWipeAt = Number(appState.factoryZeroWipeAt) || 0;
   const cloudFactoryWipeAt = Number(cloudData.factoryZeroWipeAt) || 0;
+  appState.factoryZeroWipeAt = Math.max(localFactoryWipeAt, cloudFactoryWipeAt);
   const isZeroWiped = (localFactoryWipeAt > 0 || cloudFactoryWipeAt > 0);
   const localFarmName = String(appState.farmName ?? '').trim() || (isZeroWiped ? '' : 'أبوذكري');
   const cloudFarmName = String(cloudData.farmName ?? '').trim() || localFarmName;
@@ -2188,9 +2189,6 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   const localBulkImportAt = Number(appState.lastBulkImportAt) || 0;
   const cloudBulkImportAt = Number(cloudData.lastBulkImportAt) || 0;
   appState.lastBulkImportAt = Math.max(localBulkImportAt, cloudBulkImportAt);
-  const localFactoryWipeAt = Number(appState.factoryZeroWipeAt) || 0;
-  const cloudFactoryWipeAt = Number(cloudData.factoryZeroWipeAt) || 0;
-  appState.factoryZeroWipeAt = Math.max(localFactoryWipeAt, cloudFactoryWipeAt);
 
   const countMovements = (daysMap) => {
     if (!daysMap || typeof daysMap !== 'object') return 0;
@@ -10467,7 +10465,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v59-complete-zero-wipe-clean') {
+          if (k !== 'farm-sales-committee-v60-login-syntax-hotfix') {
             caches.delete(k).catch(() => {});
           }
         });
