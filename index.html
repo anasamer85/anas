@@ -23,7 +23,7 @@
     // رابط المزامنة السحابية المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
     window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=62" />
+  <link rel="stylesheet" href="./style.css?v=63" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -211,6 +211,44 @@
           <span>➕</span>
           <span>إنشاء المزرعة وفتح النظام الآن</span>
         </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- ASK MISSING PRICE MODAL (نافذة السؤال عن السعر في حالة عدم كتابته)        -->
+  <!-- ======================================================================= -->
+  <div id="askMissingPriceModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white text-slate-900 rounded-3xl shadow-2xl border-4 border-amber-400 max-w-md w-full p-6 space-y-5 text-right">
+      <div class="text-center space-y-1.5 border-b border-slate-200 pb-4">
+        <div class="inline-flex items-center justify-center px-4 py-1.5 rounded-2xl bg-amber-400 text-slate-950 font-extrabold text-sm shadow">
+          💰 تنبيه: لم يتم كتابة السعر
+        </div>
+        <h2 class="text-lg md:text-xl font-extrabold text-slate-900 pt-1">يرجى إدخال سعر الكيلو (ج.م / كجم)</h2>
+        <p id="askMissingPriceModalSub" class="text-xs text-slate-600 font-bold leading-relaxed">
+          خانة السعر فارغة حالياً — يرجى كتابة سعر الكيلو لاعتماده وإتمام حفظ الحركة فوراً:
+        </p>
+      </div>
+
+      <form id="askMissingPriceForm" class="space-y-4">
+        <div>
+          <label for="inpModalMissingPrice" class="block text-xs font-extrabold text-slate-800 mb-1.5">
+            💵 السعر (ج.م / كجم):
+          </label>
+          <input id="inpModalMissingPrice" type="text" inputmode="decimal" data-money-input="1" required autocomplete="off"
+            placeholder="اكتب سعر الكيلو هنا (مثال: 75)..."
+            class="w-full px-3.5 py-2.5 text-base font-extrabold border-2 border-blue-800 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-center text-slate-900" />
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <button type="button" id="btnCancelMissingPriceModal" class="flex-1 py-2.5 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-extrabold text-xs transition">
+            ✕ إلغاء والعودة للخانة
+          </button>
+          <button type="submit" id="btnConfirmMissingPriceModal" class="flex-[2] py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs md:text-sm shadow-lg transition flex items-center justify-center gap-1.5">
+            <span>✅</span>
+            <span>اعتماد السعر وإتمام الحفظ الآن</span>
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -2684,7 +2722,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=62"></script>
-  <script src="./app.js?v=62"></script>
+  <script src="./excel-template.js?v=63"></script>
+  <script src="./app.js?v=63"></script>
 </body>
 </html>

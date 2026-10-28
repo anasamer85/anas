@@ -397,8 +397,39 @@ function deduplicateDayRecords(dayObj, deletedIds) {
   dayObj.expenses = cleanExpenses;
 }
 
+function sanitizeAccidentalHardcodedPrice(stateObj) {
+  if (!stateObj || typeof stateObj !== 'object') return;
+  if (Math.abs((Number(stateObj.defaultPrice) || 0) - 78.02) < 0.001) {
+    stateObj.defaultPrice = 0;
+  }
+  const cleanDaysPrice = (dMap) => {
+    if (!dMap || typeof dMap !== 'object') return;
+    for (let d = 1; d <= 10; d++) {
+      const dayObj = dMap[d];
+      if (!dayObj || !Array.isArray(dayObj.pendingSales)) continue;
+      dayObj.pendingSales.forEach(p => {
+        if (p && Math.abs((Number(p.price) || 0) - 78.02) < 0.001) {
+          p.price = 0;
+        }
+      });
+    }
+  };
+  cleanDaysPrice(stateObj.days);
+  if (stateObj.farmsArchive && typeof stateObj.farmsArchive === 'object') {
+    Object.values(stateObj.farmsArchive).forEach(fObj => {
+      if (fObj && typeof fObj === 'object') {
+        if (Math.abs((Number(fObj.defaultPrice) || 0) - 78.02) < 0.001) {
+          fObj.defaultPrice = 0;
+        }
+        cleanDaysPrice(fObj.days);
+      }
+    });
+  }
+}
+
 function deduplicateAllDaysInState(stateObj) {
   if (!stateObj || typeof stateObj !== 'object') return;
+  sanitizeAccidentalHardcodedPrice(stateObj);
   stateObj.deletedIds = ensureDeletedIdsStructure(stateObj.deletedIds);
   if (stateObj.days && typeof stateObj.days === 'object') {
     for (let d = 1; d <= 10; d++) {
@@ -10560,7 +10591,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v62-force-farm-and-merchant-fix') {
+          if (k !== 'farm-sales-committee-v63-ask-price-when-empty') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -12536,13 +12567,20 @@ function initFarmSalesApp() {
         return;
       }
 
-      // 2) وزنة 2 ⬅️ توزيع العهدة تلقائياً (إن وجدت) أو الانتقال لنقدي المبيعات
+      // 2) وزنة 2 ⬅️ التحقق من السعر أولاً (إذا كان فارغاً ينتقل للسعر)، ثم توزيع العهدة أو الانتقال لنقدي المبيعات
       if (fieldId === 'inpW2') {
         const w1 = Math.max(0, parseNum(document.getElementById('inpW1').value) || 0);
         const w2 = Math.max(0, parseNum(document.getElementById('inpW2').value) || 0);
         if (w2 > 0 && w2 < w1) {
           updateLiveFormCalculation();
           showToast('⚠️ الوزنة الثانية (القائم) يجب أن تكون أكبر من أو تساوي الوزنة الأولى!', '⚠️');
+          return;
+        }
+        const curPrice = parseNum(document.getElementById('inpPrice')?.value) || 0;
+        if (curPrice <= 0) {
+          updateLiveFormCalculation();
+          focusAndSelectField('inpPrice');
+          showToast('💡 يرجى كتابة (السعر ج.م / كجم) أولاً!', '💰');
           return;
         }
         const cCash = parseNum(document.getElementById('inpCustodyCash')?.value) || 0;
@@ -12643,7 +12681,8 @@ function initFarmSalesApp() {
     document.getElementById('inpCarNo').value = item.carNo || '';
     document.getElementById('inpW1').value = item.w1 ? fmtMoney(item.w1) : '';
     document.getElementById('inpW2').value = item.w2 ? fmtMoney(item.w2) : '';
-    document.getElementById('inpPrice').value = item.price ? fmtMoney(item.price) : '';
+    const recalledPrice = Number(item.price) > 0 ? Number(item.price) : (Number(appState.defaultPrice) > 0 ? Number(appState.defaultPrice) : 0);
+    document.getElementById('inpPrice').value = recalledPrice > 0 ? fmtMoney(recalledPrice) : '';
     document.getElementById('inpTip').value = item.tip !== undefined ? fmtMoney(item.tip) : '';
     document.getElementById('inpCustodyCash').value = item.custodyCash ? fmtMoney(item.custodyCash) : '';
     document.getElementById('inpCustodyTransfer').value = item.custodyTransfer ? fmtMoney(item.custodyTransfer) : '';
@@ -12682,6 +12721,87 @@ function initFarmSalesApp() {
     saveState(true);
     renderAll();
     showToast('تم حذف الوزنة المؤقتة المحجوزة وتحديث الجدول', '🗑️');
+  }
+
+  let pendingPriceActionMode = '';
+
+  function openAskMissingPriceModal(actionMode = 'pending', merchantName = '') {
+    pendingPriceActionMode = actionMode;
+    const modal = document.getElementById('askMissingPriceModal');
+    const subEl = document.getElementById('askMissingPriceModalSub');
+    const inpModalPrice = document.getElementById('inpModalMissingPrice');
+    if (subEl) {
+      const actionLabel = actionMode === 'pending' ? 'حفظ الوزنة الأولى مؤقتاً' : 'الحفظ النهائي للفاتورة';
+      subEl.textContent = `لم يتم كتابة السعر للتاجر (${merchantName || 'الحالي'}). يرجى إدخال سعر الكيلو (ج.م / كجم) لإتمام (${actionLabel}):`;
+    }
+    if (modal) {
+      modal.classList.remove('hidden');
+      if (inpModalPrice) {
+        inpModalPrice.value = Number(appState.defaultPrice) > 0 ? fmtMoney(appState.defaultPrice) : '';
+        setTimeout(() => {
+          try {
+            inpModalPrice.focus();
+            inpModalPrice.select();
+          } catch (e) {}
+        }, 60);
+      }
+    } else {
+      focusAndSelectField('inpPrice');
+    }
+    showToast('💰 يرجى إدخال سعر الكيلو (ج.م / كجم) أولاً لإتمام الحفظ!', '⚠️');
+  }
+
+  function closeAskMissingPriceModal(focusMainPriceInput = false) {
+    const modal = document.getElementById('askMissingPriceModal');
+    if (modal) modal.classList.add('hidden');
+    if (focusMainPriceInput) {
+      const inpPriceEl = document.getElementById('inpPrice');
+      if (inpPriceEl) {
+        inpPriceEl.classList.add('ring-4', 'ring-amber-400', 'border-amber-500');
+        setTimeout(() => {
+          inpPriceEl.classList.remove('ring-4', 'ring-amber-400', 'border-amber-500');
+        }, 2500);
+      }
+      focusAndSelectField('inpPrice');
+    }
+  }
+
+  const askPriceFormEl = document.getElementById('askMissingPriceForm');
+  if (askPriceFormEl) {
+    askPriceFormEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const inpModalPrice = document.getElementById('inpModalMissingPrice');
+      const priceVal = parseNum(inpModalPrice ? inpModalPrice.value : 0);
+      if (priceVal <= 0) {
+        showToast('⚠️ يرجى كتابة سعر كيلو صحيح أكبر من صفر!', '⚠️');
+        if (inpModalPrice) inpModalPrice.focus();
+        return;
+      }
+      const mainPriceInp = document.getElementById('inpPrice');
+      if (mainPriceInp) {
+        mainPriceInp.value = fmtMoney(priceVal);
+      }
+      appState.defaultPrice = priceVal;
+      updateLiveFormCalculation();
+      const modeToResume = pendingPriceActionMode;
+      pendingPriceActionMode = '';
+      closeAskMissingPriceModal(false);
+      if (modeToResume === 'pending') {
+        const btnPend = document.getElementById('btnSavePendingW1');
+        if (btnPend) btnPend.click();
+      } else if (modeToResume === 'final') {
+        const btnFinal = document.getElementById('btnSaveSale');
+        if (btnFinal) btnFinal.click();
+      }
+    });
+  }
+
+  const btnCancelMissingPriceEl = document.getElementById('btnCancelMissingPriceModal');
+  if (btnCancelMissingPriceEl) {
+    btnCancelMissingPriceEl.addEventListener('click', () => {
+      pendingPriceActionMode = '';
+      closeAskMissingPriceModal(true);
+    });
   }
 
   document.getElementById('btnSavePendingW1').addEventListener('click', () => {
@@ -12724,8 +12844,12 @@ function initFarmSalesApp() {
       document.getElementById('inpScaleNo').value = enteredScale;
     }
 
-    const enteredPrice = parseNum(document.getElementById('inpPrice').value) || appState.defaultPrice || 78.02;
-    const enteredTip = parseNum(document.getElementById('inpTip').value);
+    const enteredPrice = parseNum(document.getElementById('inpPrice').value);
+    if (enteredPrice <= 0) {
+      openAskMissingPriceModal('pending', mName);
+      return;
+    }
+    const enteredTip = parseNum(document.getElementById('inpTip').value) || 0;
 
     appState.defaultPrice = enteredPrice;
     appState.defaultTip = enteredTip;
@@ -12873,6 +12997,10 @@ function initFarmSalesApp() {
     }
 
     const enteredPrice = isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpPrice').value) || 0);
+    if (!isStandaloneDebtVoucher && enteredPrice <= 0) {
+      openAskMissingPriceModal('final', mName);
+      return;
+    }
     const enteredTip = isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpTip').value) || 0);
 
     if (!isStandaloneDebtVoucher && enteredPrice > 0) {
