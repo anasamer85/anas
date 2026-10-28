@@ -114,6 +114,7 @@ function getDefaultState(customFarmName = 'أبوذكري') {
     defaultPrice: 0,
     defaultTip: 0,
     lastScaleNo: 0,
+    lastVoucherNo: 0,
     inactivityTimeoutMin: 20,
     showFloatingActionBar: true,
     showAuditMetadata: true,
@@ -240,11 +241,45 @@ function getLatestDayActivityTimestamp(dayObj, clearTs = 0) {
   return maxTs;
 }
 
+function isRecordDebtOnlyVoucher(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (row.isPending) return false;
+  if (row.entryMode === 'debt_only' || row.isDebtCollectionOnly) return true;
+  const w1 = Math.max(0, Number(row.w1) || 0);
+  const w2 = Math.max(0, Number(row.w2) || 0);
+  const price = Number(row.price) || 0;
+  const tip = Number(row.tip) || 0;
+  const netWeight = (w2 >= w1 && w2 > 0) ? (w2 - w1) : 0;
+  const totalWithTip = (netWeight * price) + tip;
+  const cashSales = Number(row.cashSales) || 0;
+  const transferSales = Number(row.transferSales) || 0;
+  const creditSales = Number(row.creditSales) || 0;
+  const debtCash = Number(row.debtCash) || 0;
+  const debtTransfer = Number(row.debtTransfer) || 0;
+  const prevCash = Number(row.prevCash) || 0;
+  const prevTransfer = Number(row.prevTransfer) || 0;
+  return Boolean(
+    w1 === 0 &&
+    w2 === 0 &&
+    totalWithTip === 0 &&
+    cashSales === 0 &&
+    transferSales === 0 &&
+    creditSales === 0 &&
+    (debtCash > 0 || debtTransfer > 0 || prevCash > 0 || prevTransfer > 0)
+  );
+}
+
 function sortSalesListByScaleNo(list) {
   if (!Array.isArray(list)) return [];
   return [...list].sort((a, b) => {
-    const sa = Number(a && a.scaleNo) || 0;
-    const sb = Number(b && b.scaleNo) || 0;
+    const aDebtOnly = isRecordDebtOnlyVoucher(a);
+    const bDebtOnly = isRecordDebtOnlyVoucher(b);
+    // وضع حركات (سند تحصيل مديونية فقط - بدون ميزان) دائماً في آخر الجدول بعد حركات الميزان
+    if (aDebtOnly !== bDebtOnly) {
+      return aDebtOnly ? 1 : -1;
+    }
+    const sa = Number(a && (aDebtOnly ? (a.voucherNo || a.scaleNo) : a.scaleNo)) || 0;
+    const sb = Number(b && (bDebtOnly ? (b.voucherNo || b.scaleNo) : b.scaleNo)) || 0;
     if (sa > 0 && sb > 0 && sa !== sb) return sa - sb;
     return 0;
   });
@@ -277,6 +312,7 @@ function areSalesRowsDuplicate(a, b, ignoreDifferentUUIDs = false) {
     // إذا كان كلا السجلين يحملان معرّفين مختلفين، لا نعتبرهما مكررين أبداً أثناء المزامنة العادية حتى لا يبتلع سجلٌ قديمٌ سجلاً معدلاً
     if (!ignoreDifferentUUIDs) return false;
   }
+  if (isRecordDebtOnlyVoucher(a) !== isRecordDebtOnlyVoucher(b)) return false;
   if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
   if (!isSameMerchantIdentity(a.merchant, b.merchant)) return false;
 
@@ -371,6 +407,7 @@ function deduplicateDayRecords(dayObj, deletedIds) {
     const pid = item.id !== undefined ? String(item.id) : '';
     if (pid && delPendSet.has(pid)) return;
     const alreadyCompleted = dayObj.sales.some(s =>
+      !isRecordDebtOnlyVoucher(s) &&
       String(s.merchant || '').trim() === String(item.merchant || '').trim() &&
       ((Number(s.scaleNo) > 0 && Number(s.scaleNo) === Number(item.scaleNo)) ||
        (String(s.carNo || '').trim() === String(item.carNo || '').trim() && Number(s.w1) === Number(item.w1)))
@@ -1126,6 +1163,7 @@ function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '�
   appState.defaultPrice = 0;
   appState.defaultTip = 0;
   appState.lastScaleNo = 0;
+  appState.lastVoucherNo = 0;
   appState.farmResetAt = nowTs;
   appState.lastBulkImportAt = 0;
   appState.hasLocalEdits = true;
@@ -1190,6 +1228,7 @@ function clearAllSiteMovementsAndArchiveKeepMerchants(customMsg = '', customIcon
   appState.defaultPrice = 0;
   appState.defaultTip = 0;
   appState.lastScaleNo = 0;
+  appState.lastVoucherNo = 0;
   appState.farmResetAt = nowTs;
   appState.lastBulkImportAt = 0;
   appState.farmsArchive = {};
@@ -1292,6 +1331,7 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
   appState.defaultPrice = 0;
   appState.defaultTip = 0;
   appState.lastScaleNo = 0;
+  appState.lastVoucherNo = 0;
   appState.farmResetAt = nowTs;
   appState.factoryZeroWipeAt = nowTs;
   appState.lastBulkImportAt = 0;
@@ -1395,6 +1435,7 @@ function getNextSequentialScaleNo() {
   const curPending = curDayObj.pendingSales || [];
   let maxScale = 0;
   curSales.forEach(r => {
+    if (isRecordDebtOnlyVoucher(r)) return;
     const sn = Number(r.scaleNo) || 0;
     if (sn > maxScale) maxScale = sn;
   });
@@ -1408,6 +1449,7 @@ function getNextSequentialScaleNo() {
     const dSales = dObj.sales || [];
     const dPending = dObj.pendingSales || [];
     dSales.forEach(r => {
+      if (isRecordDebtOnlyVoucher(r)) return;
       const sn = Number(r.scaleNo) || 0;
       if (sn > maxScale) maxScale = sn;
     });
@@ -1420,6 +1462,29 @@ function getNextSequentialScaleNo() {
   return (Number(appState.lastScaleNo) || 0) + 1;
 }
 
+function getNextSequentialVoucherNo() {
+  const curDayObj = (appState.days && appState.days[appState.currentDay]) || {};
+  const curSales = curDayObj.sales || [];
+  let maxVoucher = 0;
+  curSales.forEach(r => {
+    if (!isRecordDebtOnlyVoucher(r)) return;
+    const vn = Number(r.voucherNo || r.scaleNo) || 0;
+    if (vn > maxVoucher) maxVoucher = vn;
+  });
+  if (maxVoucher > 0) return maxVoucher + 1;
+  for (let d = appState.currentDay - 1; d >= 1; d--) {
+    const dObj = (appState.days && appState.days[d]) || {};
+    const dSales = dObj.sales || [];
+    dSales.forEach(r => {
+      if (!isRecordDebtOnlyVoucher(r)) return;
+      const vn = Number(r.voucherNo || r.scaleNo) || 0;
+      if (vn > maxVoucher) maxVoucher = vn;
+    });
+    if (maxVoucher > 0) return maxVoucher + 1;
+  }
+  return (Number(appState.lastVoucherNo) || 0) + 1;
+}
+
 function applyStickySaleDefaults() {
   const editId = document.getElementById('editSaleId') ? document.getElementById('editSaleId').value : '';
   if (editId || activeRecalledPendingId) return;
@@ -1430,7 +1495,11 @@ function applyStickySaleDefaults() {
   const dt = Number(appState.defaultTip) || 0;
   if (elPrice) elPrice.value = dp > 0 ? fmtMoney(dp) : '';
   if (elTip) elTip.value = dt > 0 ? fmtMoney(dt) : '';
-  if (elScale) elScale.value = getNextSequentialScaleNo();
+  if (elScale) {
+    elScale.value = (typeof isDebtCollectionOnlyMode === 'function' && isDebtCollectionOnlyMode())
+      ? getNextSequentialVoucherNo()
+      : getNextSequentialScaleNo();
+  }
 }
 
 function computeMerchantCurrentDebtExcluding(merchantCode, excludeSaleId = '') {
@@ -3105,9 +3174,11 @@ function computeSaleRow(row) {
     (debtCash > 0 || debtTransfer > 0 || prevCash > 0 || prevTransfer > 0 || row.entryMode === 'debt_only')
   );
 
+  const voucherNo = isDebtCollectionOnly ? (Number(row.voucherNo || row.scaleNo) || 0) : 0;
   return {
     ...row,
     code,
+    voucherNo,
     isDebtCollectionOnly,
     w1,
     w2,
@@ -3520,11 +3591,14 @@ function renderDailyView() {
           : `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-edit-sale="${safeId}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
              <button type="button" data-del-sale="${safeId}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`);
 
+      const scaleOrVoucherCellHtml = r.isDebtCollectionOnly
+        ? `سند #${escXmlStr(r.voucherNo || r.scaleNo || '-')}${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}`
+        : `${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}`;
       tr.innerHTML = `
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
         <td class="p-2 border text-center font-extrabold text-blue-900">${r.code || '-'}</td>
         <td class="p-2 border font-extrabold text-slate-900">${merchantCellHtml}</td>
-        <td class="p-2 border text-center text-[11px] font-extrabold ${r.isPending ? 'text-amber-900 bg-amber-100/60' : ''}">${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}</td>
+        <td class="p-2 border text-center text-[11px] font-extrabold ${r.isPending ? 'text-amber-900 bg-amber-100/60' : (r.isDebtCollectionOnly ? 'text-teal-900 bg-teal-50/70' : '')}">${scaleOrVoucherCellHtml}</td>
         <td class="p-2 border text-left font-bold">${fmtInt(r.w1)}</td>
         <td class="p-2 border text-left">${w2CellHtml}</td>
         <td class="p-2 border text-left font-extrabold bg-blue-50/50 text-blue-950">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
@@ -5804,7 +5878,7 @@ function renderScaleReceiptPrintView(saleId, dayNumInput) {
             ${statusBadgeTxt}
           </span>
           <span style="padding:1.5px 8px; border-radius:4px; background:#1b365d; color:#ffffff; font-size:10px; font-weight:800;">
-            بون #${escXmlStr(r.scaleNo || '-')}
+            ${r.isDebtCollectionOnly ? 'سند' : 'بون'} #${escXmlStr((r.isDebtCollectionOnly ? (r.voucherNo || r.scaleNo) : r.scaleNo) || '-')}
           </span>
         </div>
       </div>
@@ -5949,7 +6023,7 @@ function renderOfficialDaySettlementReportPrintView(dayNumInput) {
         <td style="text-align:center; font-weight:800;">${idx + 1}</td>
         <td style="text-align:center; font-weight:800; color:#1e3a8a;">${r.code || '-'}</td>
         <td style="text-align:right; font-weight:800;">${escXmlStr(r.merchant)}${r.isPending ? ' (وزنة 1)' : ''}</td>
-        <td style="text-align:center; font-weight:700;">${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}</td>
+        <td style="text-align:center; font-weight:700;">${r.isDebtCollectionOnly ? `سند #${escXmlStr(r.voucherNo || r.scaleNo || '-')}${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}` : `${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}`}</td>
         <td style="text-align:center; font-weight:700;">${fmtInt(r.w1)}</td>
         <td style="text-align:center; font-weight:700;">${r.isPending ? 'مؤقت' : fmtInt(r.w2)}</td>
         <td style="text-align:center; font-weight:800; background:#eff6ff;">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
@@ -7988,7 +8062,7 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
             <span class="w-6 h-6 rounded-full bg-slate-800 text-white text-[11px] font-extrabold inline-flex items-center justify-center">${idx + 1}</span>
             <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 text-[11px] font-extrabold">كود ${r.code || '-'}</span>
             <span class="font-extrabold text-sm text-slate-900">${safeMerchant}</span>
-            <span class="text-[11px] font-bold text-slate-600">(ميزان: <strong>${escXmlStr(r.scaleNo || '-')}</strong> | سيارة: <strong>${escXmlStr(r.carNo || '-')}</strong>)</span>
+            <span class="text-[11px] font-bold text-slate-600">${isDebtOnly ? `(سند رقم: <strong class="text-teal-900">#${escXmlStr(r.voucherNo || r.scaleNo || '-')}</strong>${r.carNo ? ` | سيارة: <strong>${escXmlStr(r.carNo)}</strong>` : ''})` : `(ميزان: <strong>${escXmlStr(r.scaleNo || '-')}</strong> | سيارة: <strong>${escXmlStr(r.carNo || '-')}</strong>)`}</span>
           </div>
           ${statusBadge}
         </div>
@@ -10072,7 +10146,8 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
     if (b) b.classList.toggle('hidden', isDebtOnly);
   });
 
-  // 5. Clear weight & current-day invoice fields when switching to Debt-Only Mode
+  // 5. Clear weight & current-day invoice fields when switching to Debt-Only Mode & set independent Voucher No
+  const editIdNow = document.getElementById('editSaleId') ? document.getElementById('editSaleId').value : '';
   if (isDebtOnly && clearWeightFields) {
     ['inpW1', 'inpW2', 'inpPrice', 'inpTip', 'inpCashSales', 'inpTransferSales', 'inpCreditSales'].forEach(fid => {
       const inp = document.getElementById(fid);
@@ -10082,6 +10157,10 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
     if (selTrS) selTrS.value = '';
     const wAlert = document.getElementById('weightValidationAlert');
     if (wAlert) wAlert.classList.add('hidden');
+    if (!editIdNow && !activeRecalledPendingId) {
+      const elScale = document.getElementById('inpScaleNo');
+      if (elScale) elScale.value = getNextSequentialVoucherNo();
+    }
   } else if (!isDebtOnly && clearWeightFields) {
     applyStickySaleDefaults();
   }
@@ -10591,7 +10670,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v63-ask-price-when-empty') {
+          if (k !== 'farm-sales-committee-v64-independent-voucher-seq-and-bottom-sort') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -12834,7 +12913,10 @@ function initFarmSalesApp() {
     if (!Array.isArray(dayObj.pendingSales)) dayObj.pendingSales = [];
 
     let enteredScale = Number(document.getElementById('inpScaleNo').value) || getNextSequentialScaleNo();
-    const scaleConflict = [...(dayObj.sales || []), ...(dayObj.pendingSales || [])].find(x =>
+    const scaleConflict = [
+      ...(dayObj.sales || []).filter(x => !isRecordDebtOnlyVoucher(x)),
+      ...(dayObj.pendingSales || [])
+    ].find(x =>
       x.id !== activeRecalledPendingId && Number(x.scaleNo) > 0 && Number(x.scaleNo) === enteredScale
     );
     if (scaleConflict) {
@@ -12981,19 +13063,41 @@ function initFarmSalesApp() {
         return;
       }
     }
-    const enteredScale = Number(document.getElementById('inpScaleNo').value) || getNextSequentialScaleNo();
-    const scaleConflict = [...(daySales || []), ...(dayObj.pendingSales || [])].find(x => {
-      if (editId && x.id === editId) return false;
-      if (activeRecalledPendingId && x.id === activeRecalledPendingId) return false;
-      if (String(x.merchant || '').trim() === mName && Number(x.scaleNo) === enteredScale) return false;
-      return Number(x.scaleNo) > 0 && Number(x.scaleNo) === enteredScale;
-    });
-    if (scaleConflict) {
-      const nextFree = getNextSequentialScaleNo();
-      showToast(`⚠️ مسلسل الميزان (${enteredScale}) محجوز بالفعل للتاجر (${scaleConflict.merchant})! تم وضع المسلسل المتاح (${nextFree}).`, '⚠️');
-      document.getElementById('inpScaleNo').value = nextFree;
-      document.getElementById('inpScaleNo').focus();
-      return;
+    const enteredScale = Number(document.getElementById('inpScaleNo').value) ||
+      (isStandaloneDebtVoucher ? getNextSequentialVoucherNo() : getNextSequentialScaleNo());
+
+    if (isStandaloneDebtVoucher) {
+      const voucherConflict = (daySales || []).find(x => {
+        if (editId && x.id === editId) return false;
+        if (!isRecordDebtOnlyVoucher(x)) return false;
+        const xNum = Number(x.voucherNo || x.scaleNo) || 0;
+        if (String(x.merchant || '').trim() === mName && xNum === enteredScale) return false;
+        return xNum > 0 && xNum === enteredScale;
+      });
+      if (voucherConflict) {
+        const nextFreeV = getNextSequentialVoucherNo();
+        showToast(`⚠️ رقم السند (${enteredScale}) محجوز بالفعل للتاجر (${voucherConflict.merchant})! تم وضع رقم السند المتاح (${nextFreeV}).`, '⚠️');
+        document.getElementById('inpScaleNo').value = nextFreeV;
+        document.getElementById('inpScaleNo').focus();
+        return;
+      }
+    } else {
+      const scaleConflict = [
+        ...(daySales || []).filter(x => !isRecordDebtOnlyVoucher(x)),
+        ...(dayObj.pendingSales || [])
+      ].find(x => {
+        if (editId && x.id === editId) return false;
+        if (activeRecalledPendingId && x.id === activeRecalledPendingId) return false;
+        if (String(x.merchant || '').trim() === mName && Number(x.scaleNo) === enteredScale) return false;
+        return Number(x.scaleNo) > 0 && Number(x.scaleNo) === enteredScale;
+      });
+      if (scaleConflict) {
+        const nextFree = getNextSequentialScaleNo();
+        showToast(`⚠️ مسلسل الميزان (${enteredScale}) محجوز بالفعل للتاجر (${scaleConflict.merchant})! تم وضع المسلسل المتاح (${nextFree}).`, '⚠️');
+        document.getElementById('inpScaleNo').value = nextFree;
+        document.getElementById('inpScaleNo').focus();
+        return;
+      }
     }
 
     const enteredPrice = isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpPrice').value) || 0);
@@ -13003,14 +13107,18 @@ function initFarmSalesApp() {
     }
     const enteredTip = isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpTip').value) || 0);
 
-    if (!isStandaloneDebtVoucher && enteredPrice > 0) {
-      appState.defaultPrice = enteredPrice;
-      appState.defaultTip = enteredTip;
+    if (isStandaloneDebtVoucher) {
+      appState.lastVoucherNo = Math.max(Number(appState.lastVoucherNo) || 0, enteredScale);
+    } else {
+      if (enteredPrice > 0) {
+        appState.defaultPrice = enteredPrice;
+        appState.defaultTip = enteredTip;
+      }
+      appState.lastScaleNo = Math.max(Number(appState.lastScaleNo) || 0, enteredScale);
     }
-    appState.lastScaleNo = Math.max(Number(appState.lastScaleNo) || 0, enteredScale);
 
     const existingSaleForAudit = editId ? daySales.find(x => x.id === editId) : null;
-    const recalledPendForAudit = !existingSaleForAudit && Array.isArray(dayObj.pendingSales)
+    const recalledPendForAudit = (!isStandaloneDebtVoucher && !existingSaleForAudit && Array.isArray(dayObj.pendingSales))
       ? dayObj.pendingSales.find(pItem =>
           (activeRecalledPendingId && pItem.id === activeRecalledPendingId) ||
           (String(pItem.merchant || '').trim() === mName && Number(pItem.scaleNo) > 0 && Number(pItem.scaleNo) === enteredScale)
@@ -13020,6 +13128,7 @@ function initFarmSalesApp() {
       entryMode: isStandaloneDebtVoucher ? 'debt_only' : 'sale',
       merchant: mName,
       scaleNo: enteredScale,
+      voucherNo: isStandaloneDebtVoucher ? enteredScale : 0,
       carNo: Number(document.getElementById('inpCarNo').value) || '',
       w1: isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpW1').value) || 0),
       w2: isStandaloneDebtVoucher ? 0 : (parseNum(document.getElementById('inpW2').value) || 0),
@@ -13081,7 +13190,11 @@ function initFarmSalesApp() {
       const idx = daySales.findIndex(x => x.id === editId);
       if (idx !== -1) daySales[idx] = rowObj;
       dayObj.sales = sortSalesListByScaleNo(daySales);
-      showToast(`تم تحديث حركة التاجر (${mName}) مع حفظ ترتيبه بمسلسل ميزان (${enteredScale})`);
+      showToast(
+        isStandaloneDebtVoucher
+          ? `تم تحديث سند تحصيل مديونية التاجر (${mName}) برقم سند (${enteredScale}) في آخر الجدول 💵`
+          : `تم تحديث حركة التاجر (${mName}) مع حفظ ترتيبه بمسلسل ميزان (${enteredScale})`
+      );
     } else {
       if (daySales.length >= 45) {
         showToast('وصلت للحد الأقصى (45 حركة بيع في اليوم الواحد)', '⚠️');
@@ -13089,12 +13202,16 @@ function initFarmSalesApp() {
       }
       daySales.push(rowObj);
       dayObj.sales = sortSalesListByScaleNo(daySales);
-      showToast(`تم تسجيل حركة (${mName}) في ترتيبها المحجوز بمسلسل ميزان (${enteredScale})`);
+      showToast(
+        isStandaloneDebtVoucher
+          ? `تم تسجيل سند تحصيل مديونية للتاجر (${mName}) برقم سند مستقل (${enteredScale}) ووضعه في آخر الجدول 💵`
+          : `تم تسجيل حركة (${mName}) في ترتيبها المحجوز بمسلسل ميزان (${enteredScale})`
+      );
     }
 
-    // إزالة السيارة تلقائياً من قائمة (سيارات محفوظة مؤقتاً - وزنة أولى) فور إتمام الوزنة الثانية والحفظ النهائي!
+    // إزالة السيارة تلقائياً من قائمة (سيارات محفوظة مؤقتاً - وزنة أولى) فور إتمام الوزنة الثانية والحفظ النهائي (لحركات الميزان فقط)!
     const curDayObj = appState.days[appState.currentDay];
-    if (curDayObj && Array.isArray(curDayObj.pendingSales) && curDayObj.pendingSales.length > 0) {
+    if (!isStandaloneDebtVoucher && curDayObj && Array.isArray(curDayObj.pendingSales) && curDayObj.pendingSales.length > 0) {
       curDayObj.pendingSales = curDayObj.pendingSales.filter(pItem => {
         const isRecalled = Boolean(activeRecalledPendingId && pItem.id === activeRecalledPendingId);
         const matchSameCarAndW1 = String(pItem.merchant || '').trim() === rowObj.merchant &&
@@ -13171,7 +13288,7 @@ function initFarmSalesApp() {
       setSaleEntryMode(compRow.isDebtCollectionOnly ? 'debt_only' : 'sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
       document.getElementById('editSaleId').value = row.id;
       document.getElementById('inpMerchantName').value = row.merchant;
-      document.getElementById('inpScaleNo').value = row.scaleNo || '';
+      document.getElementById('inpScaleNo').value = (compRow.isDebtCollectionOnly ? (row.voucherNo || row.scaleNo) : row.scaleNo) || '';
       document.getElementById('inpCarNo').value = row.carNo || '';
       document.getElementById('inpW1').value = row.w1 ? fmtMoney(row.w1) : '';
       document.getElementById('inpW2').value = row.w2 ? fmtMoney(row.w2) : '';
