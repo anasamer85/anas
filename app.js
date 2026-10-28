@@ -600,14 +600,17 @@ function unifyGlobalMerchantsRegistry() {
       if (!dayObj) continue;
       [...(dayObj.sales || []), ...(dayObj.pendingSales || [])].forEach(row => {
         if (!row || !row.merchant) return;
-        const baseName = cleanMerchantBaseName(row.merchant);
+        const baseName = cleanMerchantBaseName(row.merchant) || String(row.merchant).trim();
         if (!baseName) return;
         const existingCode = resolveMerchantCode(baseName);
         if (existingCode <= 0) {
           const nextCode = appState.merchants.length > 0
             ? Math.max(100, ...appState.merchants.map(m => Number(m.code) || 100)) + 1
             : 101;
-          appState.merchants.push({ code: nextCode, name: baseName });
+          unrecordDeletedItem('merchants', nextCode);
+          delSet.delete(Number(nextCode));
+          const safeTs = Math.max(getSyncedNow() + 1000, (Number(appState.factoryZeroWipeAt) || 0) + 1000);
+          appState.merchants.push({ code: nextCode, name: baseName, updatedAt: safeTs });
         }
       });
     }
@@ -618,6 +621,18 @@ function unifyGlobalMerchantsRegistry() {
       if (fObj && fObj.days) scanDaysForMissingMerchants(fObj.days);
     });
   }
+
+  // أي تاجر أُضيف بطابع زمني أحدث من التصفير الجذري أو الحذف يُرفع من قائمة الحذف تلقائياً
+  appState.merchants.forEach(m => {
+    if (!m || !m.code) return;
+    const cNum = Number(m.code);
+    const mTs = Number(m.updatedAt) || 0;
+    const delTs = Number(appState.deletedTimestamps && appState.deletedTimestamps.merchants && appState.deletedTimestamps.merchants[String(cNum)]) || 0;
+    if (mTs > 0 && (mTs >= delTs || mTs > Number(appState.factoryZeroWipeAt || 0))) {
+      unrecordDeletedItem('merchants', cNum);
+      delSet.delete(cNum);
+    }
+  });
 
   appState.merchants = appState.merchants
     .filter(m => m && m.code && m.name && !delSet.has(Number(m.code)))
@@ -2100,7 +2115,7 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
     if (inL && !inC) {
       const cM = (cloudData.merchants || []).find(m => m && Number(m.code) === codeNum);
       const cMTs = Math.max(Number(cM && cM.updatedAt) || 0, cloudBulkTs);
-      if (cM && ((lDelTs > 0 && cMTs > lDelTs) || (lDelTs === 0 && cloudBulkTs > 0))) {
+      if (cM && ((lDelTs > 0 && cMTs >= lDelTs) || (lDelTs === 0 && (cMTs > 0 || cloudBulkTs > 0)))) {
         delete mergedDeletedTimestamps.merchants[idStr];
         return false;
       }
@@ -2108,8 +2123,37 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
     if (inC && !inL) {
       const lM = (localState.merchants || []).find(m => m && Number(m.code) === codeNum);
       const lMTs = Math.max(Number(lM && lM.updatedAt) || 0, localBulkTs);
-      if (lM && ((cDelTs > 0 && lMTs > cDelTs) || (cDelTs === 0 && localBulkTs > 0))) {
+      if (lM && ((cDelTs > 0 && lMTs >= cDelTs) || (cDelTs === 0 && (lMTs > 0 || localBulkTs > 0)))) {
         delete mergedDeletedTimestamps.merchants[idStr];
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // تطهير شواهد قبور المزارع (farms) إذا أُعيد إنشاء المزرعة محلياً أو في السحابة بعد التصفير
+  const localFarmDelSet = new Set(localDel.farms.map(String));
+  const cloudFarmDelSet = new Set(cloudDel.farms.map(String));
+  mergedDeletedIds.farms = (mergedDeletedIds.farms || []).filter(rawFName => {
+    const fnStr = String(rawFName || '').trim();
+    if (!fnStr) return false;
+    const inL = localFarmDelSet.has(fnStr);
+    const inC = cloudFarmDelSet.has(fnStr);
+    const lDelTs = Number(localDelTsMap.farms && localDelTsMap.farms[fnStr]) || 0;
+    const cDelTs = Number(cloudDelTsMap.farms && cloudDelTsMap.farms[fnStr]) || 0;
+    if (inC && !inL) {
+      const existsLocally = (String(localState.farmName || '').trim() === fnStr) || Boolean(localState.farmsArchive && localState.farmsArchive[fnStr]);
+      const lFarmTs = Math.max(Number(localState.lastFarmSwitchAt) || 0, localBulkTs);
+      if (existsLocally && (cDelTs === 0 || lFarmTs >= cDelTs || Boolean(localState.hasLocalEdits))) {
+        delete mergedDeletedTimestamps.farms[fnStr];
+        return false;
+      }
+    }
+    if (inL && !inC) {
+      const existsInCloud = (String(cloudData.farmName || '').trim() === fnStr) || Boolean(cloudData.farmsArchive && cloudData.farmsArchive[fnStr]);
+      const cFarmTs = Math.max(Number(cloudData.lastFarmSwitchAt) || 0, cloudBulkTs);
+      if (existsInCloud && ((lDelTs > 0 && cFarmTs > lDelTs) || (lDelTs === 0 && cFarmTs > 0))) {
+        delete mergedDeletedTimestamps.farms[fnStr];
         return false;
       }
     }
@@ -2931,17 +2975,51 @@ function resolveMerchantCode(rawName) {
 }
 
 function ensureMerchantExists(rawName, explicitCode = null) {
-  const code = resolveMerchantCode(rawName);
-  if (code > 0) return code;
-  const base = cleanMerchantBaseName(rawName) || String(rawName).trim();
+  const cleanedInput = String(rawName || '').replace(/\s+/g, ' ').trim();
+  if (!cleanedInput) return 0;
+
+  const code = resolveMerchantCode(cleanedInput);
+  if (code > 0) {
+    unrecordDeletedItem('merchants', code);
+    return code;
+  }
+
+  const base = cleanMerchantBaseName(cleanedInput) || cleanedInput;
   if (!base) return 0;
+
+  if (!Array.isArray(appState.merchants)) appState.merchants = [];
+
   const nextCode = explicitCode && Number(explicitCode) >= 100
     ? Number(explicitCode)
-    : (appState.merchants.length > 0 ? Math.max(...appState.merchants.map(m => m.code)) + 1 : 101);
-  if (!appState.merchants.some(m => m.code === nextCode)) {
-    appState.merchants.push({ code: nextCode, name: base, updatedAt: getSyncedNow() });
-  }
+    : (appState.merchants.length > 0
+        ? Math.max(100, ...appState.merchants.map(m => Number(m.code) || 100)) + 1
+        : 101);
+
+  const prevDelTs = Number(appState.deletedTimestamps && appState.deletedTimestamps.merchants && appState.deletedTimestamps.merchants[String(nextCode)]) || 0;
   unrecordDeletedItem('merchants', nextCode);
+
+  const nowTs = Math.max(
+    getSyncedNow() + 1000,
+    prevDelTs + 1000,
+    (Number(appState.factoryZeroWipeAt) || 0) + 1000,
+    (Number(appState.farmResetAt) || 0) + 1000
+  );
+
+  const existingIdx = appState.merchants.findIndex(m => m && Number(m.code) === nextCode);
+  if (existingIdx === -1) {
+    appState.merchants.push({ code: nextCode, name: base, updatedAt: nowTs });
+  } else {
+    appState.merchants[existingIdx].name = base;
+    appState.merchants[existingIdx].updatedAt = nowTs;
+  }
+
+  appState.merchants.sort((a, b) => Number(a.code) - Number(b.code));
+
+  const fName = String(appState.farmName || '').trim();
+  if (fName && appState.farmsArchive && appState.farmsArchive[fName]) {
+    appState.farmsArchive[fName].merchants = JSON.parse(JSON.stringify(appState.merchants));
+  }
+
   return nextCode;
 }
 
@@ -8245,7 +8323,24 @@ function restoreFullJsonBackupFromText(rawText, sourceFileName = '') {
 // =========================================================================
 // SMART ACTIVE-TAB RENDERING ENGINE (قصر إعادة الرسم على التبويب النشط لتسريع الاستجابة > 70%)
 // =========================================================================
+function checkAndEnforceNewFarmCreationModal() {
+  const overlay = document.getElementById('forceCreateFarmOverlay');
+  if (!overlay) return;
+  const hasActiveFarm = Boolean(String(appState.farmName ?? '').trim());
+  const shouldForceCreate = Boolean(appState.isLoggedIn && !hasActiveFarm);
+  overlay.classList.toggle('hidden', !shouldForceCreate);
+  if (shouldForceCreate) {
+    const inp = document.getElementById('inpForceNewFarmName');
+    if (inp && document.activeElement !== inp) {
+      setTimeout(() => {
+        try { inp.focus(); } catch (e) {}
+      }, 80);
+    }
+  }
+}
+
 function renderAll(forceAllTabs = false, preserveInputs = false) {
+  checkAndEnforceNewFarmCreationModal();
   updateConnectionAndSyncUI();
   updateTopCloudFarmDropdownUI();
   const activeTab = appState.activeTab || 'daily';
@@ -10465,7 +10560,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v61-single-merchant-name-per-code') {
+          if (k !== 'farm-sales-committee-v62-force-farm-and-merchant-fix') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -13169,14 +13264,79 @@ function initFarmSalesApp() {
       document.getElementById('btnSubmitMerchantForm').textContent = '➕ تكويد تاجر جديد';
       document.getElementById('btnCancelMerchantEdit').classList.add('hidden');
     } else {
+      if (excelTableState && excelTableState.merch) {
+        excelTableState.merch.searchQuery = '';
+        excelTableState.merch.colFilters = {};
+      }
+      const inpSearchM = document.getElementById('inpMerchQuickSearch');
+      if (inpSearchM) inpSearchM.value = '';
       const code = ensureMerchantExists(name);
       appState.merchantsViewFilter = 'all';
-      showToast(`تم تكويد التاجر (${name}) بالكود الموحد (${code}) وعرض الدليل الكامل`);
+      showToast(`✅ تم تكويد التاجر (${name}) بالكود الموحد (${code}) وإدراجه في الدليل وقائمة الاقتراحات`);
     }
     document.getElementById('inpNewMerchantBase').value = '';
     saveState(true);
-    renderAll();
+    renderAll(true);
   });
+
+  // Mandatory New Farm Creation Modal Submit Handler (إجبار إنشاء مزرعة جديدة بعد التصفير الجذري الشامل)
+  const forceFarmForm = document.getElementById('forceCreateFarmForm');
+  if (forceFarmForm) {
+    forceFarmForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const inp = document.getElementById('inpForceNewFarmName');
+      const newName = (inp ? inp.value : '').trim();
+      if (!newName) {
+        showToast('⚠️ يرجى كتابة اسم المزرعة الجديدة أولاً!', '⚠️');
+        if (inp) inp.focus();
+        return;
+      }
+      const nowCreateTs = Math.max(getSyncedNow() + 1000, (Number(appState.factoryZeroWipeAt) || 0) + 1000);
+      const emptyDays = {};
+      for (let d = 1; d <= 10; d++) {
+        emptyDays[d] = {
+          dayNumber: d,
+          dateLabel: `اليوم ${d}`,
+          sales: [],
+          pendingSales: [],
+          expenses: [],
+          deliveredCash: 0,
+          carriedForwardCash: 0,
+          isLocked: false,
+          lockedBy: '',
+          lockedAtTxt: '',
+          lockUpdatedAt: 0
+        };
+      }
+      appState.farmName = newName;
+      appState.lastFarmSwitchAt = nowCreateTs;
+      appState.farmResetAt = 0;
+      appState.currentDay = 1;
+      appState.visibleDays = [1];
+      appState.days = emptyDays;
+      unrecordDeletedItem('farms', newName);
+      if (!appState.farmsArchive || typeof appState.farmsArchive !== 'object') {
+        appState.farmsArchive = {};
+      }
+      appState.farmsArchive[newName] = {
+        farmName: newName,
+        updatedAt: new Date(nowCreateTs).toISOString(),
+        farmResetAt: 0,
+        lastBulkImportAt: 0,
+        visibleDays: [1],
+        defaultPrice: 0,
+        defaultTip: 0,
+        lastScaleNo: 0,
+        merchants: JSON.parse(JSON.stringify(appState.merchants || [])),
+        days: emptyDays
+      };
+      if (inp) inp.value = '';
+      checkAndEnforceNewFarmCreationModal();
+      saveState(true, true);
+      renderAll(true);
+      showToast(`✅ تم إنشاء وفتح مزرعة (${newName}) بنجاح — يمكنك الآن تكويد التجار وتسجيل حركات البيع!`, '🏡');
+    });
+  }
 
   const btnFilterActEl = document.getElementById('btnFilterMerchActive');
   if (btnFilterActEl) {
