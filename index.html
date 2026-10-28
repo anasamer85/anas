@@ -22,10 +22,10 @@
   <meta id="metaEmbeddedDefaultFarmName" name="default-farm-name" content="" />
   <script id="embeddedWebhookConfigScript">
     // رابط المزامنة السحابية واسم المزرعة المدمج في ملف index.html ليسمع تلقائياً في جميع الأجهزة على GitHub Pages
-    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
+    window.EMBEDDED_CLOUD_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwtA_sPCKcU6kMpugyAumbleZfAHLuLkILSZRi3oSBqHUSD8amlPEoW-dj0iHcqYKM/exec';
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=69" />
+  <link rel="stylesheet" href="./style.css?v=68" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -148,8 +148,8 @@
   <!-- INITIAL LOGIN GATEWAY OVERLAY (واجهة تسجيل الدخول عند فتح الموقع)         -->
   <!-- ======================================================================= -->
   <div id="loginGatewayOverlay" class="fixed inset-0 z-50 navy-gradient flex items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-white text-slate-900 rounded-3xl shadow-2xl border-4 border-amber-400 max-w-md w-full p-6 space-y-4 text-right my-auto">
-      <div class="text-center space-y-1.5 border-b border-slate-200 pb-3.5">
+    <div class="bg-white text-slate-900 rounded-3xl shadow-2xl border-4 border-amber-400 max-w-md w-full p-6 space-y-5 text-right">
+      <div class="text-center space-y-1.5 border-b border-slate-200 pb-4">
         <div class="inline-flex items-center justify-center px-4 py-1.5 rounded-2xl gold-badge font-extrabold text-base shadow">
           🏡 نظام محاضر لجان بيع المزارع
         </div>
@@ -172,34 +172,6 @@
             class="w-full px-3.5 py-2.5 text-sm font-bold border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-700" />
         </div>
 
-        <!-- Optional Cloud Link on Login Screen for New Devices -->
-        <div class="pt-1 border-t border-slate-200/80">
-          <button type="button" id="btnToggleLoginCloudBox" class="w-full py-1.5 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 text-xs font-extrabold transition flex items-center justify-between">
-            <span class="flex items-center gap-1.5">
-              <span>☁️</span>
-              <span>دخول من جهاز جديد؟ ربط السحابة (اختياري)</span>
-            </span>
-            <span id="iconToggleLoginCloudBox" class="text-[11px]">▾</span>
-          </button>
-          <div id="loginCloudLinkCollapseBox" class="hidden mt-2 p-3 rounded-2xl bg-sky-50/70 border-2 border-sky-300 space-y-2">
-            <label for="inpLoginCloudWebhookUrl" class="block text-[11px] font-extrabold text-sky-950">
-              🔗 رابط السحابة (Google Apps Script / Firebase URL):
-            </label>
-            <input id="inpLoginCloudWebhookUrl" type="url" dir="ltr" autocomplete="off"
-              placeholder="https://script.google.com/macros/s/.../exec"
-              class="w-full px-3 py-2 text-xs font-bold border border-sky-400 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-600" />
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-[10px] font-bold text-slate-600 leading-tight">
-                يُحفظ الرابط تلقائياً ويسحب حسابات المستخدمين والمزرعة النشطة فور تسجيل الدخول.
-              </span>
-              <button type="button" id="btnLoginPullCloudNow" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-600 text-white text-[11px] font-extrabold shadow-sm transition">
-                ☁️⬇️ فحص وجلب
-              </button>
-            </div>
-            <div id="loginCloudSyncStatusMsg" class="hidden p-2 rounded-lg text-[11px] font-extrabold text-center"></div>
-          </div>
-        </div>
-
         <div id="loginErrorMsg" class="hidden p-2.5 rounded-xl bg-rose-100 border border-rose-400 text-rose-900 text-xs font-extrabold text-center">
           ❌ اسم المستخدم أو كلمة المرور غير صحيحة! يرجى التأكد والمحاولة مرة أخرى.
         </div>
@@ -213,77 +185,35 @@
   </div>
 
   <!-- ======================================================================= -->
-  <!-- STARTUP SETUP OVERLAY: CLOUD LINK OR NEW FARM CREATION (شاشة البداية)      -->
+  <!-- MANDATORY NEW FARM CREATION OVERLAY (إجبار إنشاء مزرعة بعد التصفير الجذري) -->
   <!-- ======================================================================= -->
-  <div id="forceCreateFarmOverlay" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-    <div class="bg-white text-slate-900 rounded-3xl shadow-2xl border-4 border-amber-400 max-w-lg w-full p-5 sm:p-6 space-y-4 text-right my-auto">
-      <div class="text-center space-y-1 border-b border-slate-200 pb-3">
-        <div class="inline-flex items-center justify-center px-3.5 py-1 rounded-2xl bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow">
-          🚀 إعداد البداية للمتصفح / الجهاز الجديد
+  <div id="forceCreateFarmOverlay" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white text-slate-900 rounded-3xl shadow-2xl border-4 border-amber-400 max-w-md w-full p-6 space-y-5 text-right">
+      <div class="text-center space-y-1.5 border-b border-slate-200 pb-4">
+        <div class="inline-flex items-center justify-center px-4 py-1.5 rounded-2xl bg-amber-400 text-slate-950 font-extrabold text-sm shadow">
+          ☢️ تم التصفير الجذري الشامل (0 بيانات)
         </div>
-        <h2 class="text-base sm:text-xl font-extrabold text-slate-900 pt-1">☁️ الربط بالسحابة أو 🏡 إنشاء مزرعة جديدة</h2>
-        <p class="text-[11px] sm:text-xs text-slate-600 font-bold leading-relaxed">
-          إذا كان لديك مزرعة محفوظة مسبقاً على السحابة، الصق رابط السحابة بالأسفل لاسترجاعها فوراً، أو أنشئ مزرعة جديدة للبدء.
+        <h2 class="text-lg md:text-xl font-extrabold text-slate-900 pt-1">🏡 إنشاء مزرعة / دورة جديدة للبدء</h2>
+        <p class="text-xs text-slate-600 font-bold leading-relaxed">
+          الموقع الآن جديد تماماً بدون أي مزرعة نشطة. يجب إنشاء مزرعة جديدة أولاً لتتمكن من تكويد التجار وتسجيل حركات البيع والميزان.
         </p>
       </div>
 
-      <!-- Option 1: Connect to Cloud & Pull Existing Farm (الخيار الأول: إدخال رابط السحابة) -->
-      <div class="p-3.5 sm:p-4 rounded-2xl bg-sky-50/90 border-2 border-sky-400 space-y-2.5 shadow-sm">
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-xs sm:text-sm font-extrabold text-sky-950 flex items-center gap-1.5">
-            <span>☁️</span>
-            <span>الخيار 1: لديك مزرعة على السحابة؟ (استرجاع ومزامنة)</span>
-          </span>
-          <span class="px-2 py-0.5 rounded-full bg-sky-200 text-sky-950 text-[10px] font-extrabold shrink-0">للأجهزة الجديدة</span>
-        </div>
-        <p class="text-[11px] font-bold text-slate-600 leading-normal">
-          الصق رابط السحابة (Google Apps Script Webhook URL) لسحب اسم المزرعة والتجار والحركات تلقائياً بدون إنشاء مزرعة جديدة:
-        </p>
+      <form id="forceCreateFarmForm" class="space-y-4">
         <div>
-          <input id="inpForceCloudWebhookUrl" type="url" dir="ltr" autocomplete="off"
-            placeholder="https://script.google.com/macros/s/.../exec"
-            class="w-full px-3 py-2 text-xs font-bold border-2 border-sky-500 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-600" />
-        </div>
-        <div id="forceCloudSyncStatusMsg" class="hidden p-2 rounded-xl text-xs font-extrabold text-center"></div>
-        <button type="button" id="btnForceSyncFromCloud" class="w-full py-2.5 px-4 rounded-xl bg-sky-700 hover:bg-sky-600 text-white font-extrabold text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2">
-          <span>☁️⬇️</span>
-          <span>ربط السحابة وسحب المزرعة والبيانات الآن</span>
-        </button>
-      </div>
-
-      <!-- Divider -->
-      <div class="relative flex py-0.5 items-center">
-        <div class="flex-grow border-t border-slate-300"></div>
-        <span class="flex-shrink mx-3 text-[11px] font-extrabold text-slate-500 bg-white px-2">أو البدء بمزرعة جديدة</span>
-        <div class="flex-grow border-t border-slate-300"></div>
-      </div>
-
-      <!-- Option 2: Create a Brand New Farm (الخيار الثاني: إنشاء مزرعة جديدة) -->
-      <form id="forceCreateFarmForm" class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50/70 border-2 border-emerald-400 space-y-3 shadow-sm">
-        <div class="flex items-center justify-between gap-2">
-          <label for="inpForceNewFarmName" class="block text-xs sm:text-sm font-extrabold text-emerald-950">
-            🏡 الخيار 2: إنشاء مزرعة / دورة جديدة للبدء:
+          <label for="inpForceNewFarmName" class="block text-xs font-extrabold text-slate-800 mb-1.5">
+            ✏️ اكتب اسم المزرعة / الدورة الجديدة (إجباري):
           </label>
-          <span class="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-950 text-[10px] font-extrabold shrink-0">دورة جديدة</span>
+          <input id="inpForceNewFarmName" type="text" required autocomplete="off"
+            placeholder="مثال: مزرعة 3 / دورة 1..."
+            class="w-full px-3.5 py-2.5 text-sm font-extrabold border-2 border-blue-800 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900" />
         </div>
-        <input id="inpForceNewFarmName" type="text" required autocomplete="off"
-          placeholder="اكتب اسم المزرعة الجديدة (مثال: مزرعة الصالحية / دورة 1)..."
-          class="w-full px-3.5 py-2 text-sm font-extrabold border-2 border-emerald-600 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900" />
 
-        <button type="submit" id="btnForceCreateFarmSubmit" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2">
+        <button type="submit" id="btnForceCreateFarmSubmit" class="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm shadow-lg transition flex items-center justify-center gap-2">
           <span>➕</span>
           <span>إنشاء المزرعة وفتح النظام الآن</span>
         </button>
       </form>
-
-      <!-- Option 3: Quick Restore from JSON / Excel Backup File -->
-      <div class="pt-1 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
-        <span class="text-[11px] font-bold text-slate-500">💡 لديك ملف نسخة احتياطية (.json) أو شيت إكسيل (.xlsx)؟</span>
-        <button type="button" id="btnForceRestoreBackupFile" class="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300 text-xs font-extrabold transition flex items-center gap-1">
-          <span>📂</span>
-          <span>استرجاع من ملف (.json / .xlsx)</span>
-        </button>
-      </div>
     </div>
   </div>
 
@@ -2794,7 +2724,7 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=69"></script>
-  <script src="./app.js?v=69"></script>
+  <script src="./excel-template.js?v=68"></script>
+  <script src="./app.js?v=68"></script>
 </body>
 </html>

@@ -8579,18 +8579,10 @@ function checkAndEnforceNewFarmCreationModal() {
   const shouldForceCreate = Boolean(appState.isLoggedIn && !hasActiveFarm && !isInitialCloudPullPending);
   overlay.classList.toggle('hidden', !shouldForceCreate);
   if (shouldForceCreate) {
-    const inpUrl = document.getElementById('inpForceCloudWebhookUrl');
-    const savedUrl = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
-    if (inpUrl && !inpUrl.value && savedUrl) {
-      inpUrl.value = savedUrl;
-    }
     const inp = document.getElementById('inpForceNewFarmName');
-    const activeEl = document.activeElement;
-    if (inp && activeEl !== inp && activeEl !== inpUrl) {
+    if (inp && document.activeElement !== inp) {
       setTimeout(() => {
-        try {
-          if (document.activeElement !== inpUrl) inp.focus();
-        } catch (e) {}
+        try { inp.focus(); } catch (e) {}
       }, 80);
     }
   }
@@ -11064,114 +11056,10 @@ function initFarmSalesApp() {
     });
   }
 
-  function applyCloudWebhookUrlFromStartScreen(rawUrl) {
-    const cleanUrl = String(rawUrl || '').trim();
-    if (!cleanUrl) return '';
-    appState.webhookUrl = cleanUrl;
-    window.EMBEDDED_CLOUD_WEBHOOK_URL = cleanUrl;
-    const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
-    if (liveMeta) liveMeta.setAttribute('content', cleanUrl);
-    const syncInpEl = document.getElementById('inpCloudWebhookUrl');
-    if (syncInpEl) {
-      syncInpEl.value = cleanUrl;
-      syncInpEl.setAttribute('value', cleanUrl);
-    }
-    const forceInpEl = document.getElementById('inpForceCloudWebhookUrl');
-    if (forceInpEl && forceInpEl.value !== cleanUrl) {
-      forceInpEl.value = cleanUrl;
-    }
-    const loginInpEl = document.getElementById('inpLoginCloudWebhookUrl');
-    if (loginInpEl && loginInpEl.value !== cleanUrl) {
-      loginInpEl.value = cleanUrl;
-    }
-    try { localStorage.setItem(STORAGE_KEY + '_webhook_url', cleanUrl); } catch (e) {}
-    return cleanUrl;
-  }
-
-  const btnToggleLoginCloud = document.getElementById('btnToggleLoginCloudBox');
-  const loginCloudBox = document.getElementById('loginCloudLinkCollapseBox');
-  const iconToggleLoginCloud = document.getElementById('iconToggleLoginCloudBox');
-  if (btnToggleLoginCloud && loginCloudBox) {
-    btnToggleLoginCloud.addEventListener('click', () => {
-      const isHidden = loginCloudBox.classList.toggle('hidden');
-      if (iconToggleLoginCloud) iconToggleLoginCloud.textContent = isHidden ? '▾' : '▴';
-      if (!isHidden) {
-        const inpLUrl = document.getElementById('inpLoginCloudWebhookUrl');
-        if (inpLUrl) {
-          if (!inpLUrl.value && (appState.webhookUrl || getEmbeddedWebhookUrl())) {
-            inpLUrl.value = appState.webhookUrl || getEmbeddedWebhookUrl();
-          }
-          setTimeout(() => { try { inpLUrl.focus(); } catch (e) {} }, 50);
-        }
-      }
-    });
-  }
-
-  const btnLoginPullCloud = document.getElementById('btnLoginPullCloudNow');
-  if (btnLoginPullCloud) {
-    btnLoginPullCloud.addEventListener('click', async () => {
-      const inpLUrl = document.getElementById('inpLoginCloudWebhookUrl');
-      const statusMsg = document.getElementById('loginCloudSyncStatusMsg');
-      const enteredUrl = (inpLUrl ? inpLUrl.value : '').trim();
-      if (!enteredUrl || !enteredUrl.startsWith('http')) {
-        if (statusMsg) {
-          statusMsg.textContent = '⚠️ يرجى لصق رابط سحابة صحيح يبدأ بـ https:// أولاً!';
-          statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-amber-100 text-amber-950 border border-amber-400';
-          statusMsg.classList.remove('hidden');
-        }
-        if (inpLUrl) inpLUrl.focus();
-        return;
-      }
-      const isFb = enteredUrl.includes('firebaseio.com') || enteredUrl.includes('firebasedatabase.app');
-      if (!isFb && enteredUrl.includes('script.google.com') && !enteredUrl.endsWith('/exec')) {
-        if (statusMsg) {
-          statusMsg.textContent = '❌ رابط Google Apps Script يجب أن ينتهي بـ /exec';
-          statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-rose-100 text-rose-900 border border-rose-400';
-          statusMsg.classList.remove('hidden');
-        }
-        return;
-      }
-      applyCloudWebhookUrlFromStartScreen(enteredUrl);
-      appState.hasLocalEdits = false;
-      appState.factoryZeroWipeAt = 0;
-      btnLoginPullCloud.disabled = true;
-      if (statusMsg) {
-        statusMsg.textContent = '⏳ جاري الاتصال بالسحابة وجلب الحسابات والمزرعة...';
-        statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-sky-100 text-sky-900 border border-sky-300';
-        statusMsg.classList.remove('hidden');
-      }
-      const pulled = await pullDatabaseFromCloud(true, true);
-      btnLoginPullCloud.disabled = false;
-      if (pulled && String(appState.farmName || '').trim()) {
-        if (statusMsg) {
-          statusMsg.textContent = `✅ تم ربط السحابة وجلب مزرعة (${appState.farmName}) بنجاح! يمكنك تسجيل الدخول الآن.`;
-          statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-emerald-100 text-emerald-950 border border-emerald-400';
-        }
-      } else {
-        if (statusMsg) {
-          statusMsg.textContent = '✅ تم حفظ الرابط! السحابة جاهزة — سجل الدخول الآن للبدء.';
-          statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-emerald-100 text-emerald-950 border border-emerald-400';
-        }
-      }
-    });
-  }
-
-  document.getElementById('gatewayLoginForm').addEventListener('submit', async (e) => {
+  document.getElementById('gatewayLoginForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const uName = (document.getElementById('inpLoginUsername').value || '').trim().toLowerCase();
     const uPass = (document.getElementById('inpLoginPassword').value || '').trim();
-    const loginWebhookInp = document.getElementById('inpLoginCloudWebhookUrl');
-    const enteredLoginWebhook = (loginWebhookInp ? loginWebhookInp.value : '').trim();
-    if (enteredLoginWebhook && enteredLoginWebhook.startsWith('http')) {
-      applyCloudWebhookUrlFromStartScreen(enteredLoginWebhook);
-      if (!String(appState.farmName || '').trim()) {
-        appState.hasLocalEdits = false;
-        appState.factoryZeroWipeAt = 0;
-      }
-      if (navigator.onLine) {
-        await pullDatabaseFromCloud(true, true);
-      }
-    }
 
     // Check Admin user (supports updated username/password from Profile or default admin/admin)
     const adminObj = (appState.users || []).find(u => u.id === 'admin') || { username: 'admin', password: 'admin' };
@@ -13883,108 +13771,7 @@ function initFarmSalesApp() {
     renderAll(true);
   });
 
-  // Start Screen Option 1: Connect Cloud Webhook URL & Pull Existing Farm Immediately
-  const btnForceSyncCloud = document.getElementById('btnForceSyncFromCloud');
-  const inpForceCloudUrl = document.getElementById('inpForceCloudWebhookUrl');
-  const forceCloudStatusEl = document.getElementById('forceCloudSyncStatusMsg');
-
-  async function handleStartScreenCloudSync() {
-    if (!inpForceCloudUrl) return;
-    const enteredUrl = (inpForceCloudUrl.value || '').trim();
-    if (!enteredUrl || !enteredUrl.startsWith('http')) {
-      if (forceCloudStatusEl) {
-        forceCloudStatusEl.textContent = '⚠️ يرجى لصق رابط السحابة الصحيح (يبدأ بـ https://) أولاً!';
-        forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-amber-100 text-amber-950 border border-amber-400';
-        forceCloudStatusEl.classList.remove('hidden');
-      }
-      showToast('⚠️ يرجى لصق رابط السحابة أولاً!', '⚠️');
-      inpForceCloudUrl.focus();
-      return;
-    }
-    const isFb = enteredUrl.includes('firebaseio.com') || enteredUrl.includes('firebasedatabase.app');
-    if (!isFb && enteredUrl.includes('script.google.com') && !enteredUrl.endsWith('/exec')) {
-      if (forceCloudStatusEl) {
-        forceCloudStatusEl.textContent = '❌ خطأ في الرابط: رابط Google Apps Script يجب أن ينتهي بـ /exec';
-        forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-rose-100 text-rose-900 border border-rose-400';
-        forceCloudStatusEl.classList.remove('hidden');
-      }
-      showToast('❌ رابط Google Apps Script يجب أن ينتهي بـ /exec', '❌');
-      inpForceCloudUrl.focus();
-      return;
-    }
-    if (!navigator.onLine) {
-      if (forceCloudStatusEl) {
-        forceCloudStatusEl.textContent = '🟠 لا يوجد اتصال بالإنترنت حالياً للسحب من السحابة!';
-        forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-amber-100 text-amber-950 border border-amber-400';
-        forceCloudStatusEl.classList.remove('hidden');
-      }
-      showToast('🟠 لا يوجد اتصال بالإنترنت حالياً!', '🟠');
-      return;
-    }
-
-    applyCloudWebhookUrlFromStartScreen(enteredUrl);
-    appState.hasLocalEdits = false;
-    appState.factoryZeroWipeAt = 0;
-    appState.farmResetAt = 0;
-    appState.deletedIds = { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] };
-    appState.deletedTimestamps = { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} };
-
-    if (btnForceSyncCloud) btnForceSyncCloud.disabled = true;
-    if (forceCloudStatusEl) {
-      forceCloudStatusEl.textContent = '⏳ جاري الاتصال بالسحابة وسحب المزرعة والتجار والحركات...';
-      forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-sky-100 text-sky-900 border border-sky-300';
-      forceCloudStatusEl.classList.remove('hidden');
-    }
-
-    const pulled = await pullDatabaseFromCloud(true, true);
-    if (btnForceSyncCloud) btnForceSyncCloud.disabled = false;
-
-    const activeFarmNow = String(appState.farmName ?? '').trim();
-    if (pulled && activeFarmNow) {
-      if (forceCloudStatusEl) {
-        forceCloudStatusEl.classList.add('hidden');
-      }
-      saveState(false);
-      startLiveRealtimeSyncEngine();
-      checkAndEnforceNewFarmCreationModal();
-      renderAll(true);
-      showToast(`✅ تم ربط السحابة واسترجاع مزرعة (${activeFarmNow}) بجميع بياناتها بنجاح!`, '☁️');
-    } else {
-      saveState(false);
-      startLiveRealtimeSyncEngine();
-      if (forceCloudStatusEl) {
-        forceCloudStatusEl.textContent = '✅ تم حفظ وربط رابط السحابة بنجاح! السحابة فارغة حالياً ولا توجد بها مزرعة مسجلة بعد — اكتب اسم المزرعة الجديدة في الخيار (2) بالأسفل واضغط (إنشاء المزرعة) ليتم رفعها للسحابة فوراً.';
-        forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-emerald-100 text-emerald-950 border border-emerald-400';
-        forceCloudStatusEl.classList.remove('hidden');
-      }
-      const inpNewFarm = document.getElementById('inpForceNewFarmName');
-      if (inpNewFarm) inpNewFarm.focus();
-      showToast('✅ تم ربط رابط السحابة! اكتب اسم المزرعة الجديدة بالأسفل لبدء الدورة ورفعها للسحابة.', '☁️');
-    }
-  }
-
-  if (btnForceSyncCloud) {
-    btnForceSyncCloud.addEventListener('click', handleStartScreenCloudSync);
-  }
-  if (inpForceCloudUrl) {
-    inpForceCloudUrl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleStartScreenCloudSync();
-      }
-    });
-  }
-
-  // Start Screen Option 3: Quick Restore from JSON / Excel Backup File
-  const btnForceRestoreFile = document.getElementById('btnForceRestoreBackupFile');
-  if (btnForceRestoreFile) {
-    btnForceRestoreFile.addEventListener('click', () => {
-      const fileInp = document.getElementById('fileImportXlsx');
-      if (fileInp) fileInp.click();
-    });
-  }
-
-  // Start Screen Option 2: Mandatory New Farm Creation Modal Submit Handler
+  // Mandatory New Farm Creation Modal Submit Handler (إجبار إنشاء مزرعة جديدة بعد التصفير الجذري الشامل)
   const forceFarmForm = document.getElementById('forceCreateFarmForm');
   if (forceFarmForm) {
     forceFarmForm.addEventListener('submit', (e) => {
@@ -13995,10 +13782,6 @@ function initFarmSalesApp() {
         showToast('⚠️ يرجى كتابة اسم المزرعة الجديدة أولاً!', '⚠️');
         if (inp) inp.focus();
         return;
-      }
-      // إذا قام المستخدم بلصق رابط السحابة في الخيار (1) أعلاه ثم كتب اسم المزرعة وضغط إنشاء، نحفظ رابط السحابة أيضاً ونرفع المزرعة الجديدة إليها فوراً
-      if (inpForceCloudUrl && inpForceCloudUrl.value && inpForceCloudUrl.value.trim().startsWith('http')) {
-        applyCloudWebhookUrlFromStartScreen(inpForceCloudUrl.value.trim());
       }
       const nowCreateTs = Math.max(getSyncedNow() + 1000, (Number(appState.factoryZeroWipeAt) || 0) + 1000);
       const emptyDays = {};
@@ -14042,10 +13825,8 @@ function initFarmSalesApp() {
         days: emptyDays
       };
       if (inp) inp.value = '';
-      if (forceCloudStatusEl) forceCloudStatusEl.classList.add('hidden');
       checkAndEnforceNewFarmCreationModal();
       saveState(true, true);
-      startLiveRealtimeSyncEngine();
       renderAll(true);
       showToast(`✅ تم إنشاء وفتح مزرعة (${newName}) بنجاح — يمكنك الآن تكويد التجار وتسجيل حركات البيع!`, '🏡');
     });
@@ -15052,14 +14833,6 @@ function initFarmSalesApp() {
     if (cloneForceCreateFarm) {
       cloneForceCreateFarm.classList.add('hidden');
     }
-    const cloneForceUrl = cloneDoc.querySelector('#inpForceCloudWebhookUrl');
-    if (cloneForceUrl) cloneForceUrl.setAttribute('value', url);
-    const cloneLoginUrl = cloneDoc.querySelector('#inpLoginCloudWebhookUrl');
-    if (cloneLoginUrl) cloneLoginUrl.setAttribute('value', url);
-    const cloneForceStatus = cloneDoc.querySelector('#forceCloudSyncStatusMsg');
-    if (cloneForceStatus) cloneForceStatus.classList.add('hidden');
-    const cloneLoginStatus = cloneDoc.querySelector('#loginCloudSyncStatusMsg');
-    if (cloneLoginStatus) cloneLoginStatus.classList.add('hidden');
     const cloneLoginUser = cloneDoc.querySelector('#inpLoginUsername');
     if (cloneLoginUser) cloneLoginUser.setAttribute('value', '');
     const cloneLoginPass = cloneDoc.querySelector('#inpLoginPassword');
