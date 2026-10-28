@@ -1,8 +1,8 @@
 // =========================================================================
 // 1. INITIAL GROUNDED DATA & STATE (WITH DYNAMIC FARM NAME & FULL SYNC)
 // =========================================================================
-const STORAGE_KEY = 'abouzekry_farm_sales_v5_clean_state';
-const LEGACY_STORAGE_KEYS = ['abouzekry_farm_sales_v4_state', 'abouzekry_farm_sales_v3_state'];
+const STORAGE_KEY = 'farm_sales_committee_v67_clean_slate_state';
+const LEGACY_STORAGE_KEYS = [];
 const EMBEDDED_CLOUD_WEBHOOK_URL = '';
 
 function getEmbeddedWebhookUrl() {
@@ -50,45 +50,46 @@ const EXPENSE_CATEGORIES = [
   'منصرفات أخرى (بدون تصنيف محدد)'
 ];
 
-function getDefaultState(customFarmName = 'أبوذكري') {
-  // جميع بيانات قاعدة البيانات فارغة ما عدا الكود الموحد واسم التاجر الأساسي فقط
-  const merchants = [
-    { code: 101, name: 'محمود مدني' },
-    { code: 102, name: 'رضا المنياوى' },
-    { code: 103, name: 'السيد رشدي' },
-    { code: 104, name: 'كرنك' },
-    { code: 105, name: 'عبدالستار السيد' },
-    { code: 106, name: 'استشوار' },
-    { code: 107, name: 'احمد عمار' },
-    { code: 108, name: 'احمد التهامى' },
-    { code: 109, name: 'عبدة على' },
-    { code: 110, name: 'عادل زغلول' },
-    { code: 111, name: 'مسعد رمضان' },
-    { code: 112, name: 'احمد النون' },
-    { code: 113, name: 'الروبي' },
-    { code: 114, name: 'رمضان شوقي' },
-    { code: 115, name: 'التهامى احمد' },
-    { code: 116, name: 'عطية زغلول' },
-    { code: 117, name: 'الجزار' },
-    { code: 118, name: 'محمود صلاح' }
-  ];
+function createEmptyDayObject(d) {
+  const dayNum = Number(d) || 1;
+  return {
+    dayNumber: dayNum,
+    dateLabel: `اليوم ${dayNum}`,
+    sales: [],
+    pendingSales: [],
+    expenses: [],
+    deliveredCash: 0,
+    carriedForwardCash: 0,
+    isLocked: false,
+    lockedBy: '',
+    lockedAtTxt: '',
+    lockUpdatedAt: 0
+  };
+}
 
-  const days = {};
+function ensureDaysSchemaIntact(daysObj) {
+  const target = (daysObj && typeof daysObj === 'object') ? daysObj : {};
   for (let d = 1; d <= 10; d++) {
-    days[d] = {
-      dayNumber: d,
-      dateLabel: `اليوم ${d}`,
-      sales: [],
-      pendingSales: [],
-      expenses: [],
-      deliveredCash: 0,
-      carriedForwardCash: 0,
-      isLocked: false,
-      lockedBy: '',
-      lockedAtTxt: '',
-      lockUpdatedAt: 0
-    };
+    if (!target[d] || typeof target[d] !== 'object') {
+      target[d] = createEmptyDayObject(d);
+    } else {
+      if (!Array.isArray(target[d].sales)) target[d].sales = [];
+      if (!Array.isArray(target[d].pendingSales)) target[d].pendingSales = [];
+      if (!Array.isArray(target[d].expenses)) target[d].expenses = [];
+      if (target[d].deliveredCash === undefined) target[d].deliveredCash = 0;
+      if (target[d].carriedForwardCash === undefined) target[d].carriedForwardCash = 0;
+      if (!target[d].dateLabel) target[d].dateLabel = `اليوم ${d}`;
+      target[d].dayNumber = d;
+    }
   }
+  return target;
+}
+
+function getDefaultState(customFarmName = '') {
+  // نسخة بيضاء / صفرية (Clean Slate Version): مصفوفة التجار وسجل الأيام وأرشيف المزارع فارغة تماماً
+  const merchants = [];
+  const days = {};
+  const farmsArchive = {};
 
   return {
     farmName: customFarmName,
@@ -131,7 +132,8 @@ function getDefaultState(customFarmName = 'أبوذكري') {
       { id: 'admin', username: 'admin', password: 'admin', name: 'مدير الموقع (كامل الصلاحيات)', phone: '', jobTitle: 'مدير عام المزرعة', isSystem: true, perms: { sales: true, expenses: true, merchants: true, farms: true, admin: true, liteFieldMode: false, showSyncExcel: true, showSyncCloud: true, showSyncWebhook: true } }
     ],
     merchants: merchants,
-    days: days
+    days: ensureDaysSchemaIntact(days),
+    farmsArchive: farmsArchive
   };
 }
 
@@ -292,14 +294,27 @@ function isSameNumVal(x, y, eps = 0.05) {
   return Math.abs((Number(x) || 0) - (Number(y) || 0)) <= eps;
 }
 
+function toAsciiDigits(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+}
+
+function extractMerchantSubCarNumber(rawName) {
+  if (!rawName) return '';
+  const ascii = toAsciiDigits(rawName);
+  return (ascii.match(/\d+/) || [''])[0];
+}
+
 function isSameMerchantIdentity(maRaw, mbRaw) {
   const ma = String(maRaw || '').replace(/\s+/g, ' ').trim();
   const mb = String(mbRaw || '').replace(/\s+/g, ' ').trim();
   if (!ma || !mb) return false;
   if (ma === mb) return true;
-  // إذا كان كلاهما يشير لنفس التاجر الأساسي ونفس رقم السيارة الفرعية (أو بدون رقم فرعي) مثل "مزرعه" و "المزرعه" أو "عصفور محمد " و "عصفور محمد"
-  const subA = (ma.match(/\d+/) || [''])[0];
-  const subB = (mb.match(/\d+/) || [''])[0];
+  // إذا كان كلاهما يشير لنفس التاجر الأساسي ونفس رقم السيارة الفرعية (حتى لو كُتب بأرقام هندية مثل "كرنك ١" و"كرنك 1" أو "مزرعه" و"المزرعه")
+  const subA = extractMerchantSubCarNumber(ma);
+  const subB = extractMerchantSubCarNumber(mb);
   if (subA === subB && normalizeArabicMerchantCompareKey(ma) === normalizeArabicMerchantCompareKey(mb)) {
     return true;
   }
@@ -310,19 +325,35 @@ function areSalesRowsDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
   const hasIdA = a.id !== undefined && a.id !== null && String(a.id).trim() !== '';
   const hasIdB = b.id !== undefined && b.id !== null && String(b.id).trim() !== '';
-  if (hasIdA && hasIdB) {
-    if (String(a.id).trim() === String(b.id).trim()) return true;
-    // إذا كان كلا السجلين يحملان معرّفين مختلفين، لا نعتبرهما مكررين أبداً أثناء المزامنة العادية حتى لا يبتلع سجلٌ قديمٌ سجلاً معدلاً
-    if (!ignoreDifferentUUIDs) return false;
+  if (hasIdA && hasIdB && String(a.id).trim() === String(b.id).trim()) {
+    return true;
   }
   if (isRecordDebtOnlyVoucher(a) !== isRecordDebtOnlyVoucher(b)) return false;
-  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
+
+  // فحص المفتاح المركب للإكسيل (excelCompositeKey) أولاً حتى لو اختلف الـ UUID بين جهازين استوردا نفس الشيت
+  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) {
+    return true;
+  }
+
+  // إذا كان كلا السجلين يحملان معرّفين مختلفين وليس أي منهما مستورداً من الإكسيل، نحترم اختلاف الـ UUID أثناء المزامنة العادية
+  const involvesExcelImport = Boolean(
+    ignoreDifferentUUIDs ||
+    Number(a.importedAt) > 0 ||
+    Number(b.importedAt) > 0 ||
+    (a.excelCompositeKey && String(a.excelCompositeKey).trim() !== '') ||
+    (b.excelCompositeKey && String(b.excelCompositeKey).trim() !== '')
+  );
+  if (hasIdA && hasIdB && !involvesExcelImport) {
+    return false;
+  }
+
   if (!isSameMerchantIdentity(a.merchant, b.merchant)) return false;
 
-  const sa = Number(a.scaleNo) || 0;
-  const sb = Number(b.scaleNo) || 0;
-  const ca = String(a.carNo || '').trim();
-  const cb = String(b.carNo || '').trim();
+  const isDebtOnly = isRecordDebtOnlyVoucher(a);
+  const sa = Number(isDebtOnly ? (a.voucherNo || a.scaleNo) : a.scaleNo) || 0;
+  const sb = Number(isDebtOnly ? (b.voucherNo || b.scaleNo) : b.scaleNo) || 0;
+  const ca = toAsciiDigits(a.carNo || '').trim();
+  const cb = toAsciiDigits(b.carNo || '').trim();
   const w1a = Number(a.w1) || 0, w1b = Number(b.w1) || 0;
   const w2a = Number(a.w2) || 0, w2b = Number(b.w2) || 0;
 
@@ -337,7 +368,7 @@ function areSalesRowsDuplicate(a, b, ignoreDifferentUUIDs = false) {
     isSameNumVal(a.prevCash, b.prevCash, 0.5) &&
     isSameNumVal(a.prevTransfer, b.prevTransfer, 0.5);
 
-  // 1. نفس التاجر ونفس رقم مسلسل الميزان مع تطابق الأوزان والمبالغ المالية (أو عند تحديث نفس رقم الميزان من الإكسيل)
+  // 1. نفس التاجر ونفس رقم مسلسل الميزان (أو السند) مع تطابق الأوزان والمبالغ المالية (أو عند تحديث نفس رقم الميزان من الإكسيل)
   if (sa > 0 && sb > 0 && sa === sb && (ignoreDifferentUUIDs || (isSameNumVal(w1a, w1b) && isSameNumVal(w2a, w2b) && sameFinancials))) return true;
 
   // 2. نفس التاجر ونفس رقم السيارة ونفس الأوزان الفعلية والمبالغ المالية
@@ -352,18 +383,29 @@ function arePendingSalesDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
   const hasIdA = a.id !== undefined && a.id !== null && String(a.id).trim() !== '';
   const hasIdB = b.id !== undefined && b.id !== null && String(b.id).trim() !== '';
-  if (hasIdA && hasIdB) {
-    if (String(a.id).trim() === String(b.id).trim()) return true;
-    if (!ignoreDifferentUUIDs) return false;
+  if (hasIdA && hasIdB && String(a.id).trim() === String(b.id).trim()) {
+    return true;
   }
-  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
+  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) {
+    return true;
+  }
+  const involvesExcelImport = Boolean(
+    ignoreDifferentUUIDs ||
+    Number(a.importedAt) > 0 ||
+    Number(b.importedAt) > 0 ||
+    (a.excelCompositeKey && String(a.excelCompositeKey).trim() !== '') ||
+    (b.excelCompositeKey && String(b.excelCompositeKey).trim() !== '')
+  );
+  if (hasIdA && hasIdB && !involvesExcelImport) {
+    return false;
+  }
   if (!isSameMerchantIdentity(a.merchant, b.merchant)) return false;
   const sa = Number(a.scaleNo) || 0;
   const sb = Number(b.scaleNo) || 0;
   const w1a = Number(a.w1) || 0, w1b = Number(b.w1) || 0;
   if (sa > 0 && sb > 0 && sa === sb && (ignoreDifferentUUIDs || isSameNumVal(w1a, w1b))) return true;
-  const ca = String(a.carNo || '').trim();
-  const cb = String(b.carNo || '').trim();
+  const ca = toAsciiDigits(a.carNo || '').trim();
+  const cb = toAsciiDigits(b.carNo || '').trim();
   return ca === cb && isSameNumVal(w1a, w1b);
 }
 
@@ -371,11 +413,22 @@ function areExpensesDuplicate(a, b, ignoreDifferentUUIDs = false) {
   if (!a || !b) return false;
   const hasIdA = a.id !== undefined && a.id !== null && String(a.id).trim() !== '';
   const hasIdB = b.id !== undefined && b.id !== null && String(b.id).trim() !== '';
-  if (hasIdA && hasIdB) {
-    if (String(a.id).trim() === String(b.id).trim()) return true;
-    if (!ignoreDifferentUUIDs) return false;
+  if (hasIdA && hasIdB && String(a.id).trim() === String(b.id).trim()) {
+    return true;
   }
-  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) return true;
+  if (!a.isEdited && !b.isEdited && a.excelCompositeKey && b.excelCompositeKey && String(a.excelCompositeKey) === String(b.excelCompositeKey)) {
+    return true;
+  }
+  const involvesExcelImport = Boolean(
+    ignoreDifferentUUIDs ||
+    Number(a.importedAt) > 0 ||
+    Number(b.importedAt) > 0 ||
+    (a.excelCompositeKey && String(a.excelCompositeKey).trim() !== '') ||
+    (b.excelCompositeKey && String(b.excelCompositeKey).trim() !== '')
+  );
+  if (hasIdA && hasIdB && !involvesExcelImport) {
+    return false;
+  }
   return (
     String(a.category || '').replace(/\s+/g, ' ').trim() === String(b.category || '').replace(/\s+/g, ' ').trim() &&
     String(a.desc || '').replace(/\s+/g, ' ').trim() === String(b.desc || '').replace(/\s+/g, ' ').trim() &&
@@ -618,24 +671,13 @@ function applyParsedStateObject(parsed) {
 
 function unifyGlobalMerchantsRegistry() {
   const delSet = new Set(((appState.deletedIds && appState.deletedIds.merchants) || []).map(Number));
-  const isFactoryZeroWiped = Number(appState.factoryZeroWipeAt) > 0;
-  const baseDefaults = isFactoryZeroWiped ? [] : (getDefaultState().merchants || []);
   if (!Array.isArray(appState.merchants)) appState.merchants = [];
-
-  // 1. ضمان وجود التجار الأساسيين (101..118) إلا إذا كان الموقع في وضع التصفير الجذري الشامل (factoryZeroWipeAt > 0)
-  if (!isFactoryZeroWiped) {
-    baseDefaults.forEach(dm => {
-      const c = Number(dm.code);
-      const n = String(dm.name || '').trim();
-      if (c >= 100 && n && !delSet.has(c)) {
-        if (!appState.merchants.some(m => m && (Number(m.code) === c || isSameMerchantIdentity(m.name, n)))) {
-          appState.merchants.push({ code: c, name: n });
-        }
-      }
-    });
+  appState.days = ensureDaysSchemaIntact(appState.days);
+  if (!appState.farmsArchive || typeof appState.farmsArchive !== 'object') {
+    appState.farmsArchive = {};
   }
 
-  // 2. دمج أي تجار مكودين في أرشيف المزارع (farmsArchive) غير محذوفين
+  // 1. دمج أي تجار مكودين في أرشيف المزارع (farmsArchive) غير محذوفين
   if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
     Object.values(appState.farmsArchive).forEach(fObj => {
       if (fObj && Array.isArray(fObj.merchants)) {
@@ -649,17 +691,6 @@ function unifyGlobalMerchantsRegistry() {
           }
         });
       }
-    });
-  }
-
-  // 3. إذا تم بالخطأ حذف جميع التجار (ولم يكن الموقع في وضع التصفير الجذري الشامل Mode 3)، نعيد التجار الأساسيين الـ 18 تلقائياً
-  const validNow = appState.merchants.filter(m => m && m.code && m.name && !delSet.has(Number(m.code)));
-  if (validNow.length === 0 && !isFactoryZeroWiped) {
-    if (appState.deletedIds) appState.deletedIds.merchants = [];
-    if (appState.deletedTimestamps) appState.deletedTimestamps.merchants = {};
-    delSet.clear();
-    baseDefaults.forEach(dm => {
-      appState.merchants.push({ code: Number(dm.code), name: String(dm.name).trim() });
     });
   }
 
@@ -729,7 +760,7 @@ function loadState() {
   } catch (e) {}
   if (!loaded) {
     try {
-      if (window.name && window.name.startsWith('ABOUZEKRY_STATE_V5:')) {
+      if (window.name && window.name.startsWith('FARM_SALES_CLEAN_STATE_V67:')) {
         loaded = applyParsedStateObject(JSON.parse(window.name.slice(19)));
       }
     } catch (e) {}
@@ -918,7 +949,7 @@ function buildRecordAuditMeta(existingRec = null, isEdit = false, newCandidateRe
       lastEditDiffText,
       editHistory: prevHistory,
       importedAt: 0,
-      excelCompositeKey: ''
+      excelCompositeKey: isEdit ? '' : String((existingRec && existingRec.excelCompositeKey) || '')
     };
   }
   return {
@@ -933,7 +964,7 @@ function buildRecordAuditMeta(existingRec = null, isEdit = false, newCandidateRe
     lastEditDiffText: '',
     editHistory: [],
     importedAt: 0,
-    excelCompositeKey: ''
+    excelCompositeKey: String((existingRec && existingRec.excelCompositeKey) || '')
   };
 }
 
@@ -1140,7 +1171,7 @@ function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '�
     showToast('عفواً، تصفير حركات المزرعة متاح لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
     return false;
   }
-  const currentFarm = appState.farmName || 'أبوذكري';
+  const currentFarm = appState.farmName || 'مزرعة جديدة';
   const nowTs = getSyncedNow() + 100;
   for (let d = 1; d <= 10; d++) {
     if (appState.days && appState.days[d]) {
@@ -1187,7 +1218,7 @@ function clearAllSiteMovementsAndArchiveKeepMerchants(customMsg = '', customIcon
     showToast('عفواً، التصفير الشامل للموقع متاح لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
     return false;
   }
-  const currentFarm = appState.farmName || 'أبوذكري';
+  const currentFarm = appState.farmName || 'مزرعة جديدة';
   const nowTs = getSyncedNow() + 100;
 
   // 1. تسجيل جميع حركات المزرعة النشطة في deletedIds
@@ -1265,7 +1296,7 @@ function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️'
   if (appState.farmName && String(appState.farmName).trim()) {
     recordDeletedItem('farms', String(appState.farmName).trim(), nowTs);
   }
-  recordDeletedItem('farms', 'أبوذكري', nowTs);
+  
 
   // 2. تسجيل جميع حركات وأسماء المزارع والتجار في الأرشيف داخل سجل المحذوفات
   if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
@@ -1380,7 +1411,7 @@ function deleteSpecificDayFromCycle(targetDayNum) {
   }
   const vis = getVisibleDays();
   const nowTs = getSyncedNow();
-  const currentFarm = appState.farmName || 'أبوذكري';
+  const currentFarm = appState.farmName || 'مزرعة جديدة';
 
   if (appState.days && appState.days[cur]) {
     recordDayItemsAsDeleted(appState.days[cur]);
@@ -1532,7 +1563,7 @@ function computeMerchantCrossFarmDebtReference(merchantCode, rawNotesOrFarmQuery
   if (!merchantCode || !appState.farmsArchive || typeof appState.farmsArchive !== 'object') {
     return result;
   }
-  const currentFarm = String(appState.farmName || 'أبوذكري').trim();
+  const currentFarm = String(appState.farmName || 'مزرعة جديدة').trim();
   const normQuery = normalizeArabicMerchantCompareKey(String(rawNotesOrFarmQuery || '').trim());
 
   Object.keys(appState.farmsArchive).forEach(fName => {
@@ -1570,7 +1601,7 @@ function computeMerchantCrossFarmDebtReference(merchantCode, rawNotesOrFarmQuery
 function updatePrevFarmsArchiveDatalistUI() {
   const dl = document.getElementById('prevFarmsArchiveDatalist');
   if (!dl) return;
-  const currentFarm = String(appState.farmName || 'أبوذكري').trim();
+  const currentFarm = String(appState.farmName || 'مزرعة جديدة').trim();
   const archive = appState.farmsArchive || {};
   const otherFarms = Object.keys(archive).filter(fn => fn && fn.trim() && fn.trim() !== currentFarm);
   dl.innerHTML = otherFarms.map(fn => `<option value="${escXmlStr(fn)}"></option>`).join('');
@@ -1579,7 +1610,7 @@ function updatePrevFarmsArchiveDatalistUI() {
 // =========================================================================
 // CLOUD DATABASE ENGINE (IndexedDB + Multi-Farm Archive + Cloud REST Sync)
 // =========================================================================
-const IDB_NAME = 'AbouZekryCloudDB_v5';
+const IDB_NAME = 'FarmSalesCleanSlateDB_v67';
 const IDB_STORE = 'farm_database_store';
 
 function saveToIndexedDB(stateObj) {
@@ -1635,10 +1666,10 @@ function syncActiveFarmIntoArchive() {
   }
   unifyGlobalMerchantsRegistry();
   const rawName = String(appState.farmName ?? '').trim();
-  if (!rawName && Number(appState.factoryZeroWipeAt) > 0) {
+  if (!rawName) {
     return;
   }
-  const fName = rawName || 'أبوذكري';
+  const fName = rawName;
   appState.farmsArchive[fName] = {
     farmName: fName,
     updatedAt: new Date(getSyncedNow()).toISOString(),
@@ -2332,7 +2363,7 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   const cloudFactoryWipeAt = Number(cloudData.factoryZeroWipeAt) || 0;
   appState.factoryZeroWipeAt = Math.max(localFactoryWipeAt, cloudFactoryWipeAt);
   const isZeroWiped = (localFactoryWipeAt > 0 || cloudFactoryWipeAt > 0);
-  const localFarmName = String(appState.farmName ?? '').trim() || (isZeroWiped ? '' : 'أبوذكري');
+  const localFarmName = String(appState.farmName ?? '').trim();
   const cloudFarmName = String(cloudData.farmName ?? '').trim() || localFarmName;
   const sameActiveFarm = (localFarmName === cloudFarmName);
   const rawLocalResetAt = Number(appState.farmResetAt) || 0;
@@ -2997,7 +3028,7 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
     // Ignore storage error in restricted iframe
   }
   try {
-    window.name = 'ABOUZEKRY_STATE_V5:' + serialized;
+    window.name = 'FARM_SALES_CLEAN_STATE_V67:' + serialized;
   } catch (e) {}
   saveToIndexedDB(appState);
   if (incrementPending && liveBroadcastChannel) {
@@ -3044,9 +3075,9 @@ function showToast(msg, icon = '✅') {
 // =========================================================================
 function cleanMerchantBaseName(rawName) {
   if (!rawName) return '';
-  return String(rawName)
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .replace(/[0-9\-\(\)]/g, '')
+  return toAsciiDigits(rawName)
+    .replace(/[\u200B-\u200D\uFEFF\u0640\u064B-\u065F\u0670]/g, '')
+    .replace(/[0-9\-\(\)\/#_]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -3054,17 +3085,19 @@ function cleanMerchantBaseName(rawName) {
 function normalizeArabicMerchantCompareKey(str) {
   if (!str) return '';
   return cleanMerchantBaseName(str)
-    .replace(/[أإآ]/g, 'ا')
+    .replace(/[أإآٱ]/g, 'ا')
     .replace(/ة/g, 'ه')
     .replace(/ى/g, 'ي')
-    .replace(/^ال/, '')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/(^|\s)ال/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function resolveMerchantCode(rawName) {
   if (!rawName || !String(rawName).trim()) return 0;
-  const trimmed = String(rawName).replace(/\s+/g, ' ').trim();
+  const trimmed = String(rawName).replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
   const exact = appState.merchants.find(m => String(m.name || '').trim() === trimmed);
   if (exact) return exact.code;
 
@@ -3076,12 +3109,14 @@ function resolveMerchantCode(rawName) {
     if (normTarget) {
       const byNorm = appState.merchants.find(m => normalizeArabicMerchantCompareKey(m.name) === normTarget);
       if (byNorm) return byNorm.code;
+      if (normTarget.length >= 3) {
+        const byPartial = appState.merchants.find(m => {
+          const mNorm = normalizeArabicMerchantCompareKey(m.name);
+          return mNorm && mNorm.length >= 3 && (mNorm.includes(normTarget) || normTarget.includes(mNorm));
+        });
+        if (byPartial) return byPartial.code;
+      }
     }
-    const byPartial = appState.merchants.find(m => {
-      const mClean = cleanMerchantBaseName(m.name);
-      return mClean && (mClean.includes(cleaned) || cleaned.includes(mClean));
-    });
-    if (byPartial) return byPartial.code;
   }
   return 0;
 }
@@ -4066,7 +4101,7 @@ function computeFarmCumulativeTrialBalance(summariesList = null) {
 
 function renderFarmCumulativeTrialBalanceUI(summariesList) {
   const ftb = computeFarmCumulativeTrialBalance(summariesList);
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
 
   const titleEl = document.getElementById('farmTbTitle');
   if (titleEl) titleEl.textContent = `${fName} — ${ftb.activeDaysCount} يوم نشط`;
@@ -4624,7 +4659,7 @@ function applyDomTableExcelEngine(tableId) {
 }
 
 function renderDashboardView() {
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const titleEl = document.getElementById('dashFarmNameTitle');
   if (titleEl) titleEl.textContent = fName;
 
@@ -5540,7 +5575,7 @@ function renderFarmTrialBalancePrintView() {
   const openActiveSummaries = getOpenAndActiveDashSummaries();
   const filteredSummaries = applyExcelSortAndFilter(openActiveSummaries, DASH_COLUMNS, 'dash');
   const ftb = computeFarmCumulativeTrialBalance(filteredSummaries);
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const printDateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
   const statusTxt = ftb.cumulativeCashBoxDiff === 0
     ? 'خزينة المزرعة مطابقة تماماً ✓'
@@ -5675,7 +5710,7 @@ function renderDailyTrialBalancePrintView() {
   if (!printContainer) return false;
   const d = appState.currentDay || 1;
   const s = computeDaySummary(d);
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const printDateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
   const statusTxt = s.cashBoxDiff === 0
     ? 'خزينة مطابقة ✓'
@@ -5810,7 +5845,7 @@ function renderScaleReceiptPrintView(saleId, dayNumInput) {
   if (!printContainer || !saleId) return false;
   const d = Number(dayNumInput) || appState.currentDay || 1;
   const dayObj = (appState.days && appState.days[d]) || { dayNumber: d, dateLabel: `اليوم ${d}`, sales: [], pendingSales: [] };
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
 
   let rawRow = (dayObj.sales || []).find(x => String(x.id) === String(saleId));
   let isPending = false;
@@ -6029,7 +6064,7 @@ function renderOfficialDaySettlementReportPrintView(dayNumInput) {
   if (!printContainer) return false;
   const d = Number(dayNumInput) || appState.currentDay || 1;
   const s = computeDaySummary(d);
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const now = new Date();
   const printDateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
   const printTimeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
@@ -6358,7 +6393,7 @@ function renderGenericTablePrintView(tableKey) {
   const tableEl = document.getElementById(cfg.tableId);
   if (!printContainer || !tableEl) return false;
 
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const printDateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
   const excludeSet = new Set(cfg.excludeColIndices || []);
   const alignRightSet = new Set(cfg.alignRightCols || []);
@@ -6654,7 +6689,7 @@ async function exportPrintTargetAsImageOrPdf(targetKey, format = 'png', customFi
 async function exportMerchantStatementAsImageOrPdf(format = 'png') {
   if (!activeDrillDownMerchantCode) return;
   const ledger = computeMerchantDetailedLedger(activeDrillDownMerchantCode);
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const fileBase = `كشف_حساب_${ledger.code}_${ledger.name}_مزرعة_${fName}`;
   await exportPrintTargetAsImageOrPdf('merchantDrillDown', format, fileBase);
 }
@@ -6665,7 +6700,7 @@ async function exportScaleReceiptAsImageOrPdf(saleId, dayNumInput, format = 'png
   const dayObj = (appState.days && appState.days[d]) || {};
   const row = (dayObj.sales || []).find(x => String(x.id) === String(saleId)) ||
               (dayObj.pendingSales || []).find(x => String(x.id) === String(saleId)) || {};
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const scaleLabel = row.scaleNo ? `بون_${row.scaleNo}` : `وزنة`;
   const merchLabel = row.merchant || 'تاجر';
   const fileBase = `كارتة_ميزان_${scaleLabel}_${merchLabel}_يوم${d}_مزرعة_${fName}`;
@@ -6679,7 +6714,7 @@ function exportMerchantDrillDownToExcel() {
     return;
   }
   const ledger = computeMerchantDetailedLedger(activeDrillDownMerchantCode);
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const q = (document.getElementById('inpFilterMerchantModal')?.value || '').trim().toLowerCase();
   const filteredMovements = q
     ? ledger.movements.filter(m =>
@@ -6813,7 +6848,7 @@ function exportMerchantDrillDownToExcel() {
 function renderMerchantPrintOnlyContainer(ledger, filteredMovements) {
   const printContainer = ensureMerchantPrintDomElements();
   if (!printContainer || !ledger) return;
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const pendTxt = ledger.totalPendingCars > 0 ? ` (+${ledger.totalPendingCars} مؤقت)` : '';
   const balLabel = ledger.finalRunningBalance > 0
     ? 'عليه للمزرعة'
@@ -7025,7 +7060,7 @@ function closeMerchantDrillDownModal() {
 function renderMerchantDrillDownModal() {
   if (!activeDrillDownMerchantCode) return;
   const ledger = computeMerchantDetailedLedger(activeDrillDownMerchantCode);
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
 
   const elCode = document.getElementById('mdlMerchCode');
   if (elCode) elCode.textContent = ledger.code;
@@ -7242,7 +7277,7 @@ function renderMerchantDrillDownModal() {
 
 function buildMerchantWhatsappStatementText(merchantCode) {
   const ledger = computeMerchantDetailedLedger(merchantCode);
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const lines = [
     `📋 *كشف حساب تفصيلي للتاجر: ${ledger.name} (كود ${ledger.code})*`,
     `🏡 *المزرعة:* ${fName}`,
@@ -7879,7 +7914,7 @@ function updateLiteFieldModeUI() {
     bannerEl.classList.toggle('hidden', !active);
   }
   const fNameEl = document.getElementById('liteBannerFarmName');
-  if (fNameEl) fNameEl.textContent = appState.farmName || 'أبوذكري';
+  if (fNameEl) fNameEl.textContent = appState.farmName || 'مزرعة جديدة';
 
   const curDay = Number(appState.currentDay) || 1;
   const curDayObj = (appState.days && appState.days[curDay]) || { dateLabel: `اليوم ${curDay}` };
@@ -8304,7 +8339,7 @@ function renderBackupAndAuditCenterUI() {
   if (cntBadge) {
     cntBadge.textContent = q || typeFilter !== 'all'
       ? `معروض ${filteredAudit.length} من ${auditEntries.length} حركة`
-      : `${auditEntries.length} حركة في مزرعة (${appState.farmName || 'أبوذكري'})`;
+      : `${auditEntries.length} حركة في مزرعة (${appState.farmName || 'مزرعة جديدة'})`;
   }
 
   const tbody = document.getElementById('auditTrailTbody');
@@ -8362,7 +8397,7 @@ function exportFullJsonBackup() {
     const dateSlug = now.toISOString().slice(0, 10);
     const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
     const actor = getActiveUserShortLabel();
-    const fName = (appState.farmName || 'أبوذكري').trim();
+    const fName = (appState.farmName || 'مزرعة جديدة').trim();
     const fSlug = fName.replace(/\s+/g, '_');
 
     appState.lastJsonBackup = `آخر نسخة (.json): ${timeStr} بواسطة (${actor}) ✓`;
@@ -8710,7 +8745,7 @@ async function buildStyled15SheetExcelBytes() {
     if (!k.startsWith('__')) outFiles[k] = tpl[k];
   }
 
-  const fName = appState.farmName || 'أبوذكري';
+  const fName = appState.farmName || 'مزرعة جديدة';
   const summaries = {};
   for (let d = 1; d <= 10; d++) {
     summaries[d] = computeDaySummary(d);
@@ -9235,7 +9270,7 @@ async function buildStyled15SheetExcelBytes() {
 }
 
 async function exportFullWorkbookXlsx() {
-  const fName = (appState.farmName || 'أبوذكري').replace(/\s+/g, '_');
+  const fName = (appState.farmName || 'مزرعة جديدة').replace(/\s+/g, '_');
   const fileName = `نظام_محاضر_بيع_مزرعة_${fName}_10_ايام.xlsx`;
 
   try {
@@ -9379,14 +9414,26 @@ function extractCustodyAndCleanNotesFromExcel(rawNotes, colZVal, colAAVal) {
   return { notes, custodyCash, custodyTransfer, custodyTransferType };
 }
 
+// تنظيف المبالغ المالية المستوردة من خلايا الإكسيل وتجاهل القيم السالبة وفروق التقريب العشرية الضئيلة (< 1 ج.م) الناتجة عن معادلات الإكسيل
+function sanitizeExcelFinancialAmount(val, ignoreSubPoundRoundingResidue = true) {
+  const raw = sanitizeExcelNum(val, 2);
+  if (!isFinite(raw) || raw <= 0) return 0;
+  if (ignoreSubPoundRoundingResidue && raw > 0 && raw < 1) return 0;
+  return roundMoney2(raw);
+}
+
 function buildExcelSaleCompositeKey(dayNum, seq, rec) {
   const mKey = normalizeArabicMerchantCompareKey(rec.merchant) || sanitizeExcelText(rec.merchant);
-  const subNo = (String(rec.merchant || '').match(/\d+/) || [''])[0];
-  const sNo = Number(rec.scaleNo) || 0;
-  if (sNo > 0) {
+  const subNo = extractMerchantSubCarNumber(rec.merchant);
+  const isDebtOnly = isRecordDebtOnlyVoucher(rec);
+  const sNo = Number(isDebtOnly ? (rec.voucherNo || rec.scaleNo) : rec.scaleNo) || 0;
+  if (sNo > 0 && !isDebtOnly) {
     return `d${dayNum}_scale_${sNo}_m_${mKey}${subNo}`;
   }
-  const cNo = String(rec.carNo || '').trim() || 'nocar';
+  if (sNo > 0 && isDebtOnly) {
+    return `d${dayNum}_voucher_${sNo}_m_${mKey}${subNo}_coll_${rec.debtCash}_${rec.debtTransfer}_${rec.prevCash}_${rec.prevTransfer}`;
+  }
+  const cNo = toAsciiDigits(rec.carNo || '').trim() || 'nocar';
   const w1 = Number(rec.w1) || 0;
   const w2 = Number(rec.w2) || 0;
   if (w1 > 0 || w2 > 0) {
@@ -9444,7 +9491,7 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
   const masterImportTs = getSyncedNow();
 
   // 1. استخلاص أو تثبيت اسم المزرعة النشطة بذكاء من شيت الملخص (الخلية C3 أو عنوان الخلية A1)
-  let detectedFarmName = sanitizeExcelText(appState.farmName) || 'أبوذكري';
+  let detectedFarmName = sanitizeExcelText(appState.farmName) || 'مزرعة جديدة';
   const summarySheet = workbook.Sheets['لوحة التحكم والملخص'];
   if (summarySheet) {
     const c3Cell = summarySheet['C3'];
@@ -9597,11 +9644,16 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
 
           const explicitCode = Math.round(sanitizeExcelNum(is25Col || is21Col ? r[1] : 0, 0));
           // إذا كان اسم التاجر في الشيت بدون رقم سيارة فرعية وله كود صريح في العمود B يطابق تاجراً مكوداً (مثل "مزرعه" -> كود 131 "المزرعه")، نستخدم الاسم الرسمي الموحد
-          const hasSubCarNumber = /\d/.test(merch);
-          if (!hasSubCarNumber && explicitCode >= 101) {
+          const subCarNumStr = extractMerchantSubCarNumber(merch);
+          if (!subCarNumStr && explicitCode >= 101) {
             const officialMerch = appState.merchants.find(m => Number(m.code) === explicitCode);
             if (officialMerch && isSameMerchantIdentity(officialMerch.name, merch)) {
               merch = officialMerch.name;
+            }
+          } else if (subCarNumStr) {
+            const cleanedBase = cleanMerchantBaseName(merch);
+            if (cleanedBase) {
+              merch = `${cleanedBase} ${subCarNumStr}`;
             }
           }
 
@@ -9610,23 +9662,28 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
           const w1 = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[5] : r[4], 2));
           const w2 = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[6] : r[5], 2));
           const price = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[8] : r[7], 2));
-          const tip = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[9] : r[8], 2));
+          const tip = sanitizeExcelFinancialAmount(is25Col || is21Col ? r[9] : r[8], false);
 
-          // معالجة ذكية لنقدي المبيعات: في بعض شيتات الإكسيل توضع معادلة فروق التقريب (=O57-W57) في خلية النقدي فتعطي قيماً عشرية ضئيلة مثل 0.30 أو -0.20 ج.م
-          let rawCashSales = sanitizeExcelNum(is25Col || is21Col ? r[11] : r[10], 2);
-          const cashSales = (rawCashSales < 0 || (rawCashSales > 0 && rawCashSales < 1 && (w2 > 0 || w1 > 0)))
-            ? 0
-            : Math.max(0, rawCashSales);
-
-          const transferSales = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[12] : r[11], 2));
+          // معالجة ذكية للمبالغ المالية: تجاهل أي قيم سالبة أو فروق تقريب عشرية ضئيلة (< 1 ج.م مثل 0.30 أو -0.20 ج.م) ناتجة عن معادلات الإكسيل حتى لا تتحول إلى مديونية أو عجز وهمي
+          const cashSales = sanitizeExcelFinancialAmount(is25Col || is21Col ? r[11] : r[10], true);
+          const transferSales = sanitizeExcelFinancialAmount(is25Col || is21Col ? r[12] : r[11], true);
           const transferSalesType = normalizeExcelTransferType(is25Col || is21Col ? r[13] : '', transferSales);
-          const creditSales = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[14] : r[12], 2));
-          const debtCash = Math.max(0, sanitizeExcelNum(is25Col || is21Col ? r[15] : r[13], 2));
-          const debtTransfer = Math.max(0, sanitizeExcelNum(is25Col ? r[16] : 0, 2));
+          let creditSales = sanitizeExcelFinancialAmount(is25Col || is21Col ? r[14] : r[12], true);
+          const debtCash = sanitizeExcelFinancialAmount(is25Col || is21Col ? r[15] : r[13], true);
+          const debtTransfer = sanitizeExcelFinancialAmount(is25Col ? r[16] : 0, true);
           const debtTransferType = normalizeExcelTransferType(is25Col ? r[17] : '', debtTransfer);
-          const prevCash = Math.max(0, sanitizeExcelNum(is25Col ? r[18] : (is21Col ? r[16] : r[14]), 2));
-          const prevTransfer = Math.max(0, sanitizeExcelNum(is25Col ? r[19] : 0, 2));
+          const prevCash = sanitizeExcelFinancialAmount(is25Col ? r[18] : (is21Col ? r[16] : r[14]), true);
+          const prevTransfer = sanitizeExcelFinancialAmount(is25Col ? r[19] : 0, true);
           const prevTransferType = normalizeExcelTransferType(is25Col ? r[20] : '', prevTransfer);
+
+          // مطابقة فروق التقريب العشرية البسيطة (<= 0.05 ج.م) في خانة الآجل الناتجة عن معادلات الإكسيل (=W57-L57-M57)
+          if (w2 >= w1 && w2 > 0 && price > 0 && creditSales > 0) {
+            const expectedInvTotal = roundMoney2(roundMoney2((w2 - w1) * price) + tip);
+            const expectedRemCredit = roundMoney2(Math.max(0, expectedInvTotal - cashSales - transferSales));
+            if (Math.abs(creditSales - expectedRemCredit) > 0 && Math.abs(creditSales - expectedRemCredit) <= 0.05) {
+              creditSales = expectedRemCredit;
+            }
+          }
 
           const rawNotesCell = is25Col ? r[21] : (is21Col ? r[17] : r[15]);
           const { notes, custodyCash, custodyTransfer, custodyTransferType } = extractCustodyAndCleanNotesFromExcel(
@@ -9635,9 +9692,9 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
             is25Col ? r[26] : ''
           );
 
-          // قبول أي صف يحتوي على أوزان أو أسعار أو أي حركة مالية (نقدي، آجل، تحويل مبيعات، سداد مديونية، تحصيل مزرعة سابقة، أو عهدة)
+          // قبول الصف فقط إذا كان يحتوي على أوزان فعلية أو مبالغ مالية حقيقية (تجاهل الصفوف الفارغة التي تحتوي على سعر افتراضي فقط)
           const hasAnyRowActivity = (
-            w1 > 0 || w2 > 0 || price > 0 ||
+            w1 > 0 || w2 > 0 ||
             cashSales > 0 || transferSales > 0 || creditSales > 0 ||
             debtCash > 0 || debtTransfer > 0 ||
             prevCash > 0 || prevTransfer > 0 ||
@@ -9654,12 +9711,19 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
               debtCash === 0 && debtTransfer === 0 &&
               prevCash === 0 && prevTransfer === 0
             );
+            const isDebtOnlyRow = Boolean(
+              !isPendingRow &&
+              w1 === 0 && w2 === 0 &&
+              cashSales === 0 && transferSales === 0 && creditSales === 0 &&
+              (debtCash > 0 || debtTransfer > 0 || prevCash > 0 || prevTransfer > 0)
+            );
 
             const recObj = {
               id: '',
               excelCompositeKey: '',
               merchant: merch,
               scaleNo: scaleNoVal,
+              ...(isDebtOnlyRow ? { entryMode: 'debt_only', voucherNo: Number(scaleNoVal) || 0 } : {}),
               carNo: carNoVal,
               w1,
               w2,
@@ -9680,7 +9744,8 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
               prevTransferType,
               notes
             };
-            recObj.excelCompositeKey = buildExcelSaleCompositeKey(dayNum, seq, recObj);
+            const generatedCompositeKey = buildExcelSaleCompositeKey(dayNum, seq, recObj);
+            recObj.excelCompositeKey = generatedCompositeKey;
 
             if (isPendingRow) {
               // البحث عن الحركة المؤقتة المطابقة في البيانات الحالية (بالمفتاح المركب أو رقم الميزان أو التطابق الموضوعي حتى لو اختلف الـ UUID)
@@ -9709,6 +9774,7 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                   updatedBy: matchedOldPend.updatedBy || getActiveUserShortLabel(),
                   updatedTimeTxt: matchedOldPend.updatedTimeTxt || formatAuditTimeArabic(masterImportTs),
                   importedAt: masterImportTs,
+                  excelCompositeKey: generatedCompositeKey,
                   isEdited: Boolean(matchedOldPend.isEdited),
                   editVersion: Number(matchedOldPend.editVersion) || 0,
                   lastEditDiffText: matchedOldPend.lastEditDiffText || '',
@@ -9716,9 +9782,10 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                 });
                 unchangedSalesCount++;
               } else {
-                Object.assign(recObj, buildRecordAuditMeta(matchedOldPend || null, Boolean(matchedOldPend)), {
+                Object.assign(recObj, buildRecordAuditMeta(matchedOldPend || null, Boolean(matchedOldPend), recObj, 'sale'), {
                   updatedAt: masterImportTs,
-                  importedAt: masterImportTs
+                  importedAt: masterImportTs,
+                  excelCompositeKey: generatedCompositeKey
                 });
                 if (matchedOldPend) updatedExistingSalesCount++;
               }
@@ -9737,15 +9804,16 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
               let matchedOldSale = oldSales.find(os =>
                 os && !usedOldSaleIds.has(String(os.id)) && areSalesRowsDuplicate(os, recObj, true)
               );
-              // fallback: مطابقة بنفس رقم الميزان ونفس التاجر إذا تم تعديل الأوزان أو المبالغ داخل الإكسيل
+              // fallback: مطابقة بنفس رقم الميزان/السند ونفس التاجر ونفس نوع الحركة إذا تم تعديل الأوزان أو المبالغ داخل الإكسيل
               if (!matchedOldSale && scaleNoVal) {
                 matchedOldSale = oldSales.find(os =>
                   os && !usedOldSaleIds.has(String(os.id)) &&
-                  Number(os.scaleNo) === Number(scaleNoVal) &&
+                  isRecordDebtOnlyVoucher(os) === isRecordDebtOnlyVoucher(recObj) &&
+                  Number(isRecordDebtOnlyVoucher(os) ? (os.voucherNo || os.scaleNo) : os.scaleNo) === Number(scaleNoVal) &&
                   isSameMerchantIdentity(os.merchant, recObj.merchant)
                 );
               }
-              const upgradedFromPending = !matchedOldSale
+              const upgradedFromPending = (!matchedOldSale && !isDebtOnlyRow)
                 ? oldPendingSales.find(op =>
                     op && !usedOldPendIds.has(String(op.id)) &&
                     isSameMerchantIdentity(op.merchant, recObj.merchant) &&
@@ -9785,6 +9853,7 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                   updatedBy: matchedOldSale.updatedBy || getActiveUserShortLabel(),
                   updatedTimeTxt: matchedOldSale.updatedTimeTxt || formatAuditTimeArabic(masterImportTs),
                   importedAt: masterImportTs,
+                  excelCompositeKey: generatedCompositeKey,
                   isEdited: Boolean(matchedOldSale.isEdited),
                   editVersion: Number(matchedOldSale.editVersion) || 0,
                   lastEditDiffText: matchedOldSale.lastEditDiffText || '',
@@ -9792,9 +9861,10 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                 });
                 unchangedSalesCount++;
               } else {
-                Object.assign(recObj, buildRecordAuditMeta(baseExistingRec, Boolean(baseExistingRec)), {
+                Object.assign(recObj, buildRecordAuditMeta(baseExistingRec, Boolean(baseExistingRec), recObj, 'sale'), {
                   updatedAt: masterImportTs,
-                  importedAt: masterImportTs
+                  importedAt: masterImportTs,
+                  excelCompositeKey: generatedCompositeKey
                 });
                 if (baseExistingRec) updatedExistingSalesCount++;
               }
@@ -9854,11 +9924,13 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                 editHistory: Array.isArray(matchedOldExp.editHistory) ? [...matchedOldExp.editHistory] : []
               });
             } else {
+              const expCompKey = expObj.excelCompositeKey;
               expObj.id = generateRecordUUID(`imp_exp_d${dayNum}`);
               Object.assign(expObj, buildRecordAuditMeta(null, false), {
                 createdAt: masterImportTs,
                 updatedAt: masterImportTs,
-                importedAt: masterImportTs
+                importedAt: masterImportTs,
+                excelCompositeKey: expCompKey
               });
             }
             unrecordDeletedItem('expenses', expObj.id);
@@ -10288,7 +10360,7 @@ function updateLiveFormCalculation() {
     stickyRemEl.textContent = `${fmtInt(remCreditPreview)} ج.م`;
   }
 
-  // 1. Previous Debt Statement in Current Farm for Selected Merchant (e.g., محمود مدني -> 159,120 ج.م)
+  // 1. Previous Debt Statement in Current Farm for Selected Merchant (e.g., تاجر -> 0 ج.م)
   const mName = (document.getElementById('inpMerchantName').value || '').trim();
   const editId = document.getElementById('editSaleId').value || '';
   const mCode = resolveMerchantCode(mName);
@@ -10715,7 +10787,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v66-sync-and-concurrency-hardened') {
+          if (k !== 'farm-sales-committee-v67-clean-slate') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -14228,14 +14300,14 @@ function initFarmSalesApp() {
   const btnExpFarmTbImg = document.getElementById('btnExportFarmTbImage');
   if (btnExpFarmTbImg) {
     btnExpFarmTbImg.addEventListener('click', () => {
-      const fName = appState.farmName || 'أبوذكري';
+      const fName = appState.farmName || 'مزرعة جديدة';
       exportPrintTargetAsImageOrPdf('farmTrialBalance', 'png', `ميزان_مراجعة_المزرعة_الكامل_${fName}`);
     });
   }
   const btnExpFarmTbPdf = document.getElementById('btnExportFarmTbPdf');
   if (btnExpFarmTbPdf) {
     btnExpFarmTbPdf.addEventListener('click', () => {
-      const fName = appState.farmName || 'أبوذكري';
+      const fName = appState.farmName || 'مزرعة جديدة';
       exportPrintTargetAsImageOrPdf('farmTrialBalance', 'pdf', `ميزان_مراجعة_المزرعة_الكامل_${fName}`);
     });
   }
@@ -14764,7 +14836,7 @@ function initFarmSalesApp() {
   const btnConfirmSmartResetTxt = document.getElementById('btnConfirmExecuteSmartResetTxt');
 
   function updateSmartResetModeSelectionUI() {
-    const fName = appState.farmName || 'أبوذكري';
+    const fName = appState.farmName || 'مزرعة جديدة';
     syncActiveFarmIntoArchive();
     const farmsCount = Object.keys(appState.farmsArchive || {}).length;
     const merchCount = (appState.merchants || []).length;
