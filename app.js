@@ -2909,14 +2909,19 @@ function renderCloudDatabaseHub() {
       const exps = dObj.expenses || [];
       const dayExp = exps.reduce((a, e) => a + (Number(e.amount) || 0), 0);
       rows.forEach(r => {
-        if (r.w1 > 0 || r.w2 > 0 || r.totalWithTip > 0 || r.cashSales > 0 || r.debtCash > 0 || r.prevCash > 0) {
+        const hasLoadedSaleActivity = !r.isDebtCollectionOnly && (
+          r.w1 > 0 || r.w2 > 0 || r.totalWithTip > 0 || r.cashSales > 0 || r.transferSales > 0 || r.creditSales > 0
+        );
+        if (hasLoadedSaleActivity) {
           fCars++;
+        }
+        if (hasLoadedSaleActivity || r.isDebtCollectionOnly || r.debtCash > 0 || r.debtTransfer > 0 || r.prevCash > 0 || r.prevTransfer > 0) {
           totalSalesRowsAllFarms++;
         }
-        fNetW += r.netWeight;
-        fSales += r.totalWithTip;
-        fCashInBox += (r.cashSales + r.debtCash + r.prevCash);
-        fNetDebt += (r.creditSales - r.debtCash - r.debtTransfer);
+        fNetW = roundMoney2(fNetW + r.netWeight);
+        fSales = roundMoney2(fSales + r.totalWithTip);
+        fCashInBox = roundMoney2(fCashInBox + (r.cashSales + r.debtCash + r.prevCash));
+        fNetDebt = roundMoney2(fNetDebt + (r.creditSales - r.debtCash - r.debtTransfer));
       });
       fCashInBox -= dayExp;
     }
@@ -3126,42 +3131,48 @@ function ensureMerchantExists(rawName, explicitCode = null) {
 // =========================================================================
 // 3. CALCULATIONS ENGINE (DAILY & 10-DAY AGGREGATION)
 // =========================================================================
+function roundMoney2(v) {
+  const n = Number(v) || 0;
+  const r = Math.round((n + Number.EPSILON) * 100) / 100;
+  return Object.is(r, -0) || Math.abs(r) < 0.0001 ? 0 : r;
+}
+
 function computeSaleRow(row) {
-  const w1 = Math.max(0, Number(row.w1) || 0);
-  const w2 = Math.max(0, Number(row.w2) || 0);
+  const w1 = roundMoney2(Math.max(0, Number(row.w1) || 0));
+  const w2 = roundMoney2(Math.max(0, Number(row.w2) || 0));
   // الوزنة الثانية يجب أن تكون أكبر من أو تساوي الوزنة الأولى
-  const netWeight = (w2 >= w1 && w2 > 0) ? (w2 - w1) : 0;
-  const price = Number(row.price) || 0;
-  const tip = Number(row.tip) || 0;
-  const baseAmount = netWeight * price;
-  const totalWithTip = baseAmount + tip;
+  const netWeight = (w2 >= w1 && w2 > 0) ? roundMoney2(w2 - w1) : 0;
+  const price = roundMoney2(Math.max(0, Number(row.price) || 0));
+  const tip = roundMoney2(Math.max(0, Number(row.tip) || 0));
+  const baseAmount = roundMoney2(netWeight * price);
+  const totalWithTip = roundMoney2(baseAmount + tip);
 
   // Custody is a standalone statement (مجرد بيان مستقل لا يرتبط بالفاتورة أو الخزنة)
-  const custodyCash = Number(row.custodyCash) || 0;
-  const custodyTransfer = Number(row.custodyTransfer) || 0;
+  const custodyCash = roundMoney2(Math.max(0, Number(row.custodyCash) || 0));
+  const custodyTransfer = roundMoney2(Math.max(0, Number(row.custodyTransfer) || 0));
   const custodyTransferType = row.custodyTransferType || '';
-  const totalCustody = custodyCash + custodyTransfer;
+  const totalCustody = roundMoney2(custodyCash + custodyTransfer);
 
-  const cashSales = Number(row.cashSales) || 0;
-  const transferSales = Number(row.transferSales) || 0;
+  const cashSales = roundMoney2(Math.max(0, Number(row.cashSales) || 0));
+  const transferSales = roundMoney2(Math.max(0, Number(row.transferSales) || 0));
   const transferSalesType = row.transferSalesType || '';
-  const creditSales = Number(row.creditSales) || 0;
-  const debtCash = Number(row.debtCash) || 0;
-  const debtTransfer = Number(row.debtTransfer) || 0;
-  const prevCash = Number(row.prevCash) || 0;
-  const prevTransfer = Number(row.prevTransfer) || 0;
+  const creditSales = roundMoney2(Math.max(0, Number(row.creditSales) || 0));
+  const debtCash = roundMoney2(Math.max(0, Number(row.debtCash) || 0));
+  const debtTransfer = roundMoney2(Math.max(0, Number(row.debtTransfer) || 0));
+  const prevCash = roundMoney2(Math.max(0, Number(row.prevCash) || 0));
+  const prevTransfer = roundMoney2(Math.max(0, Number(row.prevTransfer) || 0));
 
   // صافي متبقي العهدة بعد خصم سداد المديونيات وسداد فاتورة اليوم (مع التوافق التام مع السجلات القديمة)
-  const custodyUsedForDebt = debtCash + debtTransfer;
-  const custodyUsedForInvoice = cashSales + transferSales;
-  const totalSettledFromCustody = custodyUsedForDebt + custodyUsedForInvoice;
-  const netCustodyAfterDebt = totalCustody - custodyUsedForDebt;
+  const custodyUsedForDebt = roundMoney2(debtCash + debtTransfer);
+  const custodyUsedForInvoice = roundMoney2(cashSales + transferSales);
+  const totalSettledFromCustody = roundMoney2(custodyUsedForDebt + custodyUsedForInvoice);
+  const netCustodyAfterDebt = roundMoney2(totalCustody - custodyUsedForDebt);
   const netCustodyRemaining = totalCustody > 0
-    ? (totalCustody >= totalSettledFromCustody ? (totalCustody - totalSettledFromCustody) : netCustodyAfterDebt)
+    ? roundMoney2(totalCustody >= totalSettledFromCustody ? (totalCustody - totalSettledFromCustody) : netCustodyAfterDebt)
     : 0;
 
-  const totalPaidAndCredit = cashSales + transferSales + creditSales;
-  const invoiceDiff = totalPaidAndCredit - totalWithTip;
+  const totalPaidAndCredit = roundMoney2(cashSales + transferSales + creditSales);
+  const invoiceDiff = roundMoney2(totalPaidAndCredit - totalWithTip);
   const code = resolveMerchantCode(row.merchant);
   const isDebtCollectionOnly = Boolean(
     !row.isPending &&
@@ -3246,10 +3257,26 @@ function computeDaySummary(dayNum) {
     sumInvoiceDiff += r.invoiceDiff;
   });
 
-  const avgPrice = sumNetW > 0 ? (sumBase / sumNetW) : 0;
+  sumW1 = roundMoney2(sumW1);
+  sumW2 = roundMoney2(sumW2);
+  sumNetW = roundMoney2(sumNetW);
+  sumTip = roundMoney2(sumTip);
+  sumBase = roundMoney2(sumBase);
+  sumTotalWithTip = roundMoney2(sumTotalWithTip);
+  sumCashSales = roundMoney2(sumCashSales);
+  sumTransferSales = roundMoney2(sumTransferSales);
+  sumCreditSales = roundMoney2(sumCreditSales);
+  sumDebtCash = roundMoney2(sumDebtCash);
+  sumDebtTransfer = roundMoney2(sumDebtTransfer);
+  sumPrevCash = roundMoney2(sumPrevCash);
+  sumPrevTransfer = roundMoney2(sumPrevTransfer);
+  sumPaidAndCredit = roundMoney2(sumPaidAndCredit);
+  sumInvoiceDiff = roundMoney2(sumInvoiceDiff);
+
+  const avgPrice = sumNetW > 0 ? roundMoney2(sumBase / sumNetW) : 0;
   const avgCarWeight = countCars > 0 ? Math.round(sumNetW / countCars) : 0;
   const pendingCarsCount = pendingRows.length;
-  const sumExpenses = expenses.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+  const sumExpenses = roundMoney2(expenses.reduce((acc, e) => acc + (Number(e.amount) || 0), 0));
 
   // 1. حساب حركة الذمم والمديونية اليومية (المطابقة الاستحقاقية للمزرعة الحالية)
   let openingDayDebt = 0;
@@ -3260,30 +3287,32 @@ function computeDaySummary(dayNum) {
       const cr = Number(rawR.creditSales) || 0;
       const dc = Number(rawR.debtCash) || 0;
       const dt = Number(rawR.debtTransfer) || 0;
-      openingDayDebt += (cr - dc - dt);
+      openingDayDebt = roundMoney2(openingDayDebt + (cr - dc - dt));
     });
   }
-  const dayDebtCollected = sumDebtCash + sumDebtTransfer;
-  const netDayDebtChange = sumCreditSales - dayDebtCollected;
-  const closingDayDebt = openingDayDebt + netDayDebtChange;
+  const dayDebtCollected = roundMoney2(sumDebtCash + sumDebtTransfer);
+  const netDayDebtChange = roundMoney2(sumCreditSales - dayDebtCollected);
+  const closingDayDebt = roundMoney2(openingDayDebt + netDayDebtChange);
 
   // 2. حساب ميزان الخزينة النقدية شامل الرصيد النقدي المرحّل بين الأيام
-  const openingCashFromPrevDay = dayNum > 1
-    ? (Number(appState.days && appState.days[dayNum - 1] && appState.days[dayNum - 1].carriedForwardCash) || 0)
-    : (Number(dayObj.openingCash) || 0);
-  const totalCashBeforeExpenses = sumCashSales + sumDebtCash + sumPrevCash;
-  const netCashInBox = totalCashBeforeExpenses - sumExpenses;
-  const totalAvailableCashInBox = openingCashFromPrevDay + netCashInBox;
-  const deliveredCash = Number(dayObj.deliveredCash) || 0;
-  const carriedForwardCash = Number(dayObj.carriedForwardCash) || 0;
-  const totalSettledAndCarriedCash = deliveredCash + carriedForwardCash;
-  const cashBoxDiff = totalAvailableCashInBox - totalSettledAndCarriedCash;
+  const openingCashFromPrevDay = roundMoney2(
+    dayNum > 1
+      ? (Number(appState.days && appState.days[dayNum - 1] && appState.days[dayNum - 1].carriedForwardCash) || 0)
+      : (Number(dayObj.openingCash) || 0)
+  );
+  const totalCashBeforeExpenses = roundMoney2(sumCashSales + sumDebtCash + sumPrevCash);
+  const netCashInBox = roundMoney2(totalCashBeforeExpenses - sumExpenses);
+  const totalAvailableCashInBox = roundMoney2(openingCashFromPrevDay + netCashInBox);
+  const deliveredCash = roundMoney2(Number(dayObj.deliveredCash) || 0);
+  const carriedForwardCash = roundMoney2(Number(dayObj.carriedForwardCash) || 0);
+  const totalSettledAndCarriedCash = roundMoney2(deliveredCash + carriedForwardCash);
+  const cashBoxDiff = roundMoney2(totalAvailableCashInBox - totalSettledAndCarriedCash);
 
-  const currentFarmTransfers = sumTransferSales + sumDebtTransfer;
-  const totalAllTransfers = currentFarmTransfers + sumPrevTransfer;
+  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer);
+  const totalAllTransfers = roundMoney2(currentFarmTransfers + sumPrevTransfer);
 
-  const weightAuditDiff = sumNetW - (sumW2 - sumW1);
-  const invoiceAuditDiff = Number(((sumPaidAndCredit - sumTotalWithTip) - sumInvoiceDiff).toFixed(2));
+  const weightAuditDiff = roundMoney2(sumNetW - (sumW2 - sumW1));
+  const invoiceAuditDiff = roundMoney2((sumPaidAndCredit - sumTotalWithTip) - sumInvoiceDiff);
   const isInvoicesBalanced = Math.abs(sumInvoiceDiff) <= 1 && invoiceAuditDiff === 0;
 
   return {
@@ -3909,10 +3938,10 @@ function enrichDashSummaryRow(s) {
 }
 
 function enrichMerchantRow(m) {
-  const nonCashDayOfSale = m.creditSales + m.transferSales;
-  const totalSettledCurrent = m.cashSales + m.transferSales + m.debtCash + m.debtTransfer;
-  const netDebtCurrent = nonCashDayOfSale - m.transferSales - m.debtCash - m.debtTransfer;
-  const prevAll = m.prevCash + m.prevTransfer;
+  const nonCashDayOfSale = roundMoney2(m.creditSales + m.transferSales);
+  const totalSettledCurrent = roundMoney2(m.cashSales + m.transferSales + m.debtCash + m.debtTransfer);
+  const netDebtCurrent = roundMoney2(nonCashDayOfSale - m.transferSales - m.debtCash - m.debtTransfer);
+  const prevAll = roundMoney2(m.prevCash + m.prevTransfer);
   return { ...m, nonCashDayOfSale, totalSettledCurrent, netDebtCurrent, prevAll };
 }
 
@@ -3983,11 +4012,11 @@ function computeFarmCumulativeTrialBalance(summariesList = null) {
   const closingFarmDebt = sumCreditSales - totalDebtCollected;
 
   // إجمالي النقدية التراكمية التي دخلت خزنة المزرعة عبر كل الأيام (بدون ازدواج الرصيد المرحّل بين الأيام)
-  const totalCashInflowBeforeExpenses = sumCashSales + sumDebtCash + sumPrevCash;
-  const netCumulativeCashInBox = totalCashInflowBeforeExpenses - sumExpenses;
+  const totalCashInflowBeforeExpenses = roundMoney2(sumCashSales + sumDebtCash + sumPrevCash);
+  const netCumulativeCashInBox = roundMoney2(totalCashInflowBeforeExpenses - sumExpenses);
   // إجمالي ما تم توريده للإدارة عبر كل الأيام + الرصيد المتبقي المرحّل في خزنة آخر يوم نشط
-  const totalSettledAndFinalCarry = sumDeliveredCash + lastDayCarriedForwardCash;
-  const cumulativeCashBoxDiff = netCumulativeCashInBox - totalSettledAndFinalCarry;
+  const totalSettledAndFinalCarry = roundMoney2(sumDeliveredCash + lastDayCarriedForwardCash);
+  const cumulativeCashBoxDiff = roundMoney2(netCumulativeCashInBox - totalSettledAndFinalCarry);
 
   return {
     activeDaysCount,
@@ -4798,18 +4827,18 @@ function computeMerchantAggregates() {
     summary.rows.forEach(r => {
       if (!r.code || !map[r.code]) return;
       const m = map[r.code];
-      if (!r.isDebtCollectionOnly) {
+      if (!r.isDebtCollectionOnly && (r.w1 > 0 || r.w2 > 0 || r.totalWithTip > 0 || r.cashSales > 0 || r.transferSales > 0 || r.creditSales > 0)) {
         m.cars += 1;
       }
-      m.netW += r.netWeight;
-      m.totalSales += r.totalWithTip;
-      m.cashSales += r.cashSales;
-      m.creditSales += r.creditSales;
-      m.transferSales += r.transferSales;
-      m.debtCash += r.debtCash;
-      m.debtTransfer += r.debtTransfer;
-      m.prevCash += r.prevCash;
-      m.prevTransfer += r.prevTransfer;
+      m.netW = roundMoney2(m.netW + r.netWeight);
+      m.totalSales = roundMoney2(m.totalSales + r.totalWithTip);
+      m.cashSales = roundMoney2(m.cashSales + r.cashSales);
+      m.creditSales = roundMoney2(m.creditSales + r.creditSales);
+      m.transferSales = roundMoney2(m.transferSales + r.transferSales);
+      m.debtCash = roundMoney2(m.debtCash + r.debtCash);
+      m.debtTransfer = roundMoney2(m.debtTransfer + r.debtTransfer);
+      m.prevCash = roundMoney2(m.prevCash + r.prevCash);
+      m.prevTransfer = roundMoney2(m.prevTransfer + r.prevTransfer);
 
       if (r.transferSales > 0 && m.byType[r.transferSalesType] !== undefined) {
         m.byType[r.transferSalesType] += r.transferSales;
@@ -5180,7 +5209,7 @@ function computeMerchantDetailedLedger(merchantCode) {
       if (r.isPending) {
         totalPendingCars++;
       } else {
-        if (!r.isDebtCollectionOnly) {
+        if (!r.isDebtCollectionOnly && (r.w1 > 0 || r.w2 > 0 || r.totalWithTip > 0 || r.cashSales > 0 || r.transferSales > 0 || r.creditSales > 0)) {
           totalCompletedCars++;
         }
         sumW1 += r.w1;
@@ -10670,7 +10699,7 @@ function initFarmSalesApp() {
     if ('caches' in window) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v64-independent-voucher-seq-and-bottom-sort') {
+          if (k !== 'farm-sales-committee-v65-accounting-stress-test-hardened') {
             caches.delete(k).catch(() => {});
           }
         });
@@ -11836,7 +11865,7 @@ function initFarmSalesApp() {
       }
       const s = computeDaySummary(appState.currentDay);
       const curD = appState.days[appState.currentDay];
-      const targetDeliver = Math.max(0, Math.round(s.totalAvailableCashInBox - s.carriedForwardCash));
+      const targetDeliver = roundMoney2(Math.max(0, s.totalAvailableCashInBox - s.carriedForwardCash));
       curD.deliveredCash = targetDeliver;
       curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
       const inpEl = document.getElementById('inpDeliveredCash');
@@ -11856,7 +11885,7 @@ function initFarmSalesApp() {
       }
       const s = computeDaySummary(appState.currentDay);
       const curD = appState.days[appState.currentDay];
-      const remToCarry = Math.max(0, Math.round(s.totalAvailableCashInBox - s.deliveredCash));
+      const remToCarry = roundMoney2(Math.max(0, s.totalAvailableCashInBox - s.deliveredCash));
       curD.carriedForwardCash = remToCarry;
       curD.carriedForwardCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.carriedForwardCashUpdatedAt) || 0) + 10);
       const inpEl = document.getElementById('inpCarriedForwardCash');
@@ -12014,7 +12043,7 @@ function initFarmSalesApp() {
     const editId = document.getElementById('editSaleId')?.value || '';
     const mCode = resolveMerchantCode(mName);
     const rawPrevDebt = mCode > 0 ? computeMerchantCurrentDebtExcluding(mCode, editId) : 0;
-    const positivePrevDebt = Math.max(0, Math.round(rawPrevDebt));
+    const positivePrevDebt = roundMoney2(Math.max(0, rawPrevDebt));
 
     const inpDebtCashEl = document.getElementById('inpDebtCash');
     const inpDebtTrEl = document.getElementById('inpDebtTransfer');
@@ -12030,7 +12059,7 @@ function initFarmSalesApp() {
       if (inpCashSalesEl) inpCashSalesEl.value = '';
       if (inpTrSalesEl) inpTrSalesEl.value = '';
       if (inpCreditSalesEl) {
-        inpCreditSalesEl.value = hasValidW2 && totalWithTip > 0 ? fmtMoney(Math.round(totalWithTip)) : '';
+        inpCreditSalesEl.value = hasValidW2 && totalWithTip > 0 ? fmtMoney(totalWithTip) : '';
       }
       updateLiveFormCalculation();
       if (!silent) {
@@ -12039,17 +12068,26 @@ function initFarmSalesApp() {
       return false;
     }
 
+    // احترام أي مبلغ سداد مديونية بتحويل بنكي (أو نقدي) أدخله المستخدم يدوياً في خانة تحصيل المديونيات إذا كانت قناة العهدة المقابلة = 0
+    const manualDebtTr = custTr <= 0 ? roundMoney2(Math.max(0, parseNum(inpDebtTrEl?.value) || 0)) : 0;
+    const manualDebtCash = custCash <= 0 ? roundMoney2(Math.max(0, parseNum(inpDebtCashEl?.value) || 0)) : 0;
+    const effectivePrevDebtAfterManual = roundMoney2(Math.max(0, positivePrevDebt - manualDebtTr - manualDebtCash));
+
     // الخطوة 1: سداد المديونية السابقة للمزرعة الحالية أولاً (وفي وضع سند تحصيل مديونية فقط، توجه العهدة بالكامل لسداد المديونية)
     const debtOnlyActive = isDebtCollectionOnlyMode();
-    const allocDebtCash = debtOnlyActive ? custCash : Math.min(custCash, positivePrevDebt);
-    const remCashAfterDebt = Math.max(0, custCash - allocDebtCash);
-    const remDebtNeeded = Math.max(0, positivePrevDebt - allocDebtCash);
-    const allocDebtTr = debtOnlyActive ? custTr : Math.min(custTr, remDebtNeeded);
-    const remTrAfterDebt = Math.max(0, custTr - allocDebtTr);
+    const allocDebtCash = custCash > 0
+      ? (debtOnlyActive ? custCash : roundMoney2(Math.min(custCash, effectivePrevDebtAfterManual)))
+      : manualDebtCash;
+    const remCashAfterDebt = roundMoney2(Math.max(0, custCash - (custCash > 0 ? allocDebtCash : 0)));
+    const remDebtNeeded = roundMoney2(Math.max(0, effectivePrevDebtAfterManual - (custCash > 0 ? allocDebtCash : 0)));
+    const allocDebtTr = custTr > 0
+      ? (debtOnlyActive ? custTr : roundMoney2(Math.min(custTr, remDebtNeeded)))
+      : manualDebtTr;
+    const remTrAfterDebt = roundMoney2(Math.max(0, custTr - (custTr > 0 ? allocDebtTr : 0)));
 
     if (inpDebtCashEl) inpDebtCashEl.value = allocDebtCash > 0 ? fmtMoney(allocDebtCash) : '';
     if (inpDebtTrEl) inpDebtTrEl.value = allocDebtTr > 0 ? fmtMoney(allocDebtTr) : '';
-    if (allocDebtTr > 0 && custTrType && selDebtTrTypeEl) {
+    if (custTr > 0 && allocDebtTr > 0 && custTrType && selDebtTrTypeEl) {
       selDebtTrTypeEl.value = custTrType;
     }
 
@@ -12059,10 +12097,10 @@ function initFarmSalesApp() {
     let remCredit = 0;
 
     if (hasValidW2 && totalWithTip > 0) {
-      allocSalesCash = Math.min(remCashAfterDebt, Math.round(totalWithTip));
-      const remInvoiceAfterCash = Math.max(0, Math.round(totalWithTip) - allocSalesCash);
-      allocSalesTr = Math.min(remTrAfterDebt, remInvoiceAfterCash);
-      remCredit = Math.max(0, Math.round(totalWithTip - allocSalesCash - allocSalesTr));
+      allocSalesCash = roundMoney2(Math.min(remCashAfterDebt, totalWithTip));
+      const remInvoiceAfterCash = roundMoney2(Math.max(0, totalWithTip - allocSalesCash));
+      allocSalesTr = roundMoney2(Math.min(remTrAfterDebt, remInvoiceAfterCash));
+      remCredit = roundMoney2(Math.max(0, totalWithTip - allocSalesCash - allocSalesTr));
 
       if (inpCashSalesEl) inpCashSalesEl.value = allocSalesCash > 0 ? fmtMoney(allocSalesCash) : '';
       if (inpTrSalesEl) inpTrSalesEl.value = allocSalesTr > 0 ? fmtMoney(allocSalesTr) : '';
