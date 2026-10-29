@@ -2031,6 +2031,8 @@ body.floating-bar-hidden #mobileWeighbridgeActionBar,
 /* =========================================================================
    7. LITE FIELD MODE STYLES (وضع شاشة المندوب المبسط المدمج - 3 عناصر فقط)
    ========================================================================= */
+body.lite-field-mode-active #mainHeader,
+body.lite-field-mode-active > header,
 body.lite-field-mode-active .lite-hide-el,
 body.lite-field-mode-active #dailyTopSelectorAndKpiCard,
 body.lite-field-mode-active #dailyExpensesSection,
@@ -2054,6 +2056,9 @@ body.lite-field-mode-active #btnDropdownJsonBackup {
 
 body.lite-field-mode-active #liteFieldModeActiveBanner {
   display: flex !important;
+  position: sticky !important;
+  top: 6px !important;
+  z-index: 40 !important;
 }
 
 body.lite-field-mode-active #liteSalesCardsContainer {
@@ -2081,10 +2086,29 @@ body.lite-field-mode-active #btnInlineSavePendingW1 {
     bottom: 8px !important;
   }
   body.lite-field-mode-active {
-    padding-bottom: 105px !important;
+    padding-bottom: 135px !important;
+  }
+  body.lite-field-mode-active.floating-bar-hidden {
+    padding-bottom: 28px !important;
   }
   body.lite-field-mode-active #toastContainer {
-    bottom: 84px !important;
+    bottom: 118px !important;
+  }
+}
+
+/* زيادة الهامش السفلي للشاشات الصغيرة (<= 400px) لمنع تغطية الشريط العائم لأسفل بطاقات المبيعات عند ظهور زر توزيع العهدة */
+@media screen and (max-width: 400px) {
+  body {
+    padding-bottom: 185px !important;
+  }
+  body.lite-field-mode-active {
+    padding-bottom: 150px !important;
+  }
+  body.lite-field-mode-active.floating-bar-hidden {
+    padding-bottom: 28px !important;
+  }
+  body.lite-field-mode-active #toastContainer {
+    bottom: 132px !important;
   }
 }
 

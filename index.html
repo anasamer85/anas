@@ -92,13 +92,22 @@
         box-shadow: 0 -8px 28px rgba(2, 6, 23, 0.65) !important;
       }
       body {
-        padding-bottom: 160px !important;
+        padding-bottom: 165px !important;
+      }
+      body.lite-field-mode-active {
+        padding-bottom: 135px !important;
       }
       body.floating-bar-hidden {
         padding-bottom: 96px !important;
       }
+      body.lite-field-mode-active.floating-bar-hidden {
+        padding-bottom: 28px !important;
+      }
       #toastContainer {
-        bottom: 132px !important;
+        bottom: 136px !important;
+      }
+      body.lite-field-mode-active #toastContainer {
+        bottom: 118px !important;
       }
       body.floating-bar-hidden #toastContainer {
         bottom: 80px !important;
@@ -106,6 +115,21 @@
       nav.md\:hidden {
         height: 54px !important;
       }
+    }
+    @media screen and (max-width: 400px) {
+      body {
+        padding-bottom: 185px !important;
+      }
+      body.lite-field-mode-active {
+        padding-bottom: 150px !important;
+      }
+      body.lite-field-mode-active #toastContainer {
+        bottom: 132px !important;
+      }
+    }
+    body.lite-field-mode-active #mainHeader,
+    body.lite-field-mode-active > header {
+      display: none !important;
     }
     @media screen and (min-width: 768px) {
       #mobileWeighbridgeActionBar {
@@ -331,7 +355,7 @@
   </div>
 
   <!-- Compact 2-Row Top App Header (سطرين فقط على الموبايل بدون شريط تمرير، وعرض كامل للكمبيوتر) -->
-  <header class="navy-gradient text-white sticky top-0 z-40 shadow-lg">
+  <header id="mainHeader" class="navy-gradient text-white sticky top-0 z-40 shadow-lg">
     <!-- Row 1 & Row 2 on Mobile (2 compact lines without scrollbar), Full Row 1 on Desktop (md:) -->
     <div class="max-w-7xl mx-auto px-2 md:px-3 py-1 md:py-1.5 flex flex-col md:flex-row md:flex-nowrap items-stretch md:items-center justify-between gap-1 md:gap-2">
       <!-- Mobile Line 1 / Desktop Right Group: Farm Badge, Editable Farm Name & Switcher, Connection Status -->
