@@ -2056,9 +2056,15 @@ body.lite-field-mode-active #btnDropdownJsonBackup {
 
 body.lite-field-mode-active #liteFieldModeActiveBanner {
   display: flex !important;
+  margin-bottom: 6px !important;
+}
+
+#liteFieldModeActiveBanner.sticky-lite-banner,
+.sticky-lite-banner {
   position: sticky !important;
-  top: 6px !important;
-  z-index: 40 !important;
+  top: 0 !important;
+  z-index: 1050 !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.38) !important;
 }
 
 body.lite-field-mode-active #liteSalesCardsContainer {

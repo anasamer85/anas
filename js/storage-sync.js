@@ -64,6 +64,10 @@ function loadState() {
     if (savedAuditPref !== null) {
       appState.showAuditMetadata = (savedAuditPref === '1' || savedAuditPref === 'true');
     }
+    const savedStickyLite = localStorage.getItem('pref_sticky_lite_banner') ?? localStorage.getItem(STORAGE_KEY + '_sticky_lite_banner');
+    if (savedStickyLite !== null && savedStickyLite !== undefined) {
+      appState.stickyLiteBanner = (savedStickyLite === '1' || savedStickyLite === 'true');
+    }
   } catch (e) {}
   return loaded;
 }
@@ -571,7 +575,7 @@ function isUserActivelyTypingInForm() {
   const ae = document.activeElement;
   if (!ae || !ae.tagName) return false;
   if (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA') {
-    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpLiteFilterPendingCards', 'chkStickyTableHeaders', 'chkStickyTableFooters', 'chkStickyTableRightCols', 'chkStickyTableLeftCols', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm', 'chkShowFloatingActionBar', 'chkShowAuditMetadata', 'inpFilterAuditTrail', 'selFilterAuditType'];
+    const ignoreIds = ['inpFilterDailySales', 'inpFilterPendingSales', 'inpLiteFilterPendingCards', 'chkStickyLiteBanner', 'chkStickyTableHeaders', 'chkStickyTableFooters', 'chkStickyTableRightCols', 'chkStickyTableLeftCols', 'inpFilterDailyExpenses', 'inpDashQuickSearch', 'inpMerchQuickSearch', 'inpFilterTransfers', 'inpFilterPrevFarms', 'inpFilterExpSummary', 'inpFilterUsersList', 'inpFilterCloudFarms', 'inpFilterMerchantModal', 'selModalMerchantSwitcher', 'chkEnableLiveSync', 'selLiveSyncInterval', 'selTopCloudFarm', 'chkShowFloatingActionBar', 'chkShowAuditMetadata', 'inpFilterAuditTrail', 'selFilterAuditType'];
     if (!ignoreIds.includes(ae.id)) return true;
   }
   return false;
@@ -1885,6 +1889,8 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
   try {
     localStorage.setItem(STORAGE_KEY, serialized);
     localStorage.setItem(STORAGE_KEY + '_show_audit_metadata', appState.showAuditMetadata !== false ? '1' : '0');
+    localStorage.setItem('pref_sticky_lite_banner', appState.stickyLiteBanner !== false ? '1' : '0');
+    localStorage.setItem(STORAGE_KEY + '_sticky_lite_banner', appState.stickyLiteBanner !== false ? '1' : '0');
     if (appState.webhookUrl) {
       localStorage.setItem(STORAGE_KEY + '_webhook_url', appState.webhookUrl);
     }

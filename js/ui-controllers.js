@@ -2429,7 +2429,60 @@ function setLiteFieldMode(enableFlag, notify = true) {
   }
 }
 
+function isStickyLiteBannerEnabled() {
+  try {
+    const saved = localStorage.getItem('pref_sticky_lite_banner') ?? localStorage.getItem(STORAGE_KEY + '_sticky_lite_banner');
+    if (saved !== null && saved !== undefined) {
+      return (saved === '1' || saved === 'true');
+    }
+  } catch (e) {}
+  return appState.stickyLiteBanner !== false;
+}
+
+function updateStickyLiteBannerUI() {
+  const isSticky = isStickyLiteBannerEnabled();
+  appState.stickyLiteBanner = isSticky;
+  const bannerEl = document.getElementById('liteFieldModeActiveBanner');
+  if (bannerEl) {
+    bannerEl.classList.toggle('sticky-lite-banner', isSticky);
+  }
+  const chkStickyLite = document.getElementById('chkStickyLiteBanner');
+  if (chkStickyLite) {
+    chkStickyLite.checked = isSticky;
+  }
+  const btnQuickSticky = document.getElementById('btnQuickToggleStickyLiteBanner');
+  const txtQuickSticky = document.getElementById('txtQuickStickyLiteBanner');
+  if (btnQuickSticky) {
+    btnQuickSticky.className = isSticky
+      ? 'px-2 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-extrabold transition flex items-center gap-1 shadow-sm'
+      : 'px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-bold transition flex items-center gap-1 border border-slate-500';
+  }
+  if (txtQuickSticky) {
+    txtQuickSticky.textContent = isSticky ? 'مثبت' : 'غير مثبت';
+  }
+}
+
+function setStickyLiteBanner(enableFlag, notify = true) {
+  const isSticky = Boolean(enableFlag);
+  appState.stickyLiteBanner = isSticky;
+  try {
+    localStorage.setItem('pref_sticky_lite_banner', isSticky ? '1' : '0');
+    localStorage.setItem(STORAGE_KEY + '_sticky_lite_banner', isSticky ? '1' : '0');
+  } catch (e) {}
+  updateStickyLiteBannerUI();
+  saveState(false);
+  if (notify) {
+    showToast(
+      isSticky
+        ? '📌 تم تفعيل تثبيت شريط المندوب في أعلى الشاشة أثناء التمرير وحفظ اختيارك'
+        : '🔓 تم إلغاء تثبيت شريط المندوب العلوي أثناء التمرير وحفظ اختيارك',
+      isSticky ? '📌' : '🔓'
+    );
+  }
+}
+
 function updateLiteFieldModeUI() {
+  updateStickyLiteBannerUI();
   const active = isLiteFieldModeEffective();
   if (typeof document !== 'undefined' && document.body) {
     document.body.classList.toggle('lite-field-mode-active', active);
@@ -5677,6 +5730,20 @@ function initFarmSalesApp() {
           : '⏸️ تم إيقاف التحويل التلقائي على الموبايل (يمكن التفعيل يدوياً من الزر العلوي)',
         '📱'
       );
+    });
+  }
+
+  const chkStickyLiteBannerEl = document.getElementById('chkStickyLiteBanner');
+  if (chkStickyLiteBannerEl) {
+    chkStickyLiteBannerEl.addEventListener('change', (e) => {
+      setStickyLiteBanner(Boolean(e.target.checked), true);
+    });
+  }
+
+  const btnQuickStickyLiteEl = document.getElementById('btnQuickToggleStickyLiteBanner');
+  if (btnQuickStickyLiteEl) {
+    btnQuickStickyLiteEl.addEventListener('click', () => {
+      setStickyLiteBanner(!isStickyLiteBannerEnabled(), true);
     });
   }
 

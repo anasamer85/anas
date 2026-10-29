@@ -527,7 +527,7 @@
     <section id="view-daily" class="space-y-4">
 
       <!-- شريط علوي مدمج يظهر فقط عند تفعيل وضع شاشة المندوب المبسط (Lite Field Mode Banner) -->
-      <div id="liteFieldModeActiveBanner" class="hidden bg-slate-900 text-white px-3.5 py-2 rounded-2xl border-2 border-teal-400 shadow-lg flex items-center justify-between gap-2 flex-wrap">
+      <div id="liteFieldModeActiveBanner" class="hidden sticky-lite-banner bg-slate-900 text-white px-3.5 py-2 rounded-2xl border-2 border-teal-400 shadow-lg flex items-center justify-between gap-2 flex-wrap">
         <div class="flex items-center gap-2">
           <span class="px-2 py-0.5 rounded-lg bg-teal-400 text-slate-950 font-extrabold text-xs">📱 شاشة المندوب المبسط</span>
           <span class="text-xs font-extrabold text-amber-300">
@@ -535,6 +535,10 @@
           </span>
         </div>
         <div class="flex items-center gap-1.5">
+          <button type="button" id="btnQuickToggleStickyLiteBanner" class="px-2 py-1 rounded-lg bg-amber-400 text-slate-950 text-[11px] font-extrabold transition flex items-center gap-1 shadow-sm" title="تثبيت أو إلغاء تثبيت شريط المندوب في أعلى الشاشة أثناء التمرير">
+            <span id="iconQuickStickyLiteBanner">📌</span>
+            <span id="txtQuickStickyLiteBanner" class="hidden sm:inline">مثبت</span>
+          </button>
           <select id="selLiteQuickDaySwitcher" class="bg-slate-800 text-amber-300 text-xs font-extrabold rounded-lg px-2 py-1 border border-teal-400/60 focus:outline-none" title="تغيير اليوم المفتوح"></select>
           <button type="button" id="btnExitLiteFieldModeBanner" class="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-extrabold transition flex items-center gap-1" title="العودة لعرض الموقع الكامل (للمدير والمحاسب)">
             <span>🖥️</span>
@@ -1663,6 +1667,10 @@
             <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-extrabold text-teal-950 bg-teal-100/80 px-3 py-1.5 rounded-xl border border-teal-400 shadow-sm" title="عند التفعيل، يتحول الموقع تلقائياً إلى شاشة المندوب المبسط فور فتحه من شاشة موبايل (< 768px)">
               <input type="checkbox" id="chkAutoLiteFieldOnMobile" class="rounded text-teal-800 w-4 h-4" checked />
               <span>تفعيل تلقائي للمندوب على الموبايل</span>
+            </label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-extrabold text-amber-950 bg-amber-100/90 px-3 py-1.5 rounded-xl border-2 border-amber-400 shadow-sm" title="تثبيت أو إلغاء تثبيت شريط المندوب العلوي في أعلى الشاشة أثناء التمرير">
+              <input type="checkbox" id="chkStickyLiteBanner" class="rounded text-amber-700 w-4 h-4" checked />
+              <span>📌 تثبيت شريط المندوب في أعلى الشاشة أثناء التمرير</span>
             </label>
             <button type="button" id="btnToggleLiteFieldModeCard" class="px-3.5 py-1.5 rounded-xl bg-teal-800 hover:bg-teal-700 text-white font-extrabold text-xs shadow transition flex items-center gap-1.5">
               <span id="btnToggleLiteFieldModeIcon">📱</span>

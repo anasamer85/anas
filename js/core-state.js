@@ -398,6 +398,7 @@ function getDefaultState(customFarmName = '') {
     showAuditMetadata: true,
     liteFieldMode: false,
     autoLiteFieldOnMobile: true,
+    stickyLiteBanner: true,
     stickyTableOptions: {
       headers: true,
       footers: true,
@@ -896,9 +897,18 @@ function applyParsedStateObject(parsed) {
     } else if (appState.autoLiteFieldOnMobile === undefined) {
       appState.autoLiteFieldOnMobile = true;
     }
+    const savedStickyLite = localStorage.getItem('pref_sticky_lite_banner') ?? localStorage.getItem(STORAGE_KEY + '_sticky_lite_banner');
+    if (savedStickyLite !== null && savedStickyLite !== undefined) {
+      appState.stickyLiteBanner = (savedStickyLite === '1' || savedStickyLite === 'true');
+    } else if (appState.stickyLiteBanner === undefined) {
+      appState.stickyLiteBanner = true;
+    } else {
+      appState.stickyLiteBanner = Boolean(appState.stickyLiteBanner);
+    }
   } catch (e) {
     appState.liteFieldMode = Boolean(appState.liteFieldMode);
     if (appState.autoLiteFieldOnMobile === undefined) appState.autoLiteFieldOnMobile = true;
+    if (appState.stickyLiteBanner === undefined) appState.stickyLiteBanner = true;
   }
   try {
     const defaultSticky = { headers: true, footers: true, rightCols: true, leftCols: true };
