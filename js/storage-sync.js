@@ -278,6 +278,7 @@ function getDeltaEventTargetKey(actionType, payload) {
 }
 
 function enqueueDeltaSyncEvent(actionType, payload = {}) {
+  window.enqueueDeltaSyncEvent = enqueueDeltaSyncEvent;
   if (!appState) return;
   if (!Array.isArray(appState.syncOutbox)) appState.syncOutbox = [];
   const nowTs = getSyncedNow();
@@ -414,9 +415,26 @@ function applyIncomingDeltaEvents(eventsList) {
         const delTs = Number(appState.deletedTimestamps.merchants && appState.deletedTimestamps.merchants[String(codeNum)]) || 0;
         const mTs = Math.max(Number(m.updatedAt) || 0, evTs);
         if (delTs > mTs) break;
+        const existingMerch = (appState.merchants || []).find(x => x && Number(x.code) === codeNum);
+        const oldBaseName = existingMerch ? String(existingMerch.name || '').trim() : String(p.oldName || '').trim();
+        const newBaseName = String(m.name || '').trim();
         unrecordDeletedItem('merchants', codeNum);
-        appState.merchants = mergeArraysById(appState.merchants || [], [{ ...m, updatedAt: mTs }], appState.deletedIds.merchants, 'code', true)
+        appState.merchants = mergeArraysById(appState.merchants || [], [{ code: codeNum, name: newBaseName, updatedAt: mTs }], appState.deletedIds.merchants, 'code', true)
           .sort((a, b) => Number(a.code) - Number(b.code));
+        if (oldBaseName && newBaseName && oldBaseName !== newBaseName) {
+          const renameInDays = (dMap) => {
+            if (!dMap || typeof dMap !== 'object') return;
+            for (let d = 1; d <= 10; d++) {
+              if (!dMap[d]) continue;
+              (dMap[d].sales || []).forEach(r => { if (r && r.merchant === oldBaseName) r.merchant = newBaseName; });
+              (dMap[d].pendingSales || []).forEach(pr => { if (pr && pr.merchant === oldBaseName) pr.merchant = newBaseName; });
+            }
+          };
+          renameInDays(appState.days);
+          if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
+            Object.values(appState.farmsArchive).forEach(fObj => { if (fObj && fObj.days) renameInDays(fObj.days); });
+          }
+        }
         changed = true;
         break;
       }
@@ -1917,3 +1935,8 @@ function showToast(msg, icon = '✅') {
   }, 3600);
 }
 
+
+if (typeof window !== 'undefined') {
+  window.enqueueDeltaSyncEvent = enqueueDeltaSyncEvent;
+  window.applyIncomingDeltaEvents = applyIncomingDeltaEvents;
+}

@@ -4250,6 +4250,11 @@ function initFarmSalesApp() {
     if (newPass) {
       activeUser.password = newPass;
     }
+    if (typeof enqueueDeltaSyncEvent === 'function') {
+      enqueueDeltaSyncEvent('UPSERT_USER', {
+        user: JSON.parse(JSON.stringify(activeUser))
+      });
+    }
     saveState(true);
     renderAll();
     showToast('تم حفظ وتحديث بيانات ملفك الشخصي وكلمة المرور بنجاح! 👤');
@@ -4316,13 +4321,18 @@ function initFarmSalesApp() {
         // Ensure primary admin keeps admin perm
         if (uObj.id === 'admin') perms.admin = true;
         uObj.perms = perms;
+        if (typeof enqueueDeltaSyncEvent === 'function') {
+          enqueueDeltaSyncEvent('UPSERT_USER', {
+            user: JSON.parse(JSON.stringify(uObj))
+          });
+        }
       }
       document.getElementById('editUserIdInput').value = '';
       document.getElementById('btnSaveUserSubmit').textContent = '➕ حفظ المستخدم';
       document.getElementById('btnCancelUserEdit').classList.add('hidden');
       showToast(`تم تحديث جميع بيانات وصلاحيات المستخدم (${fullName}) بنجاح`);
     } else {
-      appState.users.push({
+      const newUserObj = {
         id: generateRecordUUID('usr'),
         updatedAt: getSyncedNow(),
         username: username,
@@ -4332,7 +4342,13 @@ function initFarmSalesApp() {
         jobTitle: jobTitle,
         isSystem: false,
         perms
-      });
+      };
+      appState.users.push(newUserObj);
+      if (typeof enqueueDeltaSyncEvent === 'function') {
+        enqueueDeltaSyncEvent('UPSERT_USER', {
+          user: JSON.parse(JSON.stringify(newUserObj))
+        });
+      }
       showToast(`تم إنشاء المستخدم (${fullName}) وتحديد صلاحياته بنجاح`);
     }
     document.getElementById('inpNewUserFullName').value = '';
@@ -6734,12 +6750,36 @@ function initFarmSalesApp() {
       const mObj = appState.merchants.find(m => m.code === editCode);
       if (mObj) {
         const oldName = mObj.name;
+        const nowEditMerchTs = getSyncedNow();
         mObj.name = name;
-        mObj.updatedAt = getSyncedNow();
+        mObj.updatedAt = nowEditMerchTs;
         // Update sales rows that used oldName in active farm and across all archived farms
         for (let d = 1; d <= 10; d++) {
           (appState.days[d].sales || []).forEach(r => {
-            if (r.merchant === oldName) r.merchant = name;
+            if (r.merchant === oldName) {
+              r.merchant = name;
+              r.updatedAt = Math.max(Number(r.updatedAt) || 0, nowEditMerchTs);
+              if (typeof enqueueDeltaSyncEvent === 'function') {
+                enqueueDeltaSyncEvent('UPSERT_SALE', {
+                  farmName: appState.farmName,
+                  dayNum: d,
+                  record: r
+                });
+              }
+            }
+          });
+          (appState.days[d].pendingSales || []).forEach(p => {
+            if (p.merchant === oldName) {
+              p.merchant = name;
+              p.updatedAt = Math.max(Number(p.updatedAt) || 0, nowEditMerchTs);
+              if (typeof enqueueDeltaSyncEvent === 'function') {
+                enqueueDeltaSyncEvent('UPSERT_PENDING', {
+                  farmName: appState.farmName,
+                  dayNum: d,
+                  record: p
+                });
+              }
+            }
           });
         }
         if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
@@ -6749,8 +6789,22 @@ function initFarmSalesApp() {
                 ((fObj.days[d] && fObj.days[d].sales) || []).forEach(r => {
                   if (r.merchant === oldName) r.merchant = name;
                 });
+                ((fObj.days[d] && fObj.days[d].pendingSales) || []).forEach(p => {
+                  if (p.merchant === oldName) p.merchant = name;
+                });
               }
             }
+          });
+        }
+        if (typeof enqueueDeltaSyncEvent === 'function') {
+          enqueueDeltaSyncEvent('UPSERT_MERCHANT', {
+            merchant: {
+              ...JSON.parse(JSON.stringify(mObj)),
+              code: Number(mObj.code),
+              name: mObj.name,
+              updatedAt: mObj.updatedAt
+            },
+            oldName: oldName
           });
         }
         showToast(`تم تعديل اسم التاجر كود (${editCode}) إلى (${name}) وتثبيته في جميع المزارع`);
