@@ -11159,31 +11159,12 @@ function initFarmSalesApp() {
     }
   } catch (e) {}
 
-  // Register Offline Service Worker (v71) with auto-update detection
+  // Register Offline Service Worker (v72) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    navigator.serviceWorker.register('./sw.js?v=71', { scope: './' }).then((reg) => {
-      // Immediately check for updates whenever the app is opened
-      reg.update().catch(() => {});
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              showToast('🚀 يتوفر تحديث جديد للتطبيق! جاري التحديث التلقائي...', '🔄');
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        }
-      });
-    }).catch(() => {});
-
-    let isRefreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!isRefreshing) {
-        isRefreshing = true;
-        window.location.reload();
-      }
-    });
+    if (!window.__swRegisteredOnceV72) {
+      window.__swRegisteredOnceV72 = true;
+      navigator.serviceWorker.register('./sw.js?v=72', { scope: './' }).catch(() => {});
+    }
   }
 
   // 1. إلغاء تغيير القيم ببكرة الفأرة (Mouse Wheel) ومفاتيح الأسهم على جميع خانات الإدخال الرقمية والمالية

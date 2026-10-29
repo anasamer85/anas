@@ -2839,11 +2839,10 @@
         './icon-512.png'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-        navigator.serviceWorker.register('./sw.js?v=72', { scope: './' }).then(function (reg) {
-          if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
-        }).catch(function () {});
+        if (!window.__swRegisteredOnceV72) {
+          window.__swRegisteredOnceV72 = true;
+          navigator.serviceWorker.register('./sw.js?v=72', { scope: './' }).catch(function () {});
+        }
       }
       if ('caches' in window && navigator.onLine) {
         window.addEventListener('load', function () {

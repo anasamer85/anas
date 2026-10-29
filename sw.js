@@ -1,4 +1,4 @@
-// Service Worker - نظام محاضر لجان بيع المزارع (Local Vendors PWA v72)
+// Service Worker - نظام محاضر لجان بيع المزارع (Local Vendors PWA v72 - No Loop Fix)
 const CACHE_NAME = "farm-sales-committee-v72-local-vendors";
 
 const CORE_LOCAL_ASSETS = [
@@ -13,7 +13,8 @@ const CORE_LOCAL_ASSETS = [
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
-  "./vendor/vendor-loader.js"
+  "./vendor/vendor-loader.js",
+  "./vendor/vendor-loader.js?v=72"
 ];
 
 const EXTERNAL_CDN_ASSETS = [
@@ -69,7 +70,7 @@ self.addEventListener("activate", (event) => {
           }
         })
       )
-    ).then(() => self.clients.claim())
+    )
   );
 });
 
@@ -101,6 +102,8 @@ async function matchFromCacheSmart(req, isHtmlNav = false) {
     const fileName = urlObj.pathname.split("/").pop();
     if (fileName) {
       cached = await cache.match("./" + fileName, { ignoreSearch: true });
+      if (cached) return cached;
+      cached = await cache.match("./vendor/" + fileName, { ignoreSearch: true });
       if (cached) return cached;
     }
   } catch (e) {}
@@ -135,7 +138,7 @@ self.addEventListener("fetch", (event) => {
     url.includes("/app.js") ||
     url.includes("/style.css") ||
     url.includes("/manifest.json") ||
-    url.includes("/vendor/");
+    url.includes("/vendor/vendor-loader.js");
 
   if (isLocalCoreAsset) {
     event.respondWith(
@@ -161,7 +164,8 @@ self.addEventListener("fetch", (event) => {
         .catch(async () => {
           const cachedRes = await matchFromCacheSmart(req, isHtmlNav);
           if (cachedRes) return cachedRes;
-          return caches.match("./index.html", { ignoreSearch: true });
+          if (isHtmlNav) return caches.match("./index.html", { ignoreSearch: true });
+          return new Response("", { status: 404 });
         })
     );
     return;
@@ -185,7 +189,7 @@ self.addEventListener("fetch", (event) => {
           if (url.endsWith(".js") || url.includes("cdn.tailwindcss.com") || url.includes("cdn.jsdelivr.net")) {
             return new Response("", { status: 200, headers: { "Content-Type": "application/javascript" } });
           }
-          return cachedRes;
+          return new Response("", { status: 404 });
         });
     })
   );
