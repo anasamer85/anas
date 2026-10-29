@@ -380,7 +380,9 @@ function getDefaultState(customFarmName = '') {
     hasLocalEdits: false,
     liveSyncEnabled: true,
     liveSyncIntervalSec: 5,
-    deletedIds: { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] },
+    deletedIds: { sales: [], pendingSales: [], expenses: [], merchants: [], syncOutbox: [],
+    lastDeltaSyncAt: 0,
+    users: [], farms: [] },
     deletedTimestamps: { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} },
     webhookUrl: getEmbeddedWebhookUrl() || '',
     updatedAt: '',
@@ -403,6 +405,8 @@ function getDefaultState(customFarmName = '') {
       leftCols: true
     },
     activeUserId: 'admin',
+    syncOutbox: [],
+    lastDeltaSyncAt: 0,
     users: [
       { id: 'admin', username: 'admin', password: 'admin', name: 'مدير الموقع (كامل الصلاحيات)', phone: '', jobTitle: 'مدير عام المزرعة', isSystem: true, perms: { sales: true, expenses: true, merchants: true, farms: true, admin: true, liteFieldMode: false, showSyncExcel: true, showSyncCloud: true, showSyncWebhook: true } }
     ],
@@ -816,7 +820,9 @@ function deduplicateAllDaysInState(stateObj) {
 }
 
 function ensureDeletedIdsStructure(obj) {
-  const base = { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] };
+  const base = { sales: [], pendingSales: [], expenses: [], merchants: [], syncOutbox: [],
+    lastDeltaSyncAt: 0,
+    users: [], farms: [] };
   if (!obj || typeof obj !== 'object') return base;
   return {
     sales: Array.isArray(obj.sales) ? obj.sales : [],
@@ -848,6 +854,8 @@ function applyParsedStateObject(parsed) {
   appState = { ...getDefaultState(), ...parsed, webhookUrl: savedWebhook };
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
   appState.deletedTimestamps = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
+  if (!Array.isArray(appState.syncOutbox)) appState.syncOutbox = [];
+  if (!appState.lastDeltaSyncAt) appState.lastDeltaSyncAt = 0;
   if (appState.liveSyncEnabled === undefined) appState.liveSyncEnabled = true;
   if (!appState.liveSyncIntervalSec) appState.liveSyncIntervalSec = 5;
   if (appState.inactivityTimeoutMin === undefined || appState.inactivityTimeoutMin === null || isNaN(Number(appState.inactivityTimeoutMin))) {
