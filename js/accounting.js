@@ -26,7 +26,6 @@ function addSpecificDayToCycle(targetDayNum, customLabel = '') {
   const trimmedLbl = String(customLabel || '').trim();
   if (trimmedLbl) {
     appState.days[dNum].dateLabel = trimmedLbl;
-    if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPDATE_DAY_META', { farmName: appState.farmName, dayNumber: dNum, dateLabel: trimmedLbl, labelUpdatedAt: appState.days[dNum].labelUpdatedAt });
   } else if (!appState.days[dNum].dateLabel) {
     appState.days[dNum].dateLabel = `اليوم ${dNum}`;
   }
@@ -68,7 +67,6 @@ function editSpecificDayInCycle(targetDayNum, newLabel) {
     };
   } else {
     appState.days[dNum].dateLabel = trimmedLbl;
-    if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPDATE_DAY_META', { farmName: appState.farmName, dayNumber: dNum, dateLabel: trimmedLbl, labelUpdatedAt: appState.days[dNum].labelUpdatedAt });
   }
   appState.days[dNum].isHidden = false;
   appState.days[dNum].addedAt = getSyncedNow();
@@ -630,9 +628,7 @@ function ensureMerchantExists(rawName, explicitCode = null) {
 
   const existingIdx = appState.merchants.findIndex(m => m && Number(m.code) === nextCode);
   if (existingIdx === -1) {
-    const newM = { code: nextCode, name: base, updatedAt: nowTs };
-    appState.merchants.push(newM);
-    if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_MERCHANT', newM);
+    appState.merchants.push({ code: nextCode, name: base, updatedAt: nowTs });
   } else {
     appState.merchants[existingIdx].name = base;
     appState.merchants[existingIdx].updatedAt = nowTs;

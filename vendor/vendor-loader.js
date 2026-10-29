@@ -1,7 +1,7 @@
-// Local Vendor Loader + Service Worker Infinite-Reload Loop Guard (v74 Modular Architecture)
+// Local Vendor Loader + Service Worker Infinite-Reload Loop Guard (v73 Modular Architecture)
 (function () {
-  var VENDOR_CACHE_NAME = 'farm-sales-committee-v74-modular-architecture';
-  var UNIFIED_SW_URL = './sw.js?v=74';
+  var VENDOR_CACHE_NAME = 'farm-sales-committee-v73-modular-architecture';
+  var UNIFIED_SW_URL = './sw.js?v=73';
 
   // 1. درع الحماية ضد التحديث المستمر للصفحة (Infinite Reload Loop Guard)
   if ('serviceWorker' in navigator) {

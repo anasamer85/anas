@@ -1,16 +1,16 @@
- =========================================================================
- MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v73)
- =========================================================================
+// =========================================================================
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v73)
+// =========================================================================
 
- =========================================================================
- 4. UI RENDERING FUNCTIONS
- =========================================================================
+// =========================================================================
+// 4. UI RENDERING FUNCTIONS
+// =========================================================================
 function updateConnectionAndSyncUI() {
   const isOnline = navigator.onLine;
   const dot = document.getElementById('connDot');
   const txt = document.getElementById('connText');
   const badge = document.getElementById('connStatusBadge');
-  document.getElementById('pendingCountTxt').textContent = (appState.syncOutbox && appState.syncOutbox.length) || appState.pendingChanges || 0;
+  document.getElementById('pendingCountTxt').textContent = appState.pendingChanges || 0;
 
   const rawFarmName = String(appState.farmName ?? '').trim();
   const dispFarmName = rawFarmName || 'بدون مزرعة';
@@ -71,7 +71,7 @@ function renderDaySelector() {
     container.appendChild(btn);
   });
 
-   Add "+ يوم جديد" pill button if fewer than 10 days are visible and user has permission
+  // Add "+ يوم جديد" pill button if fewer than 10 days are visible and user has permission
   if (visDays.length < 10 && hasPermission('sales')) {
     let nextAvailable = 1;
     for (let d = 1; d <= 10; d++) {
@@ -421,7 +421,7 @@ function renderDailyView() {
     ${carryNextDayNote}
   `;
 
-   Render Pending First-Weigh Cars (الوزنة الأولى المحفوظة مؤقتاً لحين استكمال الوزنة الثانية)
+  // Render Pending First-Weigh Cars (الوزنة الأولى المحفوظة مؤقتاً لحين استكمال الوزنة الثانية)
   const pendingList = (appState.days[d] && appState.days[d].pendingSales) || [];
   const pendSec = document.getElementById('pendingWeighInsSection');
   const pendTbody = document.getElementById('pendingWeighInsTbody');
@@ -473,9 +473,9 @@ function renderDailyView() {
   }
 }
 
- =========================================================================
- UNIVERSAL EXCEL-LIKE SORT & FILTER ENGINE FOR ALL 10 WEBSITE TABLES
- =========================================================================
+// =========================================================================
+// UNIVERSAL EXCEL-LIKE SORT & FILTER ENGINE FOR ALL 10 WEBSITE TABLES
+// =========================================================================
 const excelTableState = {
   showScaleReceiptButtons: false,
   dash: { searchQuery: '', sortCol: null, sortDir: 'asc', colFilters: {}, showColFilters: false },
@@ -1020,12 +1020,12 @@ function applyDomTableExcelEngine(tableId) {
   if (!tbody) return;
 
   updateColFilterToggleBtnUI(tableId);
-   Render Excel Filterable Header Row
+  // Render Excel Filterable Header Row
   if (theadRow) {
     theadRow.innerHTML = cfg.columns.map(col => renderExcelHeaderCell(tableId, col, cfg.lightHeader)).join('');
   }
 
-   Capture freshly rendered rows into cache
+  // Capture freshly rendered rows into cache
   const currentTrs = Array.from(tbody.querySelectorAll('tr'));
   const isSingleEmptyMessage = currentTrs.length === 1 && currentTrs[0].children.length === 1 && currentTrs[0].children[0].colSpan > 1;
   if (!isSingleEmptyMessage) {
@@ -1067,7 +1067,7 @@ function applyDomTableExcelEngine(tableId) {
     });
   }
 
-   Dynamically recalculate footer totals if table has tfoot
+  // Dynamically recalculate footer totals if table has tfoot
   if (cfg.tfootId && cfg.footerLabelColspan) {
     const tfoot = document.getElementById(cfg.tfootId);
     if (tfoot) {
@@ -1092,7 +1092,7 @@ function renderDashboardView() {
   const titleEl = document.getElementById('dashFarmNameTitle');
   if (titleEl) titleEl.textContent = fName;
 
-   فقط الأيام المفتوحة والتي عليها سجل حركات (الأيام غير النشطة تظل مخفية)
+  // فقط الأيام المفتوحة والتي عليها سجل حركات (الأيام غير النشطة تظل مخفية)
   const openActiveSummaries = getOpenAndActiveDashSummaries();
   const filteredSummaries = applyExcelSortAndFilter(openActiveSummaries, DASH_COLUMNS, 'dash');
 
@@ -1102,7 +1102,7 @@ function renderDashboardView() {
   }
 
   updateColFilterToggleBtnUI('dash');
-   Update Dashboard Filter Hint
+  // Update Dashboard Filter Hint
   const dashSt = excelTableState.dash;
   const activeColFiltersCount = Object.keys(dashSt.colFilters).filter(k => isColumnFilteredOrSorted('dash', k).filtered).length;
   const dashHint = document.getElementById('dashFilterStatusHint');
@@ -1162,7 +1162,7 @@ function renderDashboardView() {
     </div>
   `).join('');
 
-   Render Excel Filterable Header Row
+  // Render Excel Filterable Header Row
   const theadRow = document.getElementById('dashTableTheadRow');
   if (theadRow) {
     theadRow.innerHTML = DASH_COLUMNS.map(col => renderExcelHeaderCell('dash', col)).join('');
@@ -1234,7 +1234,7 @@ function renderDashboardView() {
 
   renderFarmCumulativeTrialBalanceUI(filteredSummaries);
 
-   الرسم البياني يعرض الأيام المفتوحة والتي عليها سجل حركات فقط (الأيام غير النشطة تظل مخفية)
+  // الرسم البياني يعرض الأيام المفتوحة والتي عليها سجل حركات فقط (الأيام غير النشطة تظل مخفية)
   const chartDays = filteredSummaries;
   const ctx = document.getElementById('dashSalesChart');
   if (ctx && typeof Chart !== 'undefined') {
@@ -1283,7 +1283,7 @@ function renderMerchantsAndStatements(scopeTab = 'all') {
   const baseList = filterMode === 'active' ? activeList : fullList;
   const list = applyExcelSortAndFilter(baseList, MERCH_COLUMNS, 'merch');
 
-   Update Filter Buttons & Counters UI
+  // Update Filter Buttons & Counters UI
   const btnAct = document.getElementById('btnFilterMerchActive');
   const btnAll = document.getElementById('btnFilterMerchAll');
   const bdgAct = document.getElementById('badgeActiveMerchCount');
@@ -1322,7 +1322,7 @@ function renderMerchantsAndStatements(scopeTab = 'all') {
     }
   }
 
-   Render Excel Filterable Header Row for Merchants Table
+  // Render Excel Filterable Header Row for Merchants Table
   const mTheadRow = document.getElementById('merchantsTheadRow');
   if (mTheadRow) {
     mTheadRow.innerHTML = `
@@ -1417,10 +1417,10 @@ function renderMerchantsAndStatements(scopeTab = 'all') {
       <td class="p-2 border"></td>
     </tr>
   `;
-  }  end if (renderMerchTable)
+  } // end if (renderMerchTable)
 
   if (renderTransfersTables) {
-   1) Transfers Table Filter (Active = merchants with transfers > 0 vs All coded merchants)
+  // 1) Transfers Table Filter (Active = merchants with transfers > 0 vs All coded merchants)
   const activeTransfersList = fullList.filter(m => (m.transferSales + m.debtTransfer + m.prevTransfer) > 0);
   const trFilterMode = appState.transfersViewFilter === 'active' ? 'active' : 'all';
   const trListToRender = trFilterMode === 'active' ? activeTransfersList : fullList;
@@ -1498,7 +1498,7 @@ function renderMerchantsAndStatements(scopeTab = 'all') {
     </tr>
   `;
 
-   2) Previous Farms Table Filter (Active = merchants with prevCash + prevTransfer > 0 vs All coded merchants)
+  // 2) Previous Farms Table Filter (Active = merchants with prevCash + prevTransfer > 0 vs All coded merchants)
   const activePrevFarmsList = fullList.filter(m => (m.prevCash + m.prevTransfer) > 0 || m.prevNotes.length > 0);
   const pfFilterMode = appState.prevFarmsViewFilter === 'active' ? 'active' : 'all';
   const pfListToRender = pfFilterMode === 'active' ? activePrevFarmsList : fullList;
@@ -1562,7 +1562,7 @@ function renderMerchantsAndStatements(scopeTab = 'all') {
     applyDomTableExcelEngine('transfers');
     applyDomTableExcelEngine('prevFarms');
   }
-  }  end if (renderTransfersTables)
+  } // end if (renderTransfersTables)
   if (activeDrillDownMerchantCode > 0) {
     const mdl = document.getElementById('merchantDrillDownModal');
     if (mdl && !mdl.classList.contains('hidden')) {
@@ -1611,7 +1611,7 @@ function renderMerchantDrillDownModal() {
     subTitle.textContent = subCarsTxt;
   }
 
-   Populate Merchant Switcher Dropdown inside Modal
+  // Populate Merchant Switcher Dropdown inside Modal
   const selSwitcher = document.getElementById('selModalMerchantSwitcher');
   if (selSwitcher && document.activeElement !== selSwitcher) {
     const allMerchants = computeMerchantAggregates();
@@ -1620,7 +1620,7 @@ function renderMerchantDrillDownModal() {
     ).join('');
   }
 
-   Render 6 KPI Summary Cards
+  // Render 6 KPI Summary Cards
   const kpiGrid = document.getElementById('mdlMerchKpiGrid');
   if (kpiGrid) {
     const pendTxt = ledger.totalPendingCars > 0 ? ` (+${ledger.totalPendingCars} مؤقت)` : '';
@@ -1661,7 +1661,7 @@ function renderMerchantDrillDownModal() {
     `;
   }
 
-   Extra Badges Strip for Standalone Custody & Previous Farms Collections
+  // Extra Badges Strip for Standalone Custody & Previous Farms Collections
   const extraStrip = document.getElementById('mdlMerchExtraBadges');
   if (extraStrip) {
     const parts = [];
@@ -1681,7 +1681,7 @@ function renderMerchantDrillDownModal() {
     }
   }
 
-   Filter movements by search query
+  // Filter movements by search query
   const q = (document.getElementById('inpFilterMerchantModal')?.value || '').trim().toLowerCase();
   const filteredMovements = q
     ? ledger.movements.filter(m =>
@@ -1697,7 +1697,7 @@ function renderMerchantDrillDownModal() {
       )
     : ledger.movements;
 
-   Populate the dedicated print-only container for this single merchant
+  // Populate the dedicated print-only container for this single merchant
   if (typeof updateReceiptToggleBtnsUI === 'function') updateReceiptToggleBtnsUI();
   renderMerchantPrintOnlyContainer(ledger, filteredMovements);
 
@@ -2016,7 +2016,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     hdrShort.textContent = `تسجيل خروج (${shortDisplayName})`;
   }
 
-   Top Header Select
+  // Top Header Select
   const selRole = document.getElementById('selActiveUserRole');
   if (selRole && document.activeElement !== selRole) {
     selRole.innerHTML = users.map(u =>
@@ -2024,7 +2024,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     ).join('');
   }
 
-   Visitor Banner & Form Locking
+  // Visitor Banner & Form Locking
   const isFullViewerOnly = !hasPermission('sales') && !hasPermission('expenses') && !hasPermission('merchants') && !hasPermission('farms');
   const vBanner = document.getElementById('visitorModeBanner');
   if (vBanner) {
@@ -2035,7 +2035,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     }
   }
 
-   1. Visitor: Completely hide ⚙️ التحكم والمزامنة والصلاحيات tab & buttons
+  // 1. Visitor: Completely hide ⚙️ التحكم والمزامنة والصلاحيات tab & buttons
   document.querySelectorAll('[data-nav="sync"]').forEach(btn => {
     btn.classList.toggle('hidden', isVis);
   });
@@ -2046,7 +2046,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
   const btnDdProf = document.getElementById('btnOpenMyProfile');
   if (btnDdProf) btnDdProf.classList.toggle('hidden', isVis);
 
-   If Visitor was on sync tab, redirect immediately to daily tab
+  // If Visitor was on sync tab, redirect immediately to daily tab
   if (isVis && appState.activeTab === 'sync') {
     appState.activeTab = 'daily';
     document.querySelectorAll('.nav-tab-btn').forEach(b => {
@@ -2058,10 +2058,10 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-   2. Inside #view-sync:
-      - Admin sees everything.
-      - Regular user sees their own account (#myProfileCardSection) + only sections explicitly permitted by Admin.
-      - Users management (#usersPermissionsModal) is strictly for Admin only.
+  // 2. Inside #view-sync:
+  //    - Admin sees everything.
+  //    - Regular user sees their own account (#myProfileCardSection) + only sections explicitly permitted by Admin.
+  //    - Users management (#usersPermissionsModal) is strictly for Admin only.
   const uPerms = (activeUser && activeUser.perms) || {};
   const showQuickCtrl = isAdm || (!isVis && Boolean(uPerms.showSyncExcel));
   const showCloudHub = isAdm || (!isVis && Boolean(uPerms.showSyncCloud || uPerms.farms));
@@ -2082,7 +2082,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
   const usersModalCard = document.getElementById('usersPermissionsModal');
   if (usersModalCard) usersModalCard.classList.toggle('hidden', !isAdm);
 
-   Toggle Forms based on granular permissions & active day lock status
+  // Toggle Forms based on granular permissions & active day lock status
   const curDayLocked = isDayLocked(appState.currentDay);
   const saleCard = document.getElementById('saleFormCard');
   if (saleCard) saleCard.classList.toggle('hidden', !(hasPermission('sales') && !curDayLocked));
@@ -2111,7 +2111,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
   const lblImp = document.querySelector('label[for="fileImportXlsx"]');
   if (lblImp) lblImp.classList.toggle('hidden', !(hasPermission('farms') || showQuickCtrl));
 
-   Populate Personal Profile Card (#myProfileCardSection) for the active user
+  // Populate Personal Profile Card (#myProfileCardSection) for the active user
   const profCard = document.getElementById('myProfileCardSection');
   if (profCard) {
     profCard.classList.toggle('hidden', isVis);
@@ -2131,7 +2131,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     });
   }
 
-   Users Table inside Modal (Admin can edit ANY user's data! Rendered only when sync tab is active or requested)
+  // Users Table inside Modal (Admin can edit ANY user's data! Rendered only when sync tab is active or requested)
   const uTbody = document.getElementById('usersListTbody');
   if (uTbody && renderTable) {
     const isAdminUser = hasPermission('admin');
@@ -2367,9 +2367,9 @@ function setAuditMetadataVisibility(showFlag, notify = true) {
   }
 }
 
- =========================================================================
- LITE FIELD MODE ENGINE (وضع شاشة المندوب المبسط المدمج - 3 عناصر فقط)
- =========================================================================
+// =========================================================================
+// LITE FIELD MODE ENGINE (وضع شاشة المندوب المبسط المدمج - 3 عناصر فقط)
+// =========================================================================
 function isMobileViewportDevice() {
   if (typeof window === 'undefined') return false;
   return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
@@ -2524,7 +2524,7 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
 
   const pendingList = (appState.days[dayNum] && appState.days[dayNum].pendingSales) || [];
 
-   1. العنصر الأول: شريط البطاقات الأفقية للوزنات المؤقتة (Swipeable Pending Cards) مع دعم البحث السريع
+  // 1. العنصر الأول: شريط البطاقات الأفقية للوزنات المؤقتة (Swipeable Pending Cards) مع دعم البحث السريع
   if (pendStripBox && pendHorizList && pendCntBadge) {
     const pendQuery = (document.getElementById('inpLiteFilterPendingCards')?.value || '').trim().toLowerCase();
     const filteredPendingList = pendQuery
@@ -2602,7 +2602,7 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
     }
   }
 
-   2. العنصر الثالث: سجل حركات البيع المسجلة اليوم بنظام بطاقات الموبايل (Mobile Sale Cards)
+  // 2. العنصر الثالث: سجل حركات البيع المسجلة اليوم بنظام بطاقات الموبايل (Mobile Sale Cards)
   if (!salesCardsBox) return;
   if (!active) {
     salesCardsBox.classList.add('hidden');
@@ -2729,9 +2729,9 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
   }).join('');
 }
 
- =========================================================================
- SMART ACTIVE-TAB RENDERING ENGINE (قصر إعادة الرسم على التبويب النشط لتسريع الاستجابة > 70%)
- =========================================================================
+// =========================================================================
+// SMART ACTIVE-TAB RENDERING ENGINE (قصر إعادة الرسم على التبويب النشط لتسريع الاستجابة > 70%)
+// =========================================================================
 function checkAndEnforceNewFarmCreationModal() {
   const overlay = document.getElementById('forceCreateFarmOverlay');
   if (!overlay) return;
@@ -2792,7 +2792,7 @@ function renderAll(forceAllTabs = false, preserveInputs = false) {
     return;
   }
 
-   قصر إعادة بناء جداول الـ DOM والرسوم البيانية على التبويب النشط فقط
+  // قصر إعادة بناء جداول الـ DOM والرسوم البيانية على التبويب النشط فقط
   switch (activeTab) {
     case 'daily':
       renderDaySelector();
@@ -2827,7 +2827,7 @@ function renderAll(forceAllTabs = false, preserveInputs = false) {
       break;
   }
 
-   إذا كانت نافذة كشف حساب التاجر التفصيلي مفتوحة حالياً، يتم تحديثها لحظياً
+  // إذا كانت نافذة كشف حساب التاجر التفصيلي مفتوحة حالياً، يتم تحديثها لحظياً
   if (activeDrillDownMerchantCode > 0) {
     const mdl = document.getElementById('merchantDrillDownModal');
     if (mdl && !mdl.classList.contains('hidden')) {
@@ -2836,12 +2836,12 @@ function renderAll(forceAllTabs = false, preserveInputs = false) {
   }
 }
 
- =========================================================================
- 6. EVENT LISTENERS & INTERACTIVE HANDLERS
- =========================================================================
+// =========================================================================
+// 6. EVENT LISTENERS & INTERACTIVE HANDLERS
+// =========================================================================
 let prevFarmsManualToggleState = {
   merchantCode: 0,
-  userExplicitlySet: null  null = auto, true = user opened, false = user closed
+  userExplicitlySet: null // null = auto, true = user opened, false = user closed
 };
 
 function setPrevFarmsSectionExpanded(isExpanded, isManualUserAction = false) {
@@ -2903,7 +2903,7 @@ function syncPrevFarmsCollapsibleState(info = {}) {
     notesVal = ''
   } = info;
 
-   إذا تغير التاجر المختار، نعيد ضبط التفضيل اليدوي ليسمح بالفتح التلقائي إذا كان للتاجر الجديد مديونية في الأرشيف
+  // إذا تغير التاجر المختار، نعيد ضبط التفضيل اليدوي ليسمح بالفتح التلقائي إذا كان للتاجر الجديد مديونية في الأرشيف
   if (mCode !== prevFarmsManualToggleState.merchantCode) {
     prevFarmsManualToggleState.merchantCode = mCode;
     prevFarmsManualToggleState.userExplicitlySet = null;
@@ -2927,25 +2927,25 @@ function syncPrevFarmsCollapsibleState(info = {}) {
     }
   }
 
-   قواعد الفتح والطيّ التلقائي:
-   1) إذا كانت هناك قيم مدخلة بالفعل في حقول المزارع السابقة/الملاحظات -> نفتح القسم دائماً حتى لا تختفي بيانات مدخلة
+  // قواعد الفتح والطيّ التلقائي:
+  // 1) إذا كانت هناك قيم مدخلة بالفعل في حقول المزارع السابقة/الملاحظات -> نفتح القسم دائماً حتى لا تختفي بيانات مدخلة
   if (hasPrevFarmInputsNow) {
     setPrevFarmsSectionExpanded(true, false);
     return;
   }
-   2) إذا قام المستخدم يدوياً بفتح أو طيّ القسم لهذا التاجر -> نحترم اختياره اليدوي
+  // 2) إذا قام المستخدم يدوياً بفتح أو طيّ القسم لهذا التاجر -> نحترم اختياره اليدوي
   if (prevFarmsManualToggleState.userExplicitlySet !== null) {
     setPrevFarmsSectionExpanded(prevFarmsManualToggleState.userExplicitlySet, false);
     return;
   }
-   3) إذا كان للتاجر مديونية مرجعية في أرشيف المزارع السابقة -> يفتح القسم تلقائياً! وإلا يظل مطوياً افتراضياً لتقليل طول الشاشة
+  // 3) إذا كان للتاجر مديونية مرجعية في أرشيف المزارع السابقة -> يفتح القسم تلقائياً! وإلا يظل مطوياً افتراضياً لتقليل طول الشاشة
   setPrevFarmsSectionExpanded(hasArchiveReferenceDebt, false);
 }
 
- =========================================================================
- DEBT-COLLECTION-ONLY MODE ENGINE (وضع سند تحصيل مديونية فقط بدون ميزان — v51)
- =========================================================================
-let activeSaleEntryMode = 'sale';  'sale' | 'debt_only'
+// =========================================================================
+// DEBT-COLLECTION-ONLY MODE ENGINE (وضع سند تحصيل مديونية فقط بدون ميزان — v51)
+// =========================================================================
+let activeSaleEntryMode = 'sale'; // 'sale' | 'debt_only'
 
 function isDebtCollectionOnlyMode() {
   return activeSaleEntryMode === 'debt_only';
@@ -2959,7 +2959,7 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
   const inpModeEl = document.getElementById('inpSaleEntryMode');
   if (inpModeEl) inpModeEl.value = activeSaleEntryMode;
 
-   1. Toggle Header Buttons & Title Styling
+  // 1. Toggle Header Buttons & Title Styling
   const btnScale = document.getElementById('btnModeScaleSale');
   const btnDebt = document.getElementById('btnModeDebtCollectionOnly');
   const hdrEl = document.getElementById('saleFormCardHeader');
@@ -2991,7 +2991,7 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
     debtBanner.classList.toggle('hidden', !isDebtOnly);
   }
 
-   2. Hide/Show Row 2 (Weights w1, w2, Price, Tip) and Car No / Scale Labels
+  // 2. Hide/Show Row 2 (Weights w1, w2, Price, Tip) and Car No / Scale Labels
   const weightsRow = document.getElementById('saleWeightsAndPriceRow');
   if (weightsRow) {
     weightsRow.classList.toggle('hidden', isDebtOnly);
@@ -3009,7 +3009,7 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
       : 'رقم السيارة';
   }
 
-   3. Adapt Blue Live KPI Banner & Hide Group 1 (سداد فاتورة اليوم) in Debt-Only Mode
+  // 3. Adapt Blue Live KPI Banner & Hide Group 1 (سداد فاتورة اليوم) in Debt-Only Mode
   ['kpiBoxNetWeight', 'kpiBoxTotalWithTip', 'kpiBoxInvoiceDiff'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('hidden', isDebtOnly);
@@ -3032,13 +3032,13 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
       : 'border-2 border-teal-800/20 bg-teal-50/40 rounded-xl p-2.5 space-y-2';
   }
 
-   4. Hide "⏳ حفظ مؤقت وزنة 1" & "⚡ باقي الفاتورة آجل" buttons when in Debt-Only Mode
+  // 4. Hide "⏳ حفظ مؤقت وزنة 1" & "⚡ باقي الفاتورة آجل" buttons when in Debt-Only Mode
   ['btnSavePendingW1', 'btnInlineSavePendingW1', 'btnStickyAutoCredit'].forEach(btnId => {
     const b = document.getElementById(btnId);
     if (b) b.classList.toggle('hidden', isDebtOnly);
   });
 
-   5. Clear weight & current-day invoice fields when switching to Debt-Only Mode & set independent Voucher No
+  // 5. Clear weight & current-day invoice fields when switching to Debt-Only Mode & set independent Voucher No
   const editIdNow = document.getElementById('editSaleId') ? document.getElementById('editSaleId').value : '';
   if (isDebtOnly && clearWeightFields) {
     ['inpW1', 'inpW2', 'inpPrice', 'inpTip', 'inpCashSales', 'inpTransferSales', 'inpCreditSales'].forEach(fid => {
@@ -3057,7 +3057,7 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
     applyStickySaleDefaults();
   }
 
-   Update Save Button Label according to mode & edit state
+  // Update Save Button Label according to mode & edit state
   const editIdVal = document.getElementById('editSaleId')?.value || '';
   const s1 = document.getElementById('btnSaveSaleText');
   const s2 = document.getElementById('btnInlineSaveSaleText');
@@ -3101,7 +3101,7 @@ function updateLiveFormCalculation() {
   const price = parseNum(document.getElementById('inpPrice').value) || 0;
   const tip = parseNum(document.getElementById('inpTip').value) || 0;
 
-   التحقق من أن الوزنة الثانية أكبر من أو تساوي الوزنة الأولى
+  // التحقق من أن الوزنة الثانية أكبر من أو تساوي الوزنة الأولى
   const hasInvalidWeight = (rawW2 !== '' && w2 < w1);
   const wAlert = document.getElementById('weightValidationAlert');
   const inpW2El = document.getElementById('inpW2');
@@ -3114,7 +3114,7 @@ function updateLiveFormCalculation() {
   const netW = (!hasInvalidWeight && w2 >= w1 && w2 > 0) ? (w2 - w1) : 0;
   const totalWithTip = (netW * price) + tip;
 
-   Invoice collections (not linked to Custody)
+  // Invoice collections (not linked to Custody)
   const cashS = parseNum(document.getElementById('inpCashSales').value) || 0;
   const trS = parseNum(document.getElementById('inpTransferSales').value) || 0;
   const credS = parseNum(document.getElementById('inpCreditSales').value) || 0;
@@ -3124,7 +3124,7 @@ function updateLiveFormCalculation() {
   document.getElementById('calcTotalWithTip').textContent = `${fmtDec(totalWithTip)} ج.م`;
   document.getElementById('calcInvoiceDiff').textContent = `${fmtDec(diff)} ج.م`;
 
-   تحديث شريط الإجراءات السفلي العائم للموبايل (Mobile Weighbridge Sticky Action Bar)
+  // تحديث شريط الإجراءات السفلي العائم للموبايل (Mobile Weighbridge Sticky Action Bar)
   const stickyNetEl = document.getElementById('stickyBarNetWeight');
   if (stickyNetEl) stickyNetEl.textContent = `${fmtInt(netW)} كجم`;
   const stickyTotEl = document.getElementById('stickyBarTotalInvoice');
@@ -3135,7 +3135,7 @@ function updateLiveFormCalculation() {
     stickyRemEl.textContent = `${fmtInt(remCreditPreview)} ج.م`;
   }
 
-   1. Previous Debt Statement in Current Farm for Selected Merchant (e.g., تاجر -> 0 ج.م)
+  // 1. Previous Debt Statement in Current Farm for Selected Merchant (e.g., تاجر -> 0 ج.م)
   const mName = (document.getElementById('inpMerchantName').value || '').trim();
   const editId = document.getElementById('editSaleId').value || '';
   const mCode = resolveMerchantCode(mName);
@@ -3160,8 +3160,8 @@ function updateLiveFormCalculation() {
     }
   }
 
-   2. Smart Custody Waterfall & Unified Collection Statement:
-      التوزيع التلقائي المتدرج للعهدة: (1) سداد المديونية السابقة أولاً ⬅️ (2) سداد فاتورة اليوم ⬅️ (3) حساب الآجل أو فائض العهدة
+  // 2. Smart Custody Waterfall & Unified Collection Statement:
+  //    التوزيع التلقائي المتدرج للعهدة: (1) سداد المديونية السابقة أولاً ⬅️ (2) سداد فاتورة اليوم ⬅️ (3) حساب الآجل أو فائض العهدة
   const custCash = parseNum(document.getElementById('inpCustodyCash') ? document.getElementById('inpCustodyCash').value : 0) || 0;
   const custTr = parseNum(document.getElementById('inpCustodyTransfer') ? document.getElementById('inpCustodyTransfer').value : 0) || 0;
   const custTrType = document.getElementById('selCustodyTransferType') ? document.getElementById('selCustodyTransferType').value : '';
@@ -3218,7 +3218,7 @@ function updateLiveFormCalculation() {
     }
   }
 
-   3. الربط المرجعي الذكي لتحصيلات المزارع السابقة + الطيّ والفتح التلقائي الذكي للقسم (Collapsible Section 3)
+  // 3. الربط المرجعي الذكي لتحصيلات المزارع السابقة + الطيّ والفتح التلقائي الذكي للقسم (Collapsible Section 3)
   const prevCashVal = parseNum(document.getElementById('inpPrevCash') ? document.getElementById('inpPrevCash').value : 0) || 0;
   const prevTrVal = parseNum(document.getElementById('inpPrevTransfer') ? document.getElementById('inpPrevTransfer').value : 0) || 0;
   const prevTrTypeVal = document.getElementById('selPrevTransferType') ? document.getElementById('selPrevTransferType').value : '';
@@ -3235,7 +3235,7 @@ function updateLiveFormCalculation() {
     )
   );
 
-   تحديث شارة الملخص في رأس القسم المطوي وفتح القسم تلقائياً إذا كان للتاجر مديونية مرجعية في الأرشيف أو قيم مدخلة
+  // تحديث شارة الملخص في رأس القسم المطوي وفتح القسم تلقائياً إذا كان للتاجر مديونية مرجعية في الأرشيف أو قيم مدخلة
   if (typeof syncPrevFarmsCollapsibleState === 'function') {
     syncPrevFarmsCollapsibleState({
       mCode,
@@ -3274,12 +3274,12 @@ function updateLiveFormCalculation() {
     }
   }
 
-   4. تنبيهات الرقابة الذكية والقيود الاسترشادية الفورية غير المانعة (Smart Non-Blocking Audit Alerts)
+  // 4. تنبيهات الرقابة الذكية والقيود الاسترشادية الفورية غير المانعة (Smart Non-Blocking Audit Alerts)
   const alerts = [];
   const trSalesTypeVal = document.getElementById('selTransferSalesType') ? document.getElementById('selTransferSalesType').value : '';
   const debtTrTypeVal = document.getElementById('selDebtTransferType') ? document.getElementById('selDebtTransferType').value : '';
 
-   أ) تنبيه فرق مطابقة فاتورة اليوم
+  // أ) تنبيه فرق مطابقة فاتورة اليوم
   if (w2 > 0 && !hasInvalidWeight && totalWithTip > 0 && (cashS > 0 || trS > 0 || credS > 0) && Math.abs(diff) > 1) {
     alerts.push({
       level: 'warn',
@@ -3294,7 +3294,7 @@ function updateLiveFormCalculation() {
     });
   }
 
-   ب) تنبيه تجاوز سداد المديونية لرصيد مديونية المزرعة الحالية
+  // ب) تنبيه تجاوز سداد المديونية لرصيد مديونية المزرعة الحالية
   if (mName && deductedDebtNow > 0 && deductedDebtNow > (prevDebt + 1)) {
     alerts.push({
       level: 'warn',
@@ -3303,7 +3303,7 @@ function updateLiveFormCalculation() {
     });
   }
 
-   ج) تنبيه فائض العهدة أو تجاوز الموزع لإجمالي العهدة
+  // ج) تنبيه فائض العهدة أو تجاوز الموزع لإجمالي العهدة
   if (totalCustody > 0 && (deductedDebtNow + cashS + trS) > (totalCustody + 1)) {
     alerts.push({
       level: 'warn',
@@ -3318,7 +3318,7 @@ function updateLiveFormCalculation() {
     });
   }
 
-   د) تنبيهات عدم اختيار نوع التحويل عند إدخال مبلغ تحويل
+  // د) تنبيهات عدم اختيار نوع التحويل عند إدخال مبلغ تحويل
   if (trS > 0 && !trSalesTypeVal) {
     alerts.push({
       level: 'warn',
@@ -3348,7 +3348,7 @@ function updateLiveFormCalculation() {
     });
   }
 
-   هـ) تنبيهات المزارع السابقة (عدم كتابة اسم المزرعة السابقة أو تجاوز المديونية المرجعية بالأرشيف)
+  // هـ) تنبيهات المزارع السابقة (عدم كتابة اسم المزرعة السابقة أو تجاوز المديونية المرجعية بالأرشيف)
   if (totalPrevEntered > 0 && !notesVal) {
     alerts.push({
       level: 'warn',
@@ -3364,7 +3364,7 @@ function updateLiveFormCalculation() {
     });
   }
 
-   و) تنبيه انحراف السعر عن السعر الافتراضي لليوم بأكثر من 15%
+  // و) تنبيه انحراف السعر عن السعر الافتراضي لليوم بأكثر من 15%
   const defP = Number(appState.defaultPrice) || 0;
   if (price > 0 && defP > 0 && Math.abs(price - defP) / defP > 0.15) {
     alerts.push({
@@ -3456,7 +3456,7 @@ function initFarmSalesApp() {
     startLiveRealtimeSyncEngine();
   }
 
-   Toggle Live Sync from Header Button
+  // Toggle Live Sync from Header Button
   const btnBundleVendors = document.getElementById('btnBundleVendorsLocally');
   if (btnBundleVendors) {
     btnBundleVendors.addEventListener('click', () => {
@@ -3485,7 +3485,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Toggle & Interval Select from Sync Settings Card
+  // Toggle & Interval Select from Sync Settings Card
   const chkLive = document.getElementById('chkEnableLiveSync');
   if (chkLive) {
     chkLive.addEventListener('change', (e) => {
@@ -3506,7 +3506,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Cross-Tab & Same-Browser Instant Sync + Immediate Forced Logout when User Deleted
+  // Cross-Tab & Same-Browser Instant Sync + Immediate Forced Logout when User Deleted
   if (liveBroadcastChannel) {
     liveBroadcastChannel.onmessage = (evt) => {
       try {
@@ -3542,7 +3542,7 @@ function initFarmSalesApp() {
       pullDatabaseFromCloud(true, true, true);
     }
   });
-         PWA Install Prompt Handler (زر تثبيت التطبيق المباشر على الموبايل والكمبيوتر)
+        // PWA Install Prompt Handler (زر تثبيت التطبيق المباشر على الموبايل والكمبيوتر)
   let deferredPwaPrompt = null;
   const btnInstallPwa = document.getElementById("btnInstallPwaApp");
   window.addEventListener("beforeinstallprompt", (e) => {
@@ -3571,7 +3571,7 @@ function initFarmSalesApp() {
   });
   const ACTIVE_PWA_CACHE_NAME = 'farm-sales-committee-v73-modular-architecture';
 
-   Force app hard reload & clear service worker caches (only when online so offline cache is never lost)
+  // Force app hard reload & clear service worker caches (only when online so offline cache is never lost)
   async function forceAppHardReload() {
     if (!navigator.onLine) {
       showToast('🟠 أنت غير متصل بالإنترنت حالياً — يرجى الاتصال بالإنترنت أولاً لتحديث نسخة التطبيق!', '🟠');
@@ -3600,7 +3600,7 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-   Purge only outdated caches while preserving ACTIVE_PWA_CACHE_NAME ('farm-sales-committee-v73-modular-architecture')
+  // Purge only outdated caches while preserving ACTIVE_PWA_CACHE_NAME ('farm-sales-committee-v73-modular-architecture')
   try {
     if ('caches' in window && navigator.onLine) {
       caches.keys().then(keys => {
@@ -3613,7 +3613,7 @@ function initFarmSalesApp() {
     }
   } catch (e) {}
 
-   Register Offline Service Worker (v73) without automatic reload loops
+  // Register Offline Service Worker (v73) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV73) {
       window.__swRegisteredOnceV73 = true;
@@ -3621,7 +3621,7 @@ function initFarmSalesApp() {
     }
   }
 
-   1. إلغاء تغيير القيم ببكرة الفأرة (Mouse Wheel) ومفاتيح الأسهم على جميع خانات الإدخال الرقمية والمالية
+  // 1. إلغاء تغيير القيم ببكرة الفأرة (Mouse Wheel) ومفاتيح الأسهم على جميع خانات الإدخال الرقمية والمالية
   document.addEventListener('wheel', (e) => {
     const ae = document.activeElement;
     if (ae && ae.tagName === 'INPUT' && (ae.type === 'number' || ae.hasAttribute('data-money-input'))) {
@@ -3638,7 +3638,7 @@ function initFarmSalesApp() {
     });
   });
 
-   تنسيق الفلوس والأرقام في جميع الإدخالات (502,698.80 مع إخفاء العلامة العشرية عند عدم وجودها)
+  // تنسيق الفلوس والأرقام في جميع الإدخالات (502,698.80 مع إخفاء العلامة العشرية عند عدم وجودها)
   document.querySelectorAll('input[data-money-input="1"]').forEach(inp => {
     inp.addEventListener('input', (e) => {
       const formatted = formatLiveMoneyInputString(e.target.value);
@@ -3654,7 +3654,7 @@ function initFarmSalesApp() {
     });
   });
 
-   2. إدارة جلسة تسجيل الدخول، البقاء في نفس الصفحة عند التحديث (Refresh)، وتسجيل الخروج التلقائي حسب الزمن الذي يحدده المدير
+  // 2. إدارة جلسة تسجيل الدخول، البقاء في نفس الصفحة عند التحديث (Refresh)، وتسجيل الخروج التلقائي حسب الزمن الذي يحدده المدير
   const loginOverlay = document.getElementById('loginGatewayOverlay');
   const loginErr = document.getElementById('loginErrorMsg');
 
@@ -3691,7 +3691,7 @@ function initFarmSalesApp() {
     }
   }
 
-   Restore session and active tab on page load / refresh!
+  // Restore session and active tab on page load / refresh!
   const nowInit = Date.now();
   const initLimitMs = getInactivityLimitMs();
   const isWithinIdleLimit = (initLimitMs <= 0) || (appState.lastActivityAt && (nowInit - appState.lastActivityAt < initLimitMs));
@@ -3707,7 +3707,7 @@ function initFarmSalesApp() {
     loginOverlay.classList.remove('hidden');
   }
 
-   Monitor activity and auto-logout after Admin-configured idle time
+  // Monitor activity and auto-logout after Admin-configured idle time
   ['mousemove', 'mousedown', 'keydown', 'touchstart', 'click', 'input', 'scroll'].forEach(evtName => {
     window.addEventListener(evtName, recordUserActivity, { passive: true });
   });
@@ -3719,7 +3719,7 @@ function initFarmSalesApp() {
     }
   }, 5000);
 
-   Admin handlers for configuring Inactivity Auto-Logout Timeout
+  // Admin handlers for configuring Inactivity Auto-Logout Timeout
   function applyAdminInactivityTimeout(newMinutes) {
     if (!hasPermission('admin')) {
       showToast('عفواً، تحديد زمن الخروج التلقائي متاح لمدير الموقع فقط.', '🔒');
@@ -3807,7 +3807,7 @@ function initFarmSalesApp() {
       const enteredUrl = (inpLUrl ? inpLUrl.value : '').trim();
       if (!enteredUrl || !enteredUrl.startsWith('http')) {
         if (statusMsg) {
-          statusMsg.textContent = '⚠️ يرجى لصق رابط سحابة صحيح يبدأ بـ https: أولاً!';
+          statusMsg.textContent = '⚠️ يرجى لصق رابط سحابة صحيح يبدأ بـ https:// أولاً!';
           statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-amber-100 text-amber-950 border border-amber-400';
           statusMsg.classList.remove('hidden');
         }
@@ -3892,7 +3892,7 @@ function initFarmSalesApp() {
       }
     }
 
-     Check Admin user (supports updated username/password from Profile or default admin/admin)
+    // Check Admin user (supports updated username/password from Profile or default admin/admin)
     const adminObj = (appState.users || []).find(u => u.id === 'admin') || { username: 'admin', password: 'admin' };
     const adminUsername = String(adminObj.username || 'admin').trim().toLowerCase();
     const adminPassword = String(adminObj.password || 'admin').trim();
@@ -3946,7 +3946,7 @@ function initFarmSalesApp() {
       return;
     }
 
-     إذا فشل تسجيل الدخول بكلمة مرور خاطئة، لا نحتفظ برابط السحابة المؤقت في الذاكرة
+    // إذا فشل تسجيل الدخول بكلمة مرور خاطئة، لا نحتفظ برابط السحابة المؤقت في الذاكرة
     if (unlockedFromVault.url && !unlockedFromVault.matchedByDirectPassword) {
       appState.webhookUrl = '';
     }
@@ -3962,7 +3962,7 @@ function initFarmSalesApp() {
     performLogout('تم تسجيل الخروج بنجاح 👋');
   });
 
-   Dynamic Farm Name Inputs (Top Header + Settings Panel + Quick Presets)
+  // Dynamic Farm Name Inputs (Top Header + Settings Panel + Quick Presets)
   document.getElementById('inpTopFarmName').addEventListener('input', (e) => {
     setFarmName(e.target.value);
     renderDailyView();
@@ -3980,7 +3980,7 @@ function initFarmSalesApp() {
     });
   });
 
-   Start a New Clean 10-Day Cycle for a New Farm (keeping coded merchants)
+  // Start a New Clean 10-Day Cycle for a New Farm (keeping coded merchants)
   document.getElementById('btnNewCleanCycle').addEventListener('click', () => {
     clearActiveFarmMovementsKeepMerchants(
       `تم فتح دورة 10 أيام جديدة فارغة لمزرعة (${appState.farmName}) مع الاحتفاظ بأكواد التجار!`,
@@ -3988,7 +3988,7 @@ function initFarmSalesApp() {
     );
   });
 
-   Live File Binding via File System Access API (`showOpenFilePicker`)
+  // Live File Binding via File System Access API (`showOpenFilePicker`)
   document.getElementById('btnLinkLiveExcel').addEventListener('click', async () => {
     if (window.showOpenFilePicker) {
       try {
@@ -4012,14 +4012,14 @@ function initFarmSalesApp() {
     }
   });
 
-   Online / Offline listeners with Automatic Cloud Sync on Reconnect
+  // Online / Offline listeners with Automatic Cloud Sync on Reconnect
   window.addEventListener('online', () => {
     updateConnectionAndSyncUI();
     pushDatabaseToCloud(true);
     showToast('عاد الاتصال بالإنترنت وتمت مزامنة قاعدة البيانات السحابية تلقائياً!', '🟢');
   });
 
-   Top Header Cloud Farm Switcher
+  // Top Header Cloud Farm Switcher
   document.getElementById('selTopCloudFarm').addEventListener('change', (e) => {
     const targetFarm = e.target.value;
     if (activateFarmFromArchive(targetFarm)) {
@@ -4036,7 +4036,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Add or Rename Farm in Cloud Database
+  // Add or Rename Farm in Cloud Database
   document.getElementById('btnAddNewCloudFarm').addEventListener('click', () => {
     if (!hasPermission('farms')) {
       showToast('عفواً، لا تملك صلاحية إضافة أو تعديل المزارع.', '🔒');
@@ -4118,7 +4118,7 @@ function initFarmSalesApp() {
     document.getElementById('btnCancelCloudFarmEdit').classList.add('hidden');
   });
 
-   Switch, Export, Rename, or Delete specific farm from Cloud Farms Table
+  // Switch, Export, Rename, or Delete specific farm from Cloud Farms Table
   document.getElementById('cloudFarmsTbody').addEventListener('click', (e) => {
     const swBtn = e.target.closest('[data-switch-farm]');
     if (swBtn) {
@@ -4182,11 +4182,11 @@ function initFarmSalesApp() {
     }
   });
 
-   Users & Permissions Modal Handlers (with password check if switching from Visitor to Admin)
+  // Users & Permissions Modal Handlers (with password check if switching from Visitor to Admin)
   document.getElementById('selActiveUserRole').addEventListener('change', (e) => {
     const targetId = e.target.value;
     if (targetId !== 'visitor' && !hasPermission('admin')) {
-       Require login via Login Overlay
+      // Require login via Login Overlay
       e.target.value = appState.activeUserId;
       document.getElementById('btnShowLoginScreen').click();
       showToast('يرجى تسجيل الدخول بحساب المدير أولاً لتفعيل هذه الصلاحية', '🔐');
@@ -4199,7 +4199,7 @@ function initFarmSalesApp() {
     showToast(`تم التبديل إلى حساب: ${u.name}`, '👤');
   });
 
-   Unified Header User Dropdown Menu Toggle & Actions
+  // Unified Header User Dropdown Menu Toggle & Actions
   const userMenuBtn = document.getElementById('btnHeaderUserMenuToggle');
   const userMenuDropdown = document.getElementById('headerUserDropdownMenu');
   const userMenuContainer = document.getElementById('headerUserDropdownContainer');
@@ -4326,30 +4326,16 @@ function initFarmSalesApp() {
         uObj.phone = phone;
         uObj.jobTitle = jobTitle;
         uObj.updatedAt = getSyncedNow();
-         Ensure primary admin keeps admin perm
+        // Ensure primary admin keeps admin perm
         if (uObj.id === 'admin') perms.admin = true;
         uObj.perms = perms;
-        if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_USER', uObj);
       }
       document.getElementById('editUserIdInput').value = '';
       document.getElementById('btnSaveUserSubmit').textContent = '➕ حفظ المستخدم';
       document.getElementById('btnCancelUserEdit').classList.add('hidden');
       showToast(`تم تحديث جميع بيانات وصلاحيات المستخدم (${fullName}) بنجاح`);
     } else {
-      const newUserObj = {
-        id: generateRecordUUID('usr'),
-        updatedAt: getSyncedNow(),
-        username: username,
-        password: pwd || '1234',
-        name: fullName,
-        phone: phone,
-        jobTitle: jobTitle,
-        isSystem: false,
-        perms
-      };
-      appState.users.push(newUserObj);
-      if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_USER', newUserObj);
-      /*
+      appState.users.push({
         id: generateRecordUUID('usr'),
         updatedAt: getSyncedNow(),
         username: username,
@@ -4360,7 +4346,6 @@ function initFarmSalesApp() {
         isSystem: false,
         perms
       });
-      */
       showToast(`تم إنشاء المستخدم (${fullName}) وتحديد صلاحياته بنجاح`);
     }
     document.getElementById('inpNewUserFullName').value = '';
@@ -4428,17 +4413,17 @@ function initFarmSalesApp() {
     }
   });
 
-   Push / Pull Cloud DB Buttons
+  // Push / Pull Cloud DB Buttons
   document.getElementById('btnPushCloudNow').addEventListener('click', () => pushDatabaseToCloud(false, true));
   document.getElementById('btnPullCloudNow').addEventListener('click', () => pullDatabaseFromCloud(false, true));
 
-   Copy Ready-Made Google Apps Script Cloud Database Code (Chunked at 2500 chars to stay well below 9KB UTF-8 limit for Arabic!)
+  // Copy Ready-Made Google Apps Script Cloud Database Code (Chunked at 2500 chars to stay well below 9KB UTF-8 limit for Arabic!)
   document.getElementById('btnCopyCloudScriptCode').addEventListener('click', () => {
     const scriptCode = [
-      " كود قاعدة البيانات السحابية المطور لـ GitHub Pages و Google Sites (يدعم اللغة العربية والأحجام الكبيرة بدون أخطاء 9KB)",
-      " 1. افتح script.google.com وامسح الكود القديم بالكامل والصق هذا الكود ثم اضغط حفظ (Save 💾)",
-      " 2. اضغط Deploy -> Manage deployments -> Edit (أيقونة القلم ✏️) -> اختر Version: New version -> Deploy",
-      "    (أو Deploy -> New deployment -> Web app -> Execute as: Me -> Who has access: Anyone)",
+      "// كود قاعدة البيانات السحابية المطور لـ GitHub Pages و Google Sites (يدعم اللغة العربية والأحجام الكبيرة بدون أخطاء 9KB)",
+      "// 1. افتح script.google.com وامسح الكود القديم بالكامل والصق هذا الكود ثم اضغط حفظ (Save 💾)",
+      "// 2. اضغط Deploy -> Manage deployments -> Edit (أيقونة القلم ✏️) -> اختر Version: New version -> Deploy",
+      "//    (أو Deploy -> New deployment -> Web app -> Execute as: Me -> Who has access: Anyone)",
       "function doGet(e) {",
       "  var store = PropertiesService.getScriptProperties();",
       "  var count = Number(store.getProperty('DB_CHUNK_COUNT') || 0);",
@@ -4485,7 +4470,7 @@ function initFarmSalesApp() {
     showToast('انقطع الإنترنت — يعمل البرنامج الآن في وضع الأوفلاين ويحفظ كل حركة على المتصفح.', '🟠');
   });
 
-   Navigation Tabs
+  // Navigation Tabs
   document.querySelectorAll('.nav-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = btn.getAttribute('data-nav');
@@ -4507,7 +4492,7 @@ function initFarmSalesApp() {
     });
   });
 
-   Quick In-Page Jump Buttons on Daily View
+  // Quick In-Page Jump Buttons on Daily View
   document.getElementById('btnJumpSaleForm').addEventListener('click', () => {
     document.getElementById('saleFormCard').scrollIntoView({ behavior: 'smooth' });
     document.getElementById('inpMerchantName').focus();
@@ -4520,7 +4505,7 @@ function initFarmSalesApp() {
     document.getElementById('dailyTrialBalanceCard').scrollIntoView({ behavior: 'smooth' });
   });
 
-   Date / Label change for current day + Interactive Add / Edit / Delete Day Boxes
+  // Date / Label change for current day + Interactive Add / Edit / Delete Day Boxes
   document.getElementById('currentDayDateInput').addEventListener('change', (e) => {
     if (!hasPermission('sales')) return;
     if (isDayLocked(appState.currentDay)) {
@@ -4542,14 +4527,14 @@ function initFarmSalesApp() {
     });
   }
 
-   Helper to populate and refresh all Day Management selectors & pills
+  // Helper to populate and refresh all Day Management selectors & pills
   function refreshDayManagementBoxesUI() {
     window.refreshDayManagementBoxesUI = refreshDayManagementBoxesUI;
     const visDays = getVisibleDays();
     const allDays = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     const hiddenDays = allDays.filter(d => !visDays.includes(d));
 
-     1) Populate Add Day Selector & Pills (#selAddDayTarget, #addDayQuickPills) + Daily Quick Add (#selDailyQuickAddDay, #dailyQuickAddDayPills)
+    // 1) Populate Add Day Selector & Pills (#selAddDayTarget, #addDayQuickPills) + Daily Quick Add (#selDailyQuickAddDay, #dailyQuickAddDayPills)
     const selAdd = document.getElementById('selAddDayTarget');
     const inpAddLbl = document.getElementById('inpAddDayCustomLabel');
     const pillsAdd = document.getElementById('addDayQuickPills');
@@ -4616,7 +4601,7 @@ function initFarmSalesApp() {
       }
     }
 
-     2) Populate Edit Day Selector & Pills (#selEditDayTarget, #editDayQuickPills, #inpEditDayCustomLabel)
+    // 2) Populate Edit Day Selector & Pills (#selEditDayTarget, #editDayQuickPills, #inpEditDayCustomLabel)
     const selEdit = document.getElementById('selEditDayTarget');
     const inpEditLbl = document.getElementById('inpEditDayCustomLabel');
     const pillsEdit = document.getElementById('editDayQuickPills');
@@ -4642,7 +4627,7 @@ function initFarmSalesApp() {
       }
     }
 
-     3) Populate Delete Day Selector & Pills (#selDeleteDayTarget, #deleteDayQuickPills, #deleteDaySummaryText)
+    // 3) Populate Delete Day Selector & Pills (#selDeleteDayTarget, #deleteDayQuickPills, #deleteDaySummaryText)
     const selDel = document.getElementById('selDeleteDayTarget');
     const pillsDel = document.getElementById('deleteDayQuickPills');
     const sumDelTxt = document.getElementById('deleteDaySummaryText');
@@ -4742,12 +4727,12 @@ function initFarmSalesApp() {
     }
   };
 
-   Top 3 Day Management Buttons in #syncQuickControlCard
+  // Top 3 Day Management Buttons in #syncQuickControlCard
   document.getElementById('btnAddDayTop').addEventListener('click', () => openDayManagementBox('add'));
   document.getElementById('btnSaveDayLabel').addEventListener('click', () => openDayManagementBox('edit'));
   document.getElementById('btnDeleteDayTop').addEventListener('click', () => openDayManagementBox('delete'));
 
-   Close / Cancel buttons for the Day Management boxes
+  // Close / Cancel buttons for the Day Management boxes
   document.getElementById('btnCancelAddDayBox').addEventListener('click', () => {
     document.getElementById('dayMgmtBoxAdd').classList.add('hidden');
   });
@@ -4761,7 +4746,7 @@ function initFarmSalesApp() {
     document.getElementById('dailyQuickAddDayBox').classList.add('hidden');
   });
 
-   Sync dropdown changes & pill clicks in Add Day Box
+  // Sync dropdown changes & pill clicks in Add Day Box
   document.getElementById('selAddDayTarget').addEventListener('change', (e) => {
     const d = Number(e.target.value) || 1;
     const inp = document.getElementById('inpAddDayCustomLabel');
@@ -4788,7 +4773,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Sync dropdown changes & pill clicks in Daily Quick Add Day Box
+  // Sync dropdown changes & pill clicks in Daily Quick Add Day Box
   document.getElementById('selDailyQuickAddDay').addEventListener('change', (e) => {
     const d = Number(e.target.value) || 1;
     const inp = document.getElementById('inpDailyQuickAddLabel');
@@ -4815,7 +4800,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Sync dropdown changes & pill clicks in Edit Day Box
+  // Sync dropdown changes & pill clicks in Edit Day Box
   document.getElementById('selEditDayTarget').addEventListener('change', (e) => {
     const d = Number(e.target.value) || 1;
     const inp = document.getElementById('inpEditDayCustomLabel');
@@ -4853,7 +4838,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Sync dropdown changes & pill clicks in Delete Day Box
+  // Sync dropdown changes & pill clicks in Delete Day Box
   document.getElementById('selDeleteDayTarget').addEventListener('change', () => {
     if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
   });
@@ -4871,7 +4856,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Delivered Cash & Carried-Forward Cash Inputs + Quick Settlement Buttons in Trial Balance
+  // Delivered Cash & Carried-Forward Cash Inputs + Quick Settlement Buttons in Trial Balance
   document.getElementById('inpDeliveredCash').addEventListener('input', (e) => {
     if (isDayLocked(appState.currentDay)) {
       showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل النقدية المسلمة إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
@@ -4881,7 +4866,6 @@ function initFarmSalesApp() {
     const curD = appState.days[appState.currentDay];
     curD.deliveredCash = parseNum(e.target.value) || 0;
     curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
-    if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPDATE_DAY_META', { farmName: appState.farmName, dayNumber: appState.currentDay, deliveredCash: curD.deliveredCash, deliveredCashUpdatedAt: curD.deliveredCashUpdatedAt });
     saveState(true);
     renderDailyView();
   });
@@ -4897,7 +4881,6 @@ function initFarmSalesApp() {
       const curD = appState.days[appState.currentDay];
       curD.carriedForwardCash = parseNum(e.target.value) || 0;
       curD.carriedForwardCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.carriedForwardCashUpdatedAt) || 0) + 10);
-      if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPDATE_DAY_META', { farmName: appState.farmName, dayNumber: appState.currentDay, carriedForwardCash: curD.carriedForwardCash, carriedForwardCashUpdatedAt: curD.carriedForwardCashUpdatedAt });
       saveState(true);
       renderDailyView();
     });
@@ -4915,7 +4898,6 @@ function initFarmSalesApp() {
       const targetDeliver = roundMoney2(Math.max(0, s.totalAvailableCashInBox - s.carriedForwardCash));
       curD.deliveredCash = targetDeliver;
       curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
-    if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPDATE_DAY_META', { farmName: appState.farmName, dayNumber: appState.currentDay, deliveredCash: curD.deliveredCash, deliveredCashUpdatedAt: curD.deliveredCashUpdatedAt });
       const inpEl = document.getElementById('inpDeliveredCash');
       if (inpEl) inpEl.value = fmtMoney(targetDeliver);
       saveState(true);
@@ -4936,7 +4918,6 @@ function initFarmSalesApp() {
       const remToCarry = roundMoney2(Math.max(0, s.totalAvailableCashInBox - s.deliveredCash));
       curD.carriedForwardCash = remToCarry;
       curD.carriedForwardCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.carriedForwardCashUpdatedAt) || 0) + 10);
-      if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPDATE_DAY_META', { farmName: appState.farmName, dayNumber: appState.currentDay, carriedForwardCash: curD.carriedForwardCash, carriedForwardCashUpdatedAt: curD.carriedForwardCashUpdatedAt });
       const inpEl = document.getElementById('inpCarriedForwardCash');
       if (inpEl) inpEl.value = fmtMoney(remToCarry);
       saveState(true);
@@ -4945,7 +4926,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Merchant Instant Auto-Suggest without arrow
+  // Merchant Instant Auto-Suggest without arrow
   const inpMerch = document.getElementById('inpMerchantName');
   const suggestBox = document.getElementById('merchantSuggestBox');
 
@@ -5025,7 +5006,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Persist Sticky Price and Tip whenever edited by user
+  // Persist Sticky Price and Tip whenever edited by user
   document.getElementById('inpPrice').addEventListener('change', (e) => {
     const v = parseNum(e.target.value);
     if (v >= 0) { appState.defaultPrice = v; saveState(false); }
@@ -5065,10 +5046,10 @@ function initFarmSalesApp() {
     calculateAndFillRemainingCredit(true);
   });
 
-   =========================================================================
-   SMART CUSTODY WATERFALL ENGINE (التوزيع المحاسبي التلقائي المتدرج للعهدة)
-   1. سداد المديونية السابقة أولاً ⬅️ 2. سداد فاتورة اليوم ⬅️ 3. حساب الآجل تلقائياً
-   =========================================================================
+  // =========================================================================
+  // SMART CUSTODY WATERFALL ENGINE (التوزيع المحاسبي التلقائي المتدرج للعهدة)
+  // 1. سداد المديونية السابقة أولاً ⬅️ 2. سداد فاتورة اليوم ⬅️ 3. حساب الآجل تلقائياً
+  // =========================================================================
   function distributeCustodyWaterfall(options = {}) {
     const { silent = false, focusTarget = false } = options;
     const custCashEl = document.getElementById('inpCustodyCash');
@@ -5117,12 +5098,12 @@ function initFarmSalesApp() {
       return false;
     }
 
-     احترام أي مبلغ سداد مديونية بتحويل بنكي (أو نقدي) أدخله المستخدم يدوياً في خانة تحصيل المديونيات إذا كانت قناة العهدة المقابلة = 0
+    // احترام أي مبلغ سداد مديونية بتحويل بنكي (أو نقدي) أدخله المستخدم يدوياً في خانة تحصيل المديونيات إذا كانت قناة العهدة المقابلة = 0
     const manualDebtTr = custTr <= 0 ? roundMoney2(Math.max(0, parseNum(inpDebtTrEl?.value) || 0)) : 0;
     const manualDebtCash = custCash <= 0 ? roundMoney2(Math.max(0, parseNum(inpDebtCashEl?.value) || 0)) : 0;
     const effectivePrevDebtAfterManual = roundMoney2(Math.max(0, positivePrevDebt - manualDebtTr - manualDebtCash));
 
-     الخطوة 1: سداد المديونية السابقة للمزرعة الحالية أولاً (وفي وضع سند تحصيل مديونية فقط، توجه العهدة بالكامل لسداد المديونية)
+    // الخطوة 1: سداد المديونية السابقة للمزرعة الحالية أولاً (وفي وضع سند تحصيل مديونية فقط، توجه العهدة بالكامل لسداد المديونية)
     const debtOnlyActive = isDebtCollectionOnlyMode();
     const allocDebtCash = custCash > 0
       ? (debtOnlyActive ? custCash : roundMoney2(Math.min(custCash, effectivePrevDebtAfterManual)))
@@ -5140,7 +5121,7 @@ function initFarmSalesApp() {
       selDebtTrTypeEl.value = custTrType;
     }
 
-     الخطوة 2: توجيه المتبقي من العهدة لسداد فاتورة الوزنة الحالية (إذا تم إدخال الوزنة الثانية)
+    // الخطوة 2: توجيه المتبقي من العهدة لسداد فاتورة الوزنة الحالية (إذا تم إدخال الوزنة الثانية)
     let allocSalesCash = 0;
     let allocSalesTr = 0;
     let remCredit = 0;
@@ -5158,7 +5139,7 @@ function initFarmSalesApp() {
       }
       if (inpCreditSalesEl) inpCreditSalesEl.value = remCredit > 0 ? fmtMoney(remCredit) : '0';
     } else {
-       لم تُدخل الوزنة الثانية بعد (السيارة تحت التحميل - وزنة 1)
+      // لم تُدخل الوزنة الثانية بعد (السيارة تحت التحميل - وزنة 1)
       if (inpCashSalesEl) inpCashSalesEl.value = '';
       if (inpTrSalesEl) inpTrSalesEl.value = '';
       if (inpCreditSalesEl) inpCreditSalesEl.value = '';
@@ -5248,7 +5229,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Trigger automatic waterfall distribution when Custody fields or Weight/Price/Merchant change (if chkAutoDistributeCustody is checked)
+  // Trigger automatic waterfall distribution when Custody fields or Weight/Price/Merchant change (if chkAutoDistributeCustody is checked)
   ['inpCustodyCash', 'inpCustodyTransfer', 'selCustodyTransferType'].forEach(cid => {
     const cel = document.getElementById(cid);
     if (!cel) return;
@@ -5400,7 +5381,7 @@ function initFarmSalesApp() {
     });
   }
 
-   مستمعات خيارات تثبيت الجداول الـ 12 (رؤوس الجداول، الإجماليات السفلية، الأعمدة اليمنى، أعمدة الإجراءات اليسرى)
+  // مستمعات خيارات تثبيت الجداول الـ 12 (رؤوس الجداول، الإجماليات السفلية، الأعمدة اليمنى، أعمدة الإجراءات اليسرى)
   const stickyCheckboxMap = [
     { id: 'chkStickyTableHeaders', key: 'headers', label: 'رؤوس الجداول (Sticky Headers)' },
     { id: 'chkStickyTableFooters', key: 'footers', label: 'صفوف الإجماليات السفلية (Sticky Footers)' },
@@ -5479,7 +5460,7 @@ function initFarmSalesApp() {
     });
   }
 
-   أزرار التحكم في وضع شاشة المندوب المبسط (Lite Field Mode)
+  // أزرار التحكم في وضع شاشة المندوب المبسط (Lite Field Mode)
   ['btnHeaderToggleLiteFieldMode', 'btnToggleLiteFieldModeCard'].forEach(btnId => {
     const el = document.getElementById(btnId);
     if (el) {
@@ -5541,7 +5522,7 @@ function initFarmSalesApp() {
     });
   }
 
-   تفويض أحداث شريط البطاقات الأفقية للوزنات المؤقتة في وضع المندوب
+  // تفويض أحداث شريط البطاقات الأفقية للوزنات المؤقتة في وضع المندوب
   const litePendListEl = document.getElementById('litePendingCardsHorizontalList');
   if (litePendListEl) {
     litePendListEl.addEventListener('click', (e) => {
@@ -5569,7 +5550,7 @@ function initFarmSalesApp() {
     });
   }
 
-   تفويض أحداث بطاقات سجل حركات البيع المسجلة في وضع المندوب
+  // تفويض أحداث بطاقات سجل حركات البيع المسجلة في وضع المندوب
   const liteSalesCardsEl = document.getElementById('liteSalesCardsContainer');
   if (liteSalesCardsEl) {
     liteSalesCardsEl.addEventListener('click', (e) => {
@@ -5619,7 +5600,7 @@ function initFarmSalesApp() {
     });
   }
 
-   تحديث بطاقات وضع المندوب عند البحث السريع
+  // تحديث بطاقات وضع المندوب عند البحث السريع
   const inpSearchDailyLite = document.getElementById('inpFilterDailySales');
   if (inpSearchDailyLite) {
     inpSearchDailyLite.addEventListener('input', () => {
@@ -5630,7 +5611,7 @@ function initFarmSalesApp() {
     });
   }
 
-   أحداث أيقونة وشريط البحث السريع في سيارات تحت التحميل بانتظار الوزنة 2 (وضع المندوب)
+  // أحداث أيقونة وشريط البحث السريع في سيارات تحت التحميل بانتظار الوزنة 2 (وضع المندوب)
   const btnToggleLitePendSearch = document.getElementById('btnToggleLitePendingSearch');
   const litePendSearchWrap = document.getElementById('litePendingSearchBoxWrapper');
   const inpLitePendSearch = document.getElementById('inpLiteFilterPendingCards');
@@ -5666,7 +5647,7 @@ function initFarmSalesApp() {
     });
   }
 
-   تفعيل التنقل السريع بزر Enter بين حقول الميزان والبيع (وزنة 1 ⬅️ وزنة 2 ⬅️ نقدي مبيعات ⬅️ باقي الفاتورة آجل)
+  // تفعيل التنقل السريع بزر Enter بين حقول الميزان والبيع (وزنة 1 ⬅️ وزنة 2 ⬅️ نقدي مبيعات ⬅️ باقي الفاتورة آجل)
   function focusAndSelectField(fieldId) {
     const el = document.getElementById(fieldId);
     if (!el) return;
@@ -5726,14 +5707,14 @@ function initFarmSalesApp() {
         return;
       }
 
-       1) وزنة 1 ⬅️ وزنة 2
+      // 1) وزنة 1 ⬅️ وزنة 2
       if (fieldId === 'inpW1') {
         updateLiveFormCalculation();
         focusAndSelectField('inpW2');
         return;
       }
 
-       2) وزنة 2 ⬅️ التحقق من السعر أولاً (إذا كان فارغاً ينتقل للسعر)، ثم توزيع العهدة أو الانتقال لنقدي المبيعات
+      // 2) وزنة 2 ⬅️ التحقق من السعر أولاً (إذا كان فارغاً ينتقل للسعر)، ثم توزيع العهدة أو الانتقال لنقدي المبيعات
       if (fieldId === 'inpW2') {
         const w1 = Math.max(0, parseNum(document.getElementById('inpW1').value) || 0);
         const w2 = Math.max(0, parseNum(document.getElementById('inpW2').value) || 0);
@@ -5772,7 +5753,7 @@ function initFarmSalesApp() {
         return;
       }
 
-       3) نقدي مبيعات ⬅️ باقي الفاتورة آجل (حساب تلقائي + تركيز على حقل الآجل)
+      // 3) نقدي مبيعات ⬅️ باقي الفاتورة آجل (حساب تلقائي + تركيز على حقل الآجل)
       if (fieldId === 'inpCashSales') {
         if (calculateAndFillRemainingCredit(true)) {
           showToast('⚡ تم حساب باقي الفاتورة آجل تلقائياً — اضغط Enter للحفظ النهائي', '⚡');
@@ -5810,7 +5791,7 @@ function initFarmSalesApp() {
         return;
       }
 
-       4) باقي الفاتورة آجل ⬅️ حفظ الحركة النهائية (أو حفظ مؤقت إذا كانت وزنة 1 فقط)
+      // 4) باقي الفاتورة آجل ⬅️ حفظ الحركة النهائية (أو حفظ مؤقت إذا كانت وزنة 1 فقط)
       if (fieldId === 'inpCreditSales') {
         updateLiveFormCalculation();
         const w1 = Math.max(0, parseNum(document.getElementById('inpW1').value) || 0);
@@ -5827,7 +5808,7 @@ function initFarmSalesApp() {
     });
   });
 
-   حفظ مؤقت للوزنة الأولى والبيانات لحين استكمال الوزنة الثانية
+  // حفظ مؤقت للوزنة الأولى والبيانات لحين استكمال الوزنة الثانية
   activeRecalledPendingId = '';
 
   function recallPendingSaleById(pid) {
@@ -6079,9 +6060,7 @@ function initFarmSalesApp() {
     dayObj.isHidden = false;
     const existingIdx = dayObj.pendingSales.findIndex(x => x.id === pendingObj.id);
     if (existingIdx !== -1) dayObj.pendingSales[existingIdx] = pendingObj;
-    if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_PENDING', { ...pendingObj, dayNum: appState.currentDay, farmName: appState.farmName });
     else dayObj.pendingSales.push(pendingObj);
-    if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_PENDING', { ...pendingObj, dayNum: appState.currentDay, farmName: appState.farmName });
     dayObj.pendingSales = sortSalesListByScaleNo(dayObj.pendingSales);
 
     cancelOrClearCurrentSaleEntry(false);
@@ -6090,7 +6069,7 @@ function initFarmSalesApp() {
     showToast(`تم حجز مسلسل الميزان رقم (${enteredScale}) للتاجر (${mName}) وحفظ ترتيبه في جدول حركات البيع المسجلة (وزنة أولى: ${fmtMoney(w1Val)} كجم)!`, '⏳');
   });
 
-   استرجاع أو حذف سيارة محفوظة مؤقتاً (وزنة أولى)
+  // استرجاع أو حذف سيارة محفوظة مؤقتاً (وزنة أولى)
   document.getElementById('pendingWeighInsTbody').addEventListener('click', (e) => {
     const recBtn = e.target.closest('[data-recall-pending]');
     if (recBtn) {
@@ -6103,7 +6082,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Save or Update Final Sale Entry (Requires Weight 2!)
+  // Save or Update Final Sale Entry (Requires Weight 2!)
   document.getElementById('saleEntryForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const mName = document.getElementById('inpMerchantName').value.trim();
@@ -6278,7 +6257,6 @@ function initFarmSalesApp() {
     if (editId) {
       const idx = daySales.findIndex(x => x.id === editId);
       if (idx !== -1) daySales[idx] = rowObj;
-      if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_SALE', { ...rowObj, dayNum: appState.currentDay, farmName: appState.farmName });
       dayObj.sales = sortSalesListByScaleNo(daySales);
       showToast(
         isStandaloneDebtVoucher
@@ -6291,7 +6269,6 @@ function initFarmSalesApp() {
         return;
       }
       daySales.push(rowObj);
-      if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_SALE', { ...rowObj, dayNum: appState.currentDay, farmName: appState.farmName });
       dayObj.sales = sortSalesListByScaleNo(daySales);
       showToast(
         isStandaloneDebtVoucher
@@ -6300,7 +6277,7 @@ function initFarmSalesApp() {
       );
     }
 
-     إزالة السيارة تلقائياً من قائمة (سيارات محفوظة مؤقتاً - وزنة أولى) فور إتمام الوزنة الثانية والحفظ النهائي (لحركات الميزان فقط)!
+    // إزالة السيارة تلقائياً من قائمة (سيارات محفوظة مؤقتاً - وزنة أولى) فور إتمام الوزنة الثانية والحفظ النهائي (لحركات الميزان فقط)!
     const curDayObj = appState.days[appState.currentDay];
     if (!isStandaloneDebtVoucher && curDayObj && Array.isArray(curDayObj.pendingSales) && curDayObj.pendingSales.length > 0) {
       curDayObj.pendingSales = curDayObj.pendingSales.filter(pItem => {
@@ -6326,7 +6303,7 @@ function initFarmSalesApp() {
     cancelOrClearCurrentSaleEntry(true);
   });
 
-   Edit / Delete / Recall Sale Row Delegation (Protected by Sales Permission)
+  // Edit / Delete / Recall Sale Row Delegation (Protected by Sales Permission)
   document.getElementById('dailySalesTbody').addEventListener('click', (e) => {
     const printRecBtn = e.target.closest('[data-print-receipt]');
     if (printRecBtn) {
@@ -6417,7 +6394,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Daily sales search handled by universal Excel filter bindings below
+  // Daily sales search handled by universal Excel filter bindings below
 
   function resetExpenseFormEditMode() {
     const expForm = document.getElementById('expenseEntryForm');
@@ -6438,7 +6415,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Add or Edit Daily Expense / Bonus
+  // Add or Edit Daily Expense / Bonus
   document.getElementById('expenseEntryForm').addEventListener('submit', (e) => {
     e.preventDefault();
     if (!hasPermission('expenses')) {
@@ -6469,7 +6446,6 @@ function initFarmSalesApp() {
           ...expAuditMeta,
           ...candidateExpFields
         };
-        if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_EXPENSE', { ...dayExps[idx], dayNum: appState.currentDay, farmName: appState.farmName });
       }
       if (expDayObj) {
         expDayObj.addedAt = getSyncedNow();
@@ -6486,17 +6462,7 @@ function initFarmSalesApp() {
     const newExpId = generateRecordUUID(`exp_d${appState.currentDay}`);
     const newExpAuditMeta = buildRecordAuditMeta(null, false);
     unrecordDeletedItem('expenses', newExpId);
-    const expFullObj = {
-      id: newExpId,
-      ...newExpAuditMeta,
-      category,
-      desc,
-      recipient,
-      amount
-    };
-    dayExps.push(expFullObj);
-    if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_EXPENSE', { ...expFullObj, dayNum: appState.currentDay, farmName: appState.farmName });
-    
+    dayExps.push({
       id: newExpId,
       ...newExpAuditMeta,
       category,
@@ -6515,7 +6481,7 @@ function initFarmSalesApp() {
     showToast(`تم خصم (${fmtInt(amount)} ج.م - ${category}) من نقدية الخزنة`);
   });
 
-   Edit or Delete Expense Row (Protected by Expenses Permission)
+  // Edit or Delete Expense Row (Protected by Expenses Permission)
   document.getElementById('dailyExpensesTbody').addEventListener('click', (e) => {
     if (!hasPermission('expenses')) {
       showToast('عفواً، التعديل والحذف غير متاح للزائر (عرض فقط).', '🔒');
@@ -6558,7 +6524,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Open specific day from Dashboard Table (auto-adding to visibleDays if needed)
+  // Open specific day from Dashboard Table (auto-adding to visibleDays if needed)
   document.getElementById('dashTableTbody').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-open-day]');
     if (btn) {
@@ -6572,7 +6538,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Add or Edit Base Merchant + Delete Merchant
+  // Add or Edit Base Merchant + Delete Merchant
   document.getElementById('addMerchantForm').addEventListener('submit', (e) => {
     e.preventDefault();
     if (!hasPermission('merchants')) {
@@ -6588,8 +6554,7 @@ function initFarmSalesApp() {
         const oldName = mObj.name;
         mObj.name = name;
         mObj.updatedAt = getSyncedNow();
-        if (typeof enqueueDeltaSyncEvent === 'function') enqueueDeltaSyncEvent('UPSERT_MERCHANT', mObj);
-         Update sales rows that used oldName in active farm and across all archived farms
+        // Update sales rows that used oldName in active farm and across all archived farms
         for (let d = 1; d <= 10; d++) {
           (appState.days[d].sales || []).forEach(r => {
             if (r.merchant === oldName) r.merchant = name;
@@ -6627,7 +6592,7 @@ function initFarmSalesApp() {
     renderAll(true);
   });
 
-   Start Screen Option 1: Connect Cloud Webhook URL & Pull Existing Farm Immediately
+  // Start Screen Option 1: Connect Cloud Webhook URL & Pull Existing Farm Immediately
   const btnForceSyncCloud = document.getElementById('btnForceSyncFromCloud');
   const inpForceCloudUrl = document.getElementById('inpForceCloudWebhookUrl');
   const forceCloudStatusEl = document.getElementById('forceCloudSyncStatusMsg');
@@ -6637,7 +6602,7 @@ function initFarmSalesApp() {
     const enteredUrl = (inpForceCloudUrl.value || '').trim();
     if (!enteredUrl || !enteredUrl.startsWith('http')) {
       if (forceCloudStatusEl) {
-        forceCloudStatusEl.textContent = '⚠️ يرجى لصق رابط السحابة الصحيح (يبدأ بـ https:) أولاً!';
+        forceCloudStatusEl.textContent = '⚠️ يرجى لصق رابط السحابة الصحيح (يبدأ بـ https://) أولاً!';
         forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-amber-100 text-amber-950 border border-amber-400';
         forceCloudStatusEl.classList.remove('hidden');
       }
@@ -6719,7 +6684,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Start Screen Option 3: Quick Restore from JSON / Excel Backup File
+  // Start Screen Option 3: Quick Restore from JSON / Excel Backup File
   const btnForceRestoreFile = document.getElementById('btnForceRestoreBackupFile');
   if (btnForceRestoreFile) {
     btnForceRestoreFile.addEventListener('click', () => {
@@ -6728,7 +6693,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Start Screen Option 2: Mandatory New Farm Creation Modal Submit Handler
+  // Start Screen Option 2: Mandatory New Farm Creation Modal Submit Handler
   const forceFarmForm = document.getElementById('forceCreateFarmForm');
   if (forceFarmForm) {
     forceFarmForm.addEventListener('submit', (e) => {
@@ -6740,7 +6705,7 @@ function initFarmSalesApp() {
         if (inp) inp.focus();
         return;
       }
-       إذا قام المستخدم بلصق رابط السحابة في الخيار (1) أعلاه ثم كتب اسم المزرعة وضغط إنشاء، نحفظ رابط السحابة أيضاً ونرفع المزرعة الجديدة إليها فوراً
+      // إذا قام المستخدم بلصق رابط السحابة في الخيار (1) أعلاه ثم كتب اسم المزرعة وضغط إنشاء، نحفظ رابط السحابة أيضاً ونرفع المزرعة الجديدة إليها فوراً
       if (inpForceCloudUrl && inpForceCloudUrl.value && inpForceCloudUrl.value.trim().startsWith('http')) {
         applyCloudWebhookUrlFromStartScreen(inpForceCloudUrl.value.trim());
       }
@@ -6871,9 +6836,9 @@ function initFarmSalesApp() {
     });
   }
 
-   =======================================================================
-   EXCEL SORT & FILTER POPOVER INTERACTIVE HANDLERS (FOR DASH & MERCH)
-   =======================================================================
+  // =======================================================================
+  // EXCEL SORT & FILTER POPOVER INTERACTIVE HANDLERS (FOR DASH & MERCH)
+  // =======================================================================
   const excelPopoverEl = document.getElementById('excelFilterPopover');
   const excelChecklistEl = document.getElementById('excelValuesChecklist');
   const chkSelectAllEl = document.getElementById('chkExcelSelectAllValues');
@@ -6948,7 +6913,7 @@ function initFarmSalesApp() {
 
     excelPopoverEl.classList.remove('hidden');
 
-     Position popover near trigger button within viewport bounds
+    // Position popover near trigger button within viewport bounds
     const rect = triggerBtn.getBoundingClientRect();
     const popW = 300;
     const popH = 380;
@@ -7145,7 +7110,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Wire up Quick Search & Clear Filter buttons for all other 8 tables
+  // Wire up Quick Search & Clear Filter buttons for all other 8 tables
   const extraFilterBindings = [
     { tableId: 'dailySales', inpId: 'inpFilterDailySales', btnId: 'btnClearDailySalesFilters', label: 'جدول حركات البيع اليومية' },
     { tableId: 'pendingWeighIns', inpId: 'inpFilterPendingSales', btnId: 'btnClearPendingSalesFilters', label: 'جدول الوزنات المؤقتة' },
@@ -7186,7 +7151,7 @@ function initFarmSalesApp() {
     document.getElementById('btnCancelMerchantEdit').classList.add('hidden');
   });
 
-   Global delegation for opening Merchant Drill-Down Modal from any table ([data-drill-merchant])
+  // Global delegation for opening Merchant Drill-Down Modal from any table ([data-drill-merchant])
   document.addEventListener('click', (e) => {
     const drillBtn = e.target.closest('[data-drill-merchant]');
     if (drillBtn) {
@@ -7264,7 +7229,7 @@ function initFarmSalesApp() {
       ta.select();
       try { document.execCommand('copy'); } catch (err) {}
       document.body.removeChild(ta);
-      const waUrl = `https:wa.me/?text=${encodeURIComponent(txt)}`;
+      const waUrl = `https://wa.me/?text=${encodeURIComponent(txt)}`;
       window.open(waUrl, '_blank', 'noopener,noreferrer');
       showToast('تم نسخ الكشف وفتح واتساب لمشاركة كشف حساب التاجر مباشرة! 📲');
     });
@@ -7375,7 +7340,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Quick Jump & Export/Share Handlers for Full Farm Cumulative Trial Balance in Executive Summary
+  // Quick Jump & Export/Share Handlers for Full Farm Cumulative Trial Balance in Executive Summary
   const btnJumpFarmTb = document.getElementById('btnJumpFarmTrialBalance');
   if (btnJumpFarmTb) {
     btnJumpFarmTb.addEventListener('click', () => {
@@ -7426,7 +7391,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Copy WhatsApp Daily Summary
+  // Copy WhatsApp Daily Summary
   document.getElementById('btnShareWhatsappSummary').addEventListener('click', () => {
     const s = computeDaySummary(appState.currentDay);
     const text = [
@@ -7458,7 +7423,7 @@ function initFarmSalesApp() {
     document.body.removeChild(ta);
   });
 
-   Export Excel Buttons & Full JSON Backup / Restore Buttons
+  // Export Excel Buttons & Full JSON Backup / Restore Buttons
   document.getElementById('btnQuickExportXlsx').addEventListener('click', exportFullWorkbookXlsx);
   document.getElementById('btnExportFullExcel2').addEventListener('click', exportFullWorkbookXlsx);
 
@@ -7513,7 +7478,7 @@ function initFarmSalesApp() {
     selAuditTypeEl.addEventListener('change', renderBackupAndAuditCenterUI);
   }
 
-   Sync Button (Smart Sync: pulls if fresh browser without local edits, pushes if local edits exist)
+  // Sync Button (Smart Sync: pulls if fresh browser without local edits, pushes if local edits exist)
   document.getElementById('btnSyncNow').addEventListener('click', async () => {
     if (liveExcelFileHandle) {
       await exportFullWorkbookXlsx();
@@ -7542,7 +7507,7 @@ function initFarmSalesApp() {
     showToast('⚠️ تم الحفظ على هذا المتصفح فقط — الصق رابط السحابة في تبويب (⚙️ التحكم والمزامنة) لمشاركتها عبر المتصفحات!', '🔄');
   });
 
-   Save Webhook URL & Smart Sync (Pulls from cloud first if this browser has no local edits, preventing accidental overwrite!)
+  // Save Webhook URL & Smart Sync (Pulls from cloud first if this browser has no local edits, preventing accidental overwrite!)
   const inpCloudWebhookEl = document.getElementById('inpCloudWebhookUrl');
   if (inpCloudWebhookEl) {
     inpCloudWebhookEl.addEventListener('input', () => {
@@ -7581,7 +7546,7 @@ function initFarmSalesApp() {
     }
   });
 
-   Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v73)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v73)
   const MODULAR_JS_SCRIPTS_ORDER = [
     './js/core-state.js?v=73',
     './js/accounting.js?v=73',
@@ -7672,7 +7637,7 @@ function initFarmSalesApp() {
     return copied;
   }
 
-   Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v73)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v73)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -7691,12 +7656,12 @@ function initFarmSalesApp() {
     const headEl = cloneDoc.querySelector('head') || cloneDoc;
     const bodyEl = cloneDoc.querySelector('body') || cloneDoc;
 
-     Remove any runtime-injected dynamic vendor scripts (blob: or data-dynamic-vendor-script) from cloned <head>
+    // Remove any runtime-injected dynamic vendor scripts (blob: or data-dynamic-vendor-script) from cloned <head>
     cloneDoc.querySelectorAll('script[data-dynamic-vendor-script="1"], script[src^="blob:"]').forEach(s => s.remove());
 
-     1. Handle CSS & JS assets:
-        - When inlineAllAssets = true (for Google Sites Embed / 1MB Single-File HTML), inline ./style.css, ./vendor/vendor-loader.js, ./excel-template.js, and all 6 modular ./js/*.js files!
-        - When inlineAllAssets = false (for GitHub Pages lightweight index.html download), keep external ./style.css and the 6 ./js/*.js links clean.
+    // 1. Handle CSS & JS assets:
+    //    - When inlineAllAssets = true (for Google Sites Embed / 1MB Single-File HTML), inline ./style.css, ./vendor/vendor-loader.js, ./excel-template.js, and all 6 modular ./js/*.js files!
+    //    - When inlineAllAssets = false (for GitHub Pages lightweight index.html download), keep external ./style.css and the 6 ./js/*.js links clean.
     const extStyleLink = cloneDoc.querySelector('link[href*="style.css"]');
     const extVendorScript = cloneDoc.querySelector('script[src*="vendor-loader.js"]');
     const extModularScripts = Array.from(cloneDoc.querySelectorAll('script[src*="js/"]'));
@@ -7766,7 +7731,7 @@ function initFarmSalesApp() {
           extLegacyAppScript.replaceWith(inlineScript);
         }
       }
-       Remove Tailwind CDN runtime-generated style tags ONLY if we still have the Tailwind CDN script in <head> so the copied HTML stays compact and fast
+      // Remove Tailwind CDN runtime-generated style tags ONLY if we still have the Tailwind CDN script in <head> so the copied HTML stays compact and fast
       if (cloneDoc.querySelector('script[src*="tailwindcss"]')) {
         cloneDoc.querySelectorAll('head style:not(#bundledGoogleSitesStyleCss):not(#criticalPrintStyles):not(#criticalMobileWeighbridgeStyles)').forEach(st => {
           if ((st.textContent || '').includes('--tw-')) st.remove();
@@ -7776,7 +7741,7 @@ function initFarmSalesApp() {
       if (extStyleLink) {
         cloneDoc.querySelectorAll('head style:not(#criticalPrintStyles):not(#criticalMobileWeighbridgeStyles)').forEach(st => st.remove());
       }
-       If opened from a single-file bundle and user clicks Download Lightweight GitHub HTML, restore the modular external script tags cleanly
+      // If opened from a single-file bundle and user clicks Download Lightweight GitHub HTML, restore the modular external script tags cleanly
       const bundledAppEl = cloneDoc.querySelector('#bundledGoogleSitesAppJs');
       if (bundledAppEl) {
         const frag = document.createDocumentFragment();
@@ -7802,8 +7767,8 @@ function initFarmSalesApp() {
       }
     }
 
-     2. Embed the Encrypted Webhook Vault (bound to login credentials) cleanly in <meta> and <script id="embeddedWebhookConfigScript">
-     لا نضع الرابط النصي المكشوف ولا نثبت اسم المزرعة في الكود حتى يُفك تشفير الرابط بكلمة المرور ويُسحب اسم المزرعة الحقيقي من السحابة تلقائياً
+    // 2. Embed the Encrypted Webhook Vault (bound to login credentials) cleanly in <meta> and <script id="embeddedWebhookConfigScript">
+    // لا نضع الرابط النصي المكشوف ولا نثبت اسم المزرعة في الكود حتى يُفك تشفير الرابط بكلمة المرور ويُسحب اسم المزرعة الحقيقي من السحابة تلقائياً
     const vaultTokens = url ? buildEncryptedWebhookVaultForUsers(url, appState.users) : getEmbeddedEncryptedVaultList();
     const vaultJoined = vaultTokens.join('|');
     const vaultJson = JSON.stringify(vaultTokens);
@@ -7841,7 +7806,7 @@ function initFarmSalesApp() {
       cfgScript.id = 'embeddedWebhookConfigScript';
       headEl.appendChild(cfgScript);
     }
-    cfgScript.textContent = `\n     خزينة رابط المزامنة السحابية المشفرة والمربوطة بتسجيل الدخول (تُفك تلقائياً عند إدخال اسم المستخدم وكلمة المرور)\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';\n    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = ${vaultJson};\n    window.EMBEDDED_DEFAULT_FARM_NAME = '';\n  `;
+    cfgScript.textContent = `\n    // خزينة رابط المزامنة السحابية المشفرة والمربوطة بتسجيل الدخول (تُفك تلقائياً عند إدخال اسم المستخدم وكلمة المرور)\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';\n    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = ${vaultJson};\n    window.EMBEDDED_DEFAULT_FARM_NAME = '';\n  `;
 
     const cloneInp = cloneDoc.querySelector('#inpCloudWebhookUrl');
     if (cloneInp) {
@@ -7852,7 +7817,7 @@ function initFarmSalesApp() {
       cloneLoginVaultBadge.classList.toggle('hidden', vaultTokens.length === 0);
     }
 
-     Hide the Google Sites code preview box in the cloned output
+    // Hide the Google Sites code preview box in the cloned output
     const cloneGsPreview = cloneDoc.querySelector('#googleSitesEmbedCodePreviewBox');
     if (cloneGsPreview) {
       cloneGsPreview.classList.add('hidden');
@@ -7863,7 +7828,7 @@ function initFarmSalesApp() {
       cloneGsTa.value = '';
     }
 
-     3. Clear runtime-populated table bodies & dynamic containers so the template HTML is 100% clean
+    // 3. Clear runtime-populated table bodies & dynamic containers so the template HTML is 100% clean
     [
       '#pendingWeighInsTbody',
       '#dailySalesTbody',
@@ -7887,7 +7852,7 @@ function initFarmSalesApp() {
       if (el) el.innerHTML = '';
     });
 
-     4. Reset login overlay & default tab state in the cloned HTML so opening on any device starts cleanly
+    // 4. Reset login overlay & default tab state in the cloned HTML so opening on any device starts cleanly
     const cloneLogin = cloneDoc.querySelector('#loginGatewayOverlay');
     if (cloneLogin) {
       cloneLogin.classList.remove('hidden');
@@ -7947,7 +7912,7 @@ function initFarmSalesApp() {
 
     copyTextToClipboardReliable(rawHtml);
 
-     Show interactive Google Sites Embed Code Preview Box so user can also inspect/copy with 1 tap on any device
+    // Show interactive Google Sites Embed Code Preview Box so user can also inspect/copy with 1 tap on any device
     const previewBox = document.getElementById('googleSitesEmbedCodePreviewBox');
     const previewTa = document.getElementById('txtGoogleSitesEmbedCodeOutput');
     const previewStatus = document.getElementById('lblGoogleSitesEmbedStatus');
@@ -8066,7 +8031,7 @@ function initFarmSalesApp() {
     showToast('✅ تم تحميل ملف index.html الشامل مدمجاً به رابط السحابة! يعمل مباشرة على GitHub Pages و Google Sites وكل الأجهزة.', '📥');
   });
 
-   Smart Triple-Mode Reset Inline Box Handlers (#btnResetDemoData & #smartResetInlineBox)
+  // Smart Triple-Mode Reset Inline Box Handlers (#btnResetDemoData & #smartResetInlineBox)
   const smartResetBox = document.getElementById('smartResetInlineBox');
   const radResetActive = document.getElementById('radResetModeActiveFarm');
   const radResetFull = document.getElementById('radResetModeFullSite');
@@ -8186,7 +8151,7 @@ function initFarmSalesApp() {
     });
   }
 
-   Import Excel (.xlsx) or JSON Backup file (Full Two-Way Parser)
+  // Import Excel (.xlsx) or JSON Backup file (Full Two-Way Parser)
   document.getElementById('fileImportXlsx').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
