@@ -11003,6 +11003,17 @@ function initFarmSalesApp() {
   }
 
   // Toggle Live Sync from Header Button
+  const btnBundleVendors = document.getElementById('btnBundleVendorsLocally');
+  if (btnBundleVendors) {
+    btnBundleVendors.addEventListener('click', () => {
+      if (typeof window.downloadAndBundleVendorPackagesLocally === 'function') {
+        window.downloadAndBundleVendorPackagesLocally();
+      } else {
+        showToast('⚠️ أداة تنزيل المكتبات غير محملة بعد.', '⚠️');
+      }
+    });
+  }
+
   const btnToggleLive = document.getElementById('btnToggleLiveSync');
   if (btnToggleLive) {
     btnToggleLive.addEventListener('click', () => {
@@ -11104,7 +11115,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-committee-v71-offline-first';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-committee-v72-local-vendors';
 
   // Force app hard reload & clear service worker caches (only when online so offline cache is never lost)
   async function forceAppHardReload() {
@@ -11135,7 +11146,7 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Purge only outdated caches while preserving ACTIVE_PWA_CACHE_NAME ('farm-sales-committee-v71-offline-first')
+  // Purge only outdated caches while preserving ACTIVE_PWA_CACHE_NAME ('farm-sales-committee-v72-local-vendors')
   try {
     if ('caches' in window && navigator.onLine) {
       caches.keys().then(keys => {

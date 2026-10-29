@@ -1,18 +1,19 @@
-// Service Worker - نظام محاضر لجان بيع المزارع (Offline-First PWA v71)
-const CACHE_NAME = "farm-sales-committee-v71-offline-first";
+// Service Worker - نظام محاضر لجان بيع المزارع (Local Vendors PWA v72)
+const CACHE_NAME = "farm-sales-committee-v72-local-vendors";
 
 const CORE_LOCAL_ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./style.css?v=71",
+  "./style.css?v=72",
   "./excel-template.js",
-  "./excel-template.js?v=71",
+  "./excel-template.js?v=72",
   "./app.js",
-  "./app.js?v=71",
+  "./app.js?v=72",
   "./manifest.json",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./vendor/vendor-loader.js"
 ];
 
 const EXTERNAL_CDN_ASSETS = [
@@ -133,7 +134,8 @@ self.addEventListener("fetch", (event) => {
     url.includes("/excel-template.js") ||
     url.includes("/app.js") ||
     url.includes("/style.css") ||
-    url.includes("/manifest.json");
+    url.includes("/manifest.json") ||
+    url.includes("/vendor/");
 
   if (isLocalCoreAsset) {
     event.respondWith(
