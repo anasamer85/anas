@@ -445,7 +445,6 @@ function restoreFullJsonBackupFromText(rawText, sourceFileName = '') {
 // 5. TWO-WAY EXCEL (.XLSX) ENGINE: FULL STYLED 15-SHEET EXPORT & IMPORT
 // =========================================================================
 // تم فصل STYLED_XLSX_TEMPLATE_B64 ودالة tinyInflateRaw في ملف مستقل (excel-template.js) لتخفيف حجم app.js وتسريع الأداء (v45)
-var _cachedStyledXlsxTemplate = window._cachedStyledXlsxTemplate || null;
 
 const _CRC32_TABLE = (() => {
   const tbl = new Uint32Array(256);
@@ -1290,7 +1289,8 @@ function buildExcelSaleCompositeKey(dayNum, seq, rec) {
   if (sNo > 0 && isDebtOnly) {
     return `d${dayNum}_voucher_${sNo}_m_${mKey}${subNo}_coll_${rec.debtCash}_${rec.debtTransfer}_${rec.prevCash}_${rec.prevTransfer}`;
   }
-  const cNo = toAsciiDigits(rec.carNo || '').trim() || 'nocar';
+  const rawCar = toAsciiDigits(rec.carNo || '').trim();
+  const cNo = rawCar || `nocar_seq${seq}`;
   const w1 = Number(rec.w1) || 0;
   const w2 = Number(rec.w2) || 0;
   if (w1 > 0 || w2 > 0) {
@@ -1341,10 +1341,7 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
   }
 
   let importedSalesCount = 0;
-  let updatedExistingSalesCount = 0;
-  let unchangedSalesCount = 0;
   let importedExpCount = 0;
-  let importedMerchantsCount = 0;
   const masterImportTs = getSyncedNow();
 
   // 1. استخلاص أو تثبيت اسم المزرعة النشطة بذكاء من شيت الملخص (الخلية C3 أو عنوان الخلية A1)
@@ -1388,7 +1385,6 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
           byName.updatedAt = masterImportTs;
         } else {
           appState.merchants.push({ code, name, updatedAt: masterImportTs });
-          importedMerchantsCount++;
         }
       }
     });
@@ -1637,14 +1633,12 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                   lastEditDiffText: matchedOldPend.lastEditDiffText || '',
                   editHistory: Array.isArray(matchedOldPend.editHistory) ? [...matchedOldPend.editHistory] : []
                 });
-                unchangedSalesCount++;
               } else {
                 Object.assign(recObj, buildRecordAuditMeta(matchedOldPend || null, Boolean(matchedOldPend), recObj, 'sale'), {
                   updatedAt: masterImportTs,
                   importedAt: masterImportTs,
                   excelCompositeKey: generatedCompositeKey
                 });
-                if (matchedOldPend) updatedExistingSalesCount++;
               }
               unrecordDeletedItem('pendingSales', recObj.id);
 
@@ -1716,14 +1710,12 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
                   lastEditDiffText: matchedOldSale.lastEditDiffText || '',
                   editHistory: Array.isArray(matchedOldSale.editHistory) ? [...matchedOldSale.editHistory] : []
                 });
-                unchangedSalesCount++;
               } else {
                 Object.assign(recObj, buildRecordAuditMeta(baseExistingRec, Boolean(baseExistingRec), recObj, 'sale'), {
                   updatedAt: masterImportTs,
                   importedAt: masterImportTs,
                   excelCompositeKey: generatedCompositeKey
                 });
-                if (baseExistingRec) updatedExistingSalesCount++;
               }
               unrecordDeletedItem('sales', recObj.id);
 

@@ -1086,7 +1086,6 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   const localFactoryWipeAt = Number(appState.factoryZeroWipeAt) || 0;
   const cloudFactoryWipeAt = Number(cloudData.factoryZeroWipeAt) || 0;
   appState.factoryZeroWipeAt = Math.max(localFactoryWipeAt, cloudFactoryWipeAt);
-  const isZeroWiped = (localFactoryWipeAt > 0 || cloudFactoryWipeAt > 0);
   const localFarmName = String(appState.farmName ?? '').trim();
   const cloudFarmName = String(cloudData.farmName ?? '').trim() || localFarmName;
   const sameActiveFarm = (localFarmName === cloudFarmName);
@@ -1813,7 +1812,7 @@ function renderCloudDatabaseHub() {
       const dObj = savedDays[d] || { sales: [], expenses: [] };
       const rows = (dObj.sales || []).map(computeSaleRow);
       const exps = dObj.expenses || [];
-      const dayExp = exps.reduce((a, e) => a + (Number(e.amount) || 0), 0);
+      const dayExp = roundMoney2(exps.reduce((a, e) => roundMoney2(a + (Number(e.amount) || 0)), 0));
       rows.forEach(r => {
         const hasLoadedSaleActivity = !r.isDebtCollectionOnly && (
           r.w1 > 0 || r.w2 > 0 || r.totalWithTip > 0 || r.cashSales > 0 || r.transferSales > 0 || r.creditSales > 0
@@ -1826,10 +1825,10 @@ function renderCloudDatabaseHub() {
         }
         fNetW = roundMoney2(fNetW + r.netWeight);
         fSales = roundMoney2(fSales + r.totalWithTip);
-        fCashInBox = roundMoney2(fCashInBox + (r.cashSales + r.debtCash + r.prevCash));
-        fNetDebt = roundMoney2(fNetDebt + (r.creditSales - r.debtCash - r.debtTransfer));
+        fCashInBox = roundMoney2(fCashInBox + roundMoney2(r.cashSales + r.debtCash + r.prevCash));
+        fNetDebt = roundMoney2(fNetDebt + roundMoney2(r.creditSales - r.debtCash - r.debtTransfer));
       });
-      fCashInBox -= dayExp;
+      fCashInBox = roundMoney2(fCashInBox - dayExp);
     }
 
     if (tbody) {

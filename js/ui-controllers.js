@@ -4655,12 +4655,7 @@ function initFarmSalesApp() {
       "  }",
       "}"
     ].join('\n');
-    const ta = document.createElement('textarea');
-    ta.value = scriptCode;
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand('copy'); } catch (err) {}
-    document.body.removeChild(ta);
+    copyTextToClipboardReliable(scriptCode);
     showToast('تم نسخ كود السحابة المطور (v75 Delta Sync + LockService)! حدثه في script.google.com واختر (New version) عند النشر.', '📋');
   });
   window.addEventListener('offline', () => {
@@ -6193,10 +6188,6 @@ function initFarmSalesApp() {
       return;
     }
     if (isDayLocked(appState.currentDay)) {
-      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن إضافة أو تعديل حركات بيع إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
-      return;
-    }
-    if (isDayLocked(appState.currentDay)) {
       showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن إضافة أو تعديل وزنات مؤقتة إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
       return;
     }
@@ -7512,12 +7503,7 @@ function initFarmSalesApp() {
     btnCopyMerchStmt.addEventListener('click', () => {
       if (!activeDrillDownMerchantCode) return;
       const txt = buildMerchantWhatsappStatementText(activeDrillDownMerchantCode);
-      const ta = document.createElement('textarea');
-      ta.value = txt;
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); } catch (err) {}
-      document.body.removeChild(ta);
+      copyTextToClipboardReliable(txt);
       showToast('تم نسخ كشف حساب التاجر التفصيلي للحافظة بنجاح! 📋');
     });
   }
@@ -7526,12 +7512,7 @@ function initFarmSalesApp() {
     btnShareMerchWa.addEventListener('click', () => {
       if (!activeDrillDownMerchantCode) return;
       const txt = buildMerchantWhatsappStatementText(activeDrillDownMerchantCode);
-      const ta = document.createElement('textarea');
-      ta.value = txt;
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); } catch (err) {}
-      document.body.removeChild(ta);
+      copyTextToClipboardReliable(txt);
       const waUrl = `https://wa.me/?text=${encodeURIComponent(txt)}`;
       window.open(waUrl, '_blank', 'noopener,noreferrer');
       showToast('تم نسخ الكشف وفتح واتساب لمشاركة كشف حساب التاجر مباشرة! 📲');
@@ -7713,17 +7694,11 @@ function initFarmSalesApp() {
       `✅ *إجمالي النقدية المتاحة بالخزنة: ${fmtInt(s.totalAvailableCashInBox)} ج.م* (المورد للإدارة: ${fmtInt(s.deliveredCash)} ج.م${s.carriedForwardCash > 0 ? ` | مرحّل للغد: ${fmtInt(s.carriedForwardCash)} ج.م` : ''} | فرق الخزينة: ${fmtInt(s.cashBoxDiff)} ج.م)`
     ].join('\n');
 
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      document.execCommand('copy');
+    if (copyTextToClipboardReliable(text)) {
       showToast('تم نسخ ملخص اليوم وميزان الخزنة — يمكنك لصقه في واتساب مباشرة!', '📲');
-    } catch (err) {
+    } else {
       showToast('تم تجهيز الملخص', '📲');
     }
-    document.body.removeChild(ta);
   });
 
   // Export Excel Buttons & Full JSON Backup / Restore Buttons
@@ -7916,8 +7891,7 @@ function initFarmSalesApp() {
   }
   preloadExternalAssetsForGoogleSitesEmbed();
 
-  function copyTextToClipboardReliable(text) {
-    let copied = false;
+  function fallbackExecCommandCopy(text) {
     try {
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -7930,14 +7904,23 @@ function initFarmSalesApp() {
       ta.focus();
       ta.select();
       try { ta.setSelectionRange(0, text.length); } catch (e) {}
-      copied = Boolean(document.execCommand('copy'));
+      const ok = Boolean(document.execCommand('copy'));
       document.body.removeChild(ta);
-    } catch (err) {}
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      navigator.clipboard.writeText(text).catch(() => {});
-      copied = true;
+      return ok;
+    } catch (err) {
+      return false;
     }
-    return copied;
+  }
+
+  function copyTextToClipboardReliable(text) {
+    const str = String(text ?? '');
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(str).catch(() => {
+        fallbackExecCommandCopy(str);
+      });
+      return true;
+    }
+    return fallbackExecCommandCopy(str);
   }
 
   // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v75)

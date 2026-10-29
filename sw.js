@@ -5,26 +5,26 @@ const CORE_LOCAL_ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./style.css?v=73",
+  "./style.css?v=75",
   "./excel-template.js",
-  "./excel-template.js?v=73",
+  "./excel-template.js?v=75",
   "./js/core-state.js",
-  "./js/core-state.js?v=73",
+  "./js/core-state.js?v=75",
   "./js/accounting.js",
-  "./js/accounting.js?v=73",
+  "./js/accounting.js?v=75",
   "./js/storage-sync.js",
-  "./js/storage-sync.js?v=73",
+  "./js/storage-sync.js?v=75",
   "./js/excel-engine.js",
-  "./js/excel-engine.js?v=73",
+  "./js/excel-engine.js?v=75",
   "./js/print-export.js",
-  "./js/print-export.js?v=73",
+  "./js/print-export.js?v=75",
   "./js/ui-controllers.js",
-  "./js/ui-controllers.js?v=73",
+  "./js/ui-controllers.js?v=75",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
   "./vendor/vendor-loader.js",
-  "./vendor/vendor-loader.js?v=73"
+  "./vendor/vendor-loader.js?v=75"
 ];
 
 const EXTERNAL_CDN_ASSETS = [
@@ -154,8 +154,29 @@ self.addEventListener("fetch", (event) => {
     url.includes("/vendor/vendor-loader.js");
 
   if (isLocalCoreAsset) {
+    const fetchCoreWithTimeout = () => {
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      let timerId = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timerId = setTimeout(() => {
+          if (controller) {
+            try { controller.abort(); } catch (e) {}
+          }
+          reject(new Error("SW_NETWORK_TIMEOUT_3000MS"));
+        }, 3000);
+      });
+      const networkPromise = (controller ? fetch(req, { signal: controller.signal }) : fetch(req)).then((res) => {
+        if (timerId) clearTimeout(timerId);
+        return res;
+      }).catch((err) => {
+        if (timerId) clearTimeout(timerId);
+        throw err;
+      });
+      return Promise.race([networkPromise, timeoutPromise]);
+    };
+
     event.respondWith(
-      fetch(req)
+      fetchCoreWithTimeout()
         .then(async (networkRes) => {
           if (networkRes && networkRes.status === 200) {
             const copy = networkRes.clone();
