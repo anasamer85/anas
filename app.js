@@ -1030,9 +1030,21 @@ function loadState() {
     }
   } catch (e) {}
   if (!loaded) {
+    for (const legKey of LEGACY_STORAGE_KEYS) {
+      try {
+        const legRaw = localStorage.getItem(legKey);
+        if (legRaw) {
+          loaded = applyParsedStateObject(JSON.parse(legRaw));
+          if (loaded) break;
+        }
+      } catch (e) {}
+    }
+  }
+  if (!loaded) {
     try {
-      if (window.name && window.name.startsWith('FARM_SALES_CLEAN_STATE_V67:')) {
-        loaded = applyParsedStateObject(JSON.parse(window.name.slice(19)));
+      const wnPrefix = 'FARM_SALES_CLEAN_STATE_V67:';
+      if (window.name && window.name.startsWith(wnPrefix)) {
+        loaded = applyParsedStateObject(JSON.parse(window.name.slice(wnPrefix.length)));
       }
     } catch (e) {}
   }
@@ -11092,8 +11104,14 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  // Force app hard reload & clear service worker caches
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-committee-v71-offline-first';
+
+  // Force app hard reload & clear service worker caches (only when online so offline cache is never lost)
   async function forceAppHardReload() {
+    if (!navigator.onLine) {
+      showToast('🟠 أنت غير متصل بالإنترنت حالياً — يرجى الاتصال بالإنترنت أولاً لتحديث نسخة التطبيق!', '🟠');
+      return;
+    }
     showToast('جاري تحديث التطبيق ومسح الكاش القديم...', '⏳');
     try {
       if ('caches' in window) {
@@ -11117,12 +11135,12 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Auto-purge legacy Service Worker caches (v25/v26) so updated print styles & scripts apply immediately
+  // Purge only outdated caches while preserving ACTIVE_PWA_CACHE_NAME ('farm-sales-committee-v71-offline-first')
   try {
-    if ('caches' in window) {
+    if ('caches' in window && navigator.onLine) {
       caches.keys().then(keys => {
         keys.forEach(k => {
-          if (k !== 'farm-sales-committee-v67-clean-slate') {
+          if (k !== ACTIVE_PWA_CACHE_NAME) {
             caches.delete(k).catch(() => {});
           }
         });
@@ -11130,9 +11148,9 @@ function initFarmSalesApp() {
     }
   } catch (e) {}
 
-  // Register Offline Service Worker with auto-update detection
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('./sw.js').then((reg) => {
+  // Register Offline Service Worker (v71) with auto-update detection
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    navigator.serviceWorker.register('./sw.js?v=71', { scope: './' }).then((reg) => {
       // Immediately check for updates whenever the app is opened
       reg.update().catch(() => {});
       reg.addEventListener('updatefound', () => {
