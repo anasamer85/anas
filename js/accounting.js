@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v73)
+// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v75)
 // =========================================================================
 
 function addSpecificDayToCycle(targetDayNum, customLabel = '') {
@@ -71,6 +71,14 @@ function editSpecificDayInCycle(targetDayNum, newLabel) {
   appState.days[dNum].isHidden = false;
   appState.days[dNum].addedAt = getSyncedNow();
   appState.days[dNum].labelUpdatedAt = getSyncedNow();
+  if (typeof enqueueDeltaSyncEvent === 'function') {
+    enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+      farmName: appState.farmName,
+      dayNum: dNum,
+      dateLabel: trimmedLbl,
+      labelUpdatedAt: appState.days[dNum].labelUpdatedAt
+    });
+  }
   if (!Array.isArray(appState.visibleDays)) appState.visibleDays = [1];
   if (!appState.visibleDays.includes(dNum)) {
     appState.visibleDays.push(dNum);
@@ -635,6 +643,11 @@ function ensureMerchantExists(rawName, explicitCode = null) {
   }
 
   appState.merchants.sort((a, b) => Number(a.code) - Number(b.code));
+  if (typeof enqueueDeltaSyncEvent === 'function') {
+    enqueueDeltaSyncEvent('UPSERT_MERCHANT', {
+      merchant: { code: nextCode, name: base, updatedAt: nowTs }
+    });
+  }
 
   const fName = String(appState.farmName || '').trim();
   if (fName && appState.farmsArchive && appState.farmsArchive[fName]) {

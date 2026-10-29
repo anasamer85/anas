@@ -1,5 +1,5 @@
-// Service Worker - نظام محاضر لجان بيع المزارع (Modular Architecture PWA v73)
-const CACHE_NAME = "farm-sales-committee-v73-modular-architecture";
+// Service Worker - نظام محاضر لجان بيع المزارع (Modular Architecture PWA v75)
+const CACHE_NAME = "farm-sales-v75-delta-sync";
 
 const CORE_LOCAL_ASSETS = [
   "./",

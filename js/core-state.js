@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v73)
+// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v75)
 // =========================================================================
 
 // =========================================================================
@@ -380,6 +380,8 @@ function getDefaultState(customFarmName = '') {
     hasLocalEdits: false,
     liveSyncEnabled: true,
     liveSyncIntervalSec: 5,
+    syncOutbox: [],
+    lastDeltaSyncAt: 0,
     deletedIds: { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] },
     deletedTimestamps: { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} },
     webhookUrl: getEmbeddedWebhookUrl() || '',
@@ -848,6 +850,8 @@ function applyParsedStateObject(parsed) {
   appState = { ...getDefaultState(), ...parsed, webhookUrl: savedWebhook };
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
   appState.deletedTimestamps = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
+  if (!Array.isArray(appState.syncOutbox)) appState.syncOutbox = [];
+  appState.lastDeltaSyncAt = Math.max(0, Number(appState.lastDeltaSyncAt) || 0);
   if (appState.liveSyncEnabled === undefined) appState.liveSyncEnabled = true;
   if (!appState.liveSyncIntervalSec) appState.liveSyncIntervalSec = 5;
   if (appState.inactivityTimeoutMin === undefined || appState.inactivityTimeoutMin === null || isNaN(Number(appState.inactivityTimeoutMin))) {
@@ -1237,6 +1241,16 @@ function toggleDayLockState(dayNum = appState.currentDay) {
   if (dayObj.isLocked) {
     dayObj.isLocked = false;
     dayObj.lockUpdatedAt = nowMs;
+    if (typeof enqueueDeltaSyncEvent === 'function') {
+      enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+        farmName: appState.farmName,
+        dayNum: d,
+        isLocked: false,
+        lockedBy: dayObj.lockedBy || '',
+        lockedAtTxt: dayObj.lockedAtTxt || '',
+        lockUpdatedAt: nowMs
+      });
+    }
     saveState(true, false);
     renderAll();
     showToast(`🔓 تم فك قفل (يوم ${d} — ${dayObj.dateLabel}) بواسطة (${actor}) وإعادة فتحه للتعديل!`, '🔓');
@@ -1246,6 +1260,16 @@ function toggleDayLockState(dayNum = appState.currentDay) {
     dayObj.lockedBy = actor;
     dayObj.lockedAtTxt = nowTxt;
     dayObj.lockUpdatedAt = nowMs;
+    if (typeof enqueueDeltaSyncEvent === 'function') {
+      enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+        farmName: appState.farmName,
+        dayNum: d,
+        isLocked: true,
+        lockedBy: actor,
+        lockedAtTxt: nowTxt,
+        lockUpdatedAt: nowMs
+      });
+    }
     activeRecalledPendingId = '';
     const saleForm = document.getElementById('saleEntryForm');
     if (saleForm) saleForm.reset();

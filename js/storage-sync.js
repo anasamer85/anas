@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v73)
+// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v75)
 // =========================================================================
 
 function loadState() {
@@ -244,7 +244,231 @@ function pruneDeletedTombstones(deletedIds, deletedTimestamps, maxPerCategory = 
   });
 }
 
-function recordDeletedItem(category, itemId, customTs = 0) {
+function getDeltaEventTargetKey(actionType, payload) {
+  if (!payload || typeof payload !== 'object') return '';
+  const fName = String(payload.farmName || (appState && appState.farmName) || '').trim();
+  const dNum = Number(payload.dayNum) || 0;
+  if (actionType === 'UPSERT_SALE' || actionType === 'DELETE_SALE') {
+    const id = payload.record ? payload.record.id : payload.id;
+    return `sale:${fName}:${dNum}:${String(id || '')}`;
+  }
+  if (actionType === 'UPSERT_PENDING' || actionType === 'DELETE_PENDING') {
+    const id = payload.record ? payload.record.id : payload.id;
+    return `pending:${fName}:${dNum}:${String(id || '')}`;
+  }
+  if (actionType === 'UPSERT_EXPENSE' || actionType === 'DELETE_EXPENSE') {
+    const id = payload.record ? payload.record.id : payload.id;
+    return `expense:${fName}:${dNum}:${String(id || '')}`;
+  }
+  if (actionType === 'UPDATE_DAY_META') {
+    return `daymeta:${fName}:${dNum}`;
+  }
+  if (actionType === 'UPSERT_MERCHANT' || actionType === 'DELETE_MERCHANT') {
+    const code = payload.merchant ? payload.merchant.code : payload.code;
+    return `merchant:${Number(code) || 0}`;
+  }
+  if (actionType === 'UPSERT_USER' || actionType === 'DELETE_USER') {
+    const uid = payload.user ? payload.user.id : payload.id;
+    return `user:${String(uid || '')}`;
+  }
+  if (actionType === 'DELETE_FARM') {
+    return `farm:${String(payload.farmName || '')}`;
+  }
+  return '';
+}
+
+function enqueueDeltaSyncEvent(actionType, payload = {}) {
+  if (!appState) return;
+  if (!Array.isArray(appState.syncOutbox)) appState.syncOutbox = [];
+  const nowTs = getSyncedNow();
+  const enrichedPayload = {
+    ...JSON.parse(JSON.stringify(payload || {})),
+    farmName: String((payload && payload.farmName) || appState.farmName || '').trim()
+  };
+  const targetKey = getDeltaEventTargetKey(actionType, enrichedPayload);
+  const eventObj = {
+    id: generateRecordUUID('dlta'),
+    action: String(actionType || '').trim(),
+    targetKey,
+    payload: enrichedPayload,
+    ts: nowTs
+  };
+
+  if (targetKey) {
+    appState.syncOutbox = appState.syncOutbox.filter(ev => ev && ev.targetKey !== targetKey);
+  }
+  appState.syncOutbox.push(eventObj);
+  if (appState.syncOutbox.length > 500) {
+    appState.syncOutbox = appState.syncOutbox.slice(-500);
+  }
+}
+
+function applyIncomingDeltaEvents(eventsList) {
+  if (!Array.isArray(eventsList) || eventsList.length === 0) return false;
+  let changed = false;
+  appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
+  appState.deletedTimestamps = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
+
+  const sortedEvents = [...eventsList].sort((a, b) => (Number(a && a.ts) || 0) - (Number(b && b.ts) || 0));
+
+  sortedEvents.forEach(ev => {
+    if (!ev || !ev.action) return;
+    const evTs = Number(ev.ts) || getSyncedNow();
+    if (evTs > 0) calibrateCloudClockOffset(evTs);
+    const p = ev.payload || {};
+    const targetFarm = String(p.farmName || appState.farmName || '').trim();
+    const isCurrentFarm = (!targetFarm || targetFarm === String(appState.farmName || '').trim());
+    const getTargetDaysMap = () => {
+      if (isCurrentFarm) return appState.days;
+      if (targetFarm && appState.farmsArchive && appState.farmsArchive[targetFarm]) {
+        if (!appState.farmsArchive[targetFarm].days) {
+          appState.farmsArchive[targetFarm].days = ensureDaysSchemaIntact({});
+        }
+        return appState.farmsArchive[targetFarm].days;
+      }
+      return null;
+    };
+
+    const dNum = Number(p.dayNum) || 1;
+    const daysMap = getTargetDaysMap();
+
+    switch (ev.action) {
+      case 'UPSERT_SALE':
+      case 'UPSERT_PENDING':
+      case 'UPSERT_EXPENSE': {
+        const cat = ev.action === 'UPSERT_SALE' ? 'sales' : (ev.action === 'UPSERT_PENDING' ? 'pendingSales' : 'expenses');
+        const dupFn = ev.action === 'UPSERT_SALE' ? areSalesRowsDuplicate : (ev.action === 'UPSERT_PENDING' ? arePendingSalesDuplicate : areExpensesDuplicate);
+        const rec = p.record;
+        if (!rec || !rec.id || !daysMap || !daysMap[dNum]) break;
+        const idStr = String(rec.id);
+        const delTs = Number(appState.deletedTimestamps[cat] && appState.deletedTimestamps[cat][idStr]) || 0;
+        const recTs = Math.max(extractTimestampFromRecord(rec), evTs);
+        if (delTs > recTs) break;
+        unrecordDeletedItem(cat, idStr);
+        daysMap[dNum][cat] = mergeArraysById(daysMap[dNum][cat] || [], [rec], appState.deletedIds[cat], 'id', true, dupFn);
+        if (cat !== 'expenses') {
+          daysMap[dNum][cat] = sortSalesListByScaleNo(daysMap[dNum][cat]);
+        }
+        if (ev.action === 'UPSERT_SALE' && Array.isArray(daysMap[dNum].pendingSales)) {
+          daysMap[dNum].pendingSales = daysMap[dNum].pendingSales.filter(x => x && String(x.id) !== idStr);
+        }
+        daysMap[dNum].isHidden = false;
+        daysMap[dNum].addedAt = Math.max(Number(daysMap[dNum].addedAt) || 0, recTs);
+        if (isCurrentFarm && Array.isArray(appState.visibleDays) && !appState.visibleDays.includes(dNum)) {
+          appState.visibleDays.push(dNum);
+          appState.visibleDays.sort((a, b) => a - b);
+        }
+        changed = true;
+        break;
+      }
+      case 'DELETE_SALE':
+      case 'DELETE_PENDING':
+      case 'DELETE_EXPENSE': {
+        const cat = ev.action === 'DELETE_SALE' ? 'sales' : (ev.action === 'DELETE_PENDING' ? 'pendingSales' : 'expenses');
+        const idStr = String(p.id || '');
+        if (!idStr) break;
+        recordDeletedItem(cat, idStr, evTs, false);
+        const removeFromDays = (dMap) => {
+          if (!dMap) return;
+          for (let d = 1; d <= 10; d++) {
+            if (dMap[d] && Array.isArray(dMap[d][cat])) {
+              dMap[d][cat] = dMap[d][cat].filter(x => x && String(x.id) !== idStr);
+            }
+          }
+        };
+        removeFromDays(appState.days);
+        if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
+          Object.values(appState.farmsArchive).forEach(arch => { if (arch && arch.days) removeFromDays(arch.days); });
+        }
+        changed = true;
+        break;
+      }
+      case 'UPDATE_DAY_META': {
+        if (!daysMap || !daysMap[dNum]) break;
+        const dayObj = daysMap[dNum];
+        if (p.dateLabel !== undefined && (Number(p.labelUpdatedAt) || evTs) >= (Number(dayObj.labelUpdatedAt) || 0)) {
+          dayObj.dateLabel = p.dateLabel;
+          dayObj.labelUpdatedAt = Math.max(Number(p.labelUpdatedAt) || 0, evTs);
+        }
+        if (p.deliveredCash !== undefined && (Number(p.deliveredCashUpdatedAt) || evTs) >= (Number(dayObj.deliveredCashUpdatedAt) || 0)) {
+          dayObj.deliveredCash = Number(p.deliveredCash) || 0;
+          dayObj.deliveredCashUpdatedAt = Math.max(Number(p.deliveredCashUpdatedAt) || 0, evTs);
+        }
+        if (p.carriedForwardCash !== undefined && (Number(p.carriedForwardCashUpdatedAt) || evTs) >= (Number(dayObj.carriedForwardCashUpdatedAt) || 0)) {
+          dayObj.carriedForwardCash = Number(p.carriedForwardCash) || 0;
+          dayObj.carriedForwardCashUpdatedAt = Math.max(Number(p.carriedForwardCashUpdatedAt) || 0, evTs);
+        }
+        if (p.isLocked !== undefined && (Number(p.lockUpdatedAt) || evTs) >= (Number(dayObj.lockUpdatedAt) || 0)) {
+          dayObj.isLocked = Boolean(p.isLocked);
+          dayObj.lockedBy = String(p.lockedBy || '');
+          dayObj.lockedAtTxt = String(p.lockedAtTxt || '');
+          dayObj.lockUpdatedAt = Math.max(Number(p.lockUpdatedAt) || 0, evTs);
+        }
+        changed = true;
+        break;
+      }
+      case 'UPSERT_MERCHANT': {
+        const m = p.merchant;
+        if (!m || !m.code) break;
+        const codeNum = Number(m.code);
+        const delTs = Number(appState.deletedTimestamps.merchants && appState.deletedTimestamps.merchants[String(codeNum)]) || 0;
+        const mTs = Math.max(Number(m.updatedAt) || 0, evTs);
+        if (delTs > mTs) break;
+        unrecordDeletedItem('merchants', codeNum);
+        appState.merchants = mergeArraysById(appState.merchants || [], [{ ...m, updatedAt: mTs }], appState.deletedIds.merchants, 'code', true)
+          .sort((a, b) => Number(a.code) - Number(b.code));
+        changed = true;
+        break;
+      }
+      case 'DELETE_MERCHANT': {
+        const codeNum = Number(p.code);
+        if (!codeNum) break;
+        recordDeletedItem('merchants', codeNum, evTs, false);
+        appState.merchants = (appState.merchants || []).filter(m => m && Number(m.code) !== codeNum);
+        changed = true;
+        break;
+      }
+      case 'UPSERT_USER': {
+        const u = p.user;
+        if (!u || !u.id || u.id === 'visitor') break;
+        unrecordDeletedItem('users', String(u.id));
+        appState.users = mergeArraysById(appState.users || [], [u], appState.deletedIds.users, 'id', true);
+        changed = true;
+        break;
+      }
+      case 'DELETE_USER': {
+        const uid = String(p.id || '');
+        if (!uid || uid === 'admin') break;
+        recordDeletedItem('users', uid, evTs, false);
+        appState.users = (appState.users || []).filter(u => u && String(u.id) !== uid);
+        changed = true;
+        break;
+      }
+      case 'DELETE_FARM': {
+        const fn = String(p.farmName || '').trim();
+        if (!fn) break;
+        recordDeletedItem('farms', fn, evTs, false);
+        if (appState.farmsArchive) delete appState.farmsArchive[fn];
+        changed = true;
+        break;
+      }
+    }
+    if (evTs > (Number(appState.lastDeltaSyncAt) || 0)) {
+      appState.lastDeltaSyncAt = evTs;
+    }
+  });
+
+  if (changed) {
+    deduplicateAllDaysInState(appState);
+    unifyGlobalMerchantsRegistry();
+    syncActiveFarmIntoArchive();
+    appState.updatedAt = new Date(getSyncedNow()).toISOString();
+    appState.hasLocalEdits = true;
+  }
+  return changed;
+}
+
+function recordDeletedItem(category, itemId, customTs = 0, enqueueDelta = true) {
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);
   appState.deletedTimestamps = ensureDeletedTimestampsStructure(appState.deletedTimestamps);
   const list = appState.deletedIds[category];
@@ -261,6 +485,23 @@ function recordDeletedItem(category, itemId, customTs = 0) {
       tsMap[String(normId)] = Math.max(Number(tsMap[String(normId)]) || 0, monotonicDelTs);
     }
     pruneDeletedTombstones(appState.deletedIds, appState.deletedTimestamps, 2000);
+    if (enqueueDelta && typeof enqueueDeltaSyncEvent === 'function') {
+      const actionMap = {
+        sales: 'DELETE_SALE',
+        pendingSales: 'DELETE_PENDING',
+        expenses: 'DELETE_EXPENSE',
+        merchants: 'DELETE_MERCHANT',
+        users: 'DELETE_USER',
+        farms: 'DELETE_FARM'
+      };
+      const act = actionMap[category];
+      if (act) {
+        enqueueDeltaSyncEvent(act, category === 'merchants'
+          ? { code: Number(normId), dayNum: appState.currentDay }
+          : (category === 'farms' ? { farmName: String(normId) } : { id: String(normId), dayNum: appState.currentDay })
+        );
+      }
+    }
   }
 }
 
@@ -1090,7 +1331,6 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
     return false;
   }
 
-  // حماية صارمة ضد مسح السحابة بالبيانات الافتراضية من متصفح جديد لم يجرِ تعديلات، مع السماح برفع الحذف الفردي إذا حذف المستخدم آخر حركة!
   const localMovCntNow = countMovementsInDays(appState.days);
   const hasRecordedDeletions = Boolean(
     appState.deletedIds && (
@@ -1114,8 +1354,97 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
   isCloudSyncInProgress = true;
   try {
     const baseEndpoint = isFirebase ? (url.replace(/\/$/, '') + '/abouzekry_cloud_db.json') : url;
+    const outboxBatch = Array.isArray(appState.syncOutbox) ? [...appState.syncOutbox] : [];
+    const canUseDeltaPush = Boolean(
+      outboxBatch.length > 0 &&
+      !skipPreFetchMerge &&
+      !isExplicitFarmReset &&
+      Number(appState.lastDeltaSyncAt) > 0 &&
+      String(appState.farmName || '').trim()
+    );
 
-    // سحب ودمج آخر تحديثات الأجهزة الأخرى قبل الرفع (قفل أمان ذري Atomic Read-Modify-Write) مع إعطاء الأولوية الصارمة للتعديلات المحلية (preferCloud = false):
+    // 1. المسار الجزئي السريع (Delta Sync Push): إرسال الحركات الموجودة في syncOutbox فقط + lastDeltaSyncAt
+    if (canUseDeltaPush && !isFirebase) {
+      try {
+        const deltaPayloadStr = JSON.stringify({
+          mode: 'delta_sync',
+          farmName: appState.farmName,
+          since: Number(appState.lastDeltaSyncAt) || 0,
+          deltaEvents: outboxBatch,
+          updatedAt: new Date(getSyncedNow()).toISOString()
+        });
+        const deltaRes = await fetch(baseEndpoint, {
+          method: 'POST',
+          redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: deltaPayloadStr
+        });
+        if (deltaRes.ok) {
+          const deltaResText = await deltaRes.text();
+          let parsedDelta = null;
+          try { parsedDelta = JSON.parse(deltaResText); } catch (e) {}
+          if (parsedDelta && parsedDelta.status === 'ok' && parsedDelta.mode === 'delta_sync') {
+            const sentIds = new Set(outboxBatch.map(ev => ev.id));
+            appState.syncOutbox = (appState.syncOutbox || []).filter(ev => !sentIds.has(ev.id));
+            if (Array.isArray(parsedDelta.incomingDeltaEvents) && parsedDelta.incomingDeltaEvents.length > 0) {
+              applyIncomingDeltaEvents(parsedDelta.incomingDeltaEvents);
+              renderAllPreservingActiveInputs();
+            }
+            appState.lastDeltaSyncAt = Math.max(Number(appState.lastDeltaSyncAt) || 0, Number(parsedDelta.serverTs) || getSyncedNow());
+            appState.pendingChanges = appState.syncOutbox.length;
+            appState.lastExcelSync = `مزامنة جزئية فورية ⚡ (${new Date().toLocaleTimeString('ar-EG')})`;
+            saveState(false);
+            if (liveBroadcastChannel) {
+              try { liveBroadcastChannel.postMessage({ type: 'STATE_UPDATED', updatedAt: appState.updatedAt }); } catch (e) {}
+            }
+            verifyActiveUserSession();
+            if (!silent) showToast('✅ تم رفع ودمج الحركات الجديدة لحظياً عبر المزامنة الجزئية السريعة (Delta Sync)!', '⚡');
+            return true;
+          }
+        }
+      } catch (deltaErr) {
+        // Auto-Fallback إلى الرفع الكامل إذا كان السكربت قديماً أو تعذر المسار الجزئي
+      }
+    }
+
+    // دعم طلبات PATCH الجزئية لروابط Firebase
+    if (canUseDeltaPush && isFirebase) {
+      try {
+        const nowIso = new Date(getSyncedNow()).toISOString();
+        appState.updatedAt = nowIso;
+        const patchObj = {
+          updatedAt: nowIso,
+          farmName: appState.farmName,
+          lastScaleNo: appState.lastScaleNo,
+          defaultPrice: appState.defaultPrice,
+          defaultTip: appState.defaultTip,
+          visibleDays: appState.visibleDays,
+          deletedIds: ensureDeletedIdsStructure(appState.deletedIds),
+          deletedTimestamps: ensureDeletedTimestampsStructure(appState.deletedTimestamps),
+          merchants: appState.merchants,
+          users: appState.users,
+          [`days/${appState.currentDay}`]: appState.days[appState.currentDay]
+        };
+        const patchRes = await fetch(baseEndpoint, {
+          method: 'PATCH',
+          redirect: 'follow',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patchObj)
+        });
+        if (patchRes.ok) {
+          const sentIds = new Set(outboxBatch.map(ev => ev.id));
+          appState.syncOutbox = (appState.syncOutbox || []).filter(ev => !sentIds.has(ev.id));
+          appState.lastDeltaSyncAt = getSyncedNow();
+          appState.pendingChanges = appState.syncOutbox.length;
+          appState.lastExcelSync = `مزامنة جزئية Firebase PATCH ⚡ (${new Date().toLocaleTimeString('ar-EG')})`;
+          saveState(false);
+          if (!silent) showToast('✅ تم تحديث الحركات جزئياً عبر Firebase PATCH بنجاح!', '⚡');
+          return true;
+        }
+      } catch (fbPatchErr) {}
+    }
+
+    // 2. المسار الشامل (Full State Snapshot & Auto-Fallback)
     if (!skipPreFetchMerge) {
       try {
         const sep = baseEndpoint.includes('?') ? '&' : '?';
@@ -1128,7 +1457,6 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
         if (preText && preText.trim() !== '{}' && preText.trim() !== 'null') {
           const remoteData = JSON.parse(preText);
           if (remoteData && remoteData.days && remoteData.merchants) {
-            // نعطي الأولوية دائماً للتعديلات المحلية أثناء خطوة الجلب المسبق داخل الرفع (preferCloud = false) لمنع ارتداد التعديلات
             mergeCloudDataIntoLocal(remoteData, false);
             renderAllPreservingActiveInputs();
           }
@@ -1140,10 +1468,10 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
     }
 
     const method = isFirebase ? 'PUT' : 'POST';
-    const nowIso = new Date(getSyncedNow()).toISOString();
+    const nowMs = getSyncedNow();
+    const nowIso = new Date(nowMs).toISOString();
     appState.updatedAt = nowIso;
 
-    // تقليل حجم البيانات المرسلة بعدم تكرار المزرعة الحالية داخل الأرشيف أثناء الإرسال
     const compactArchive = {};
     if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
       Object.keys(appState.farmsArchive).forEach(k => {
@@ -1172,7 +1500,8 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       users: appState.users,
       merchants: appState.merchants,
       days: appState.days,
-      farmsArchive: compactArchive
+      farmsArchive: compactArchive,
+      deltaEvents: outboxBatch
     });
 
     const res = await fetch(baseEndpoint, {
@@ -1195,7 +1524,16 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
         }
         return false;
       }
+      if (parsedRes && parsedRes.serverTs) {
+        appState.lastDeltaSyncAt = Math.max(Number(appState.lastDeltaSyncAt) || 0, Number(parsedRes.serverTs));
+      } else {
+        appState.lastDeltaSyncAt = nowMs;
+      }
+    } else {
+      appState.lastDeltaSyncAt = nowMs;
     }
+
+    appState.syncOutbox = [];
     appState.pendingChanges = 0;
     appState.lastExcelSync = `مزامنة حية مؤكدة ✓ (${new Date().toLocaleTimeString('ar-EG')})`;
     saveState(false);
@@ -1214,10 +1552,9 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
 }
 
 async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, isLiveBackgroundTick = false) {
-  // منع التداخل (Race Condition) بين الرفع/التعديل المحلي والنبض الخلفي: إيقاف السحب الخلفي أثناء الرفع أو لمدة 10 ثوانٍ بعد أي تعديل محلي أو عند وجود تعديلات معلقة
   if (isLiveBackgroundTick) {
     if (isCloudSyncInProgress) return false;
-    if (Number(appState.pendingChanges) > 0) return false;
+    if (Number(appState.pendingChanges) > 0 || (Array.isArray(appState.syncOutbox) && appState.syncOutbox.length > 0)) return false;
     if (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000)) return false;
   }
   const url = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
@@ -1235,11 +1572,19 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
     const baseEndpoint = isFirebase ? (url.replace(/\/$/, '') + '/abouzekry_cloud_db.json') : url;
     const sep = baseEndpoint.includes('?') ? '&' : '?';
 
-    // إذا كانت نبضة خلفية سريعة على Google Apps Script، يمكننا جلب التحديثات ومقارنة بصمة الوقت
-    const endpoint = `${baseEndpoint}${sep}_t=${Date.now()}`;
+    // في النبض الدوري الخلفي (Live Sync)، نطلب فقط الحركات التي تغيرت بعد lastDeltaSyncAt لتقليل استهلاك البيانات بنسبة 98%
+    const canUseDeltaPull = Boolean(
+      isLiveBackgroundTick &&
+      !isFirebase &&
+      Number(appState.lastDeltaSyncAt) > 0 &&
+      String(appState.farmName || '').trim()
+    );
+    const endpoint = canUseDeltaPull
+      ? `${baseEndpoint}${sep}mode=delta_pull&since=${Number(appState.lastDeltaSyncAt)}&_t=${Date.now()}`
+      : `${baseEndpoint}${sep}_t=${Date.now()}`;
+
     const res = await fetch(endpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
     const text = await res.text();
-    // إذا قام المستخدم بتصفير المزرعة أو استيراد إكسيل أو تعديل محلي أثناء انتظار رد الشبكة (أو خلال 10 ثوانٍ)، نتجاهل الرد القديم فوراً
     if (isLiveBackgroundTick && (localMutationEpoch !== pullStartEpoch || isCloudSyncInProgress || Number(appState.pendingChanges) > 0 || (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000)))) {
       return false;
     }
@@ -1250,11 +1595,34 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
       return false;
     }
     const data = JSON.parse(text);
+
+    // 1. معالجة رد المزامنة الجزئية (mode === 'delta_pull')
+    if (data && data.mode === 'delta_pull') {
+      if (data.serverTs) {
+        calibrateCloudClockOffset(Number(data.serverTs));
+      }
+      const events = Array.isArray(data.deltaEvents) ? data.deltaEvents : [];
+      if (events.length > 0) {
+        const applied = applyIncomingDeltaEvents(events);
+        appState.lastDeltaSyncAt = Math.max(Number(appState.lastDeltaSyncAt) || 0, Number(data.serverTs) || getSyncedNow());
+        appState.lastExcelSync = `متزامن جزئياً ⚡ (${new Date().toLocaleTimeString('ar-EG')})`;
+        saveState(false);
+        if (!verifyActiveUserSession()) return true;
+        if (applied) {
+          renderAllPreservingActiveInputs();
+        }
+      } else if (data.serverTs) {
+        appState.lastDeltaSyncAt = Math.max(Number(appState.lastDeltaSyncAt) || 0, Number(data.serverTs));
+      }
+      return true;
+    }
+
+    // 2. التوافق التلقائي الرجعي (Auto-Fallback) للسحب الكامل عند فتح متصفح جديد أو إذا كان السكربت على الإصدار القديم
     if (data && data.days && data.merchants) {
-      // في وضع النبض اللحظي الخلفي، إذا لم تتغير بصمة السحابة وكان الحساب سارياً، لا نعيد الرسم بدون داعٍ
       const prevUpdatedAt = appState.updatedAt;
-      const hadUnsyncedLocalChanges = (Number(appState.pendingChanges) > 0);
+      const hadUnsyncedLocalChanges = (Number(appState.pendingChanges) > 0 || (Array.isArray(appState.syncOutbox) && appState.syncOutbox.length > 0));
       mergeCloudDataIntoLocal(data, !hadUnsyncedLocalChanges);
+      appState.lastDeltaSyncAt = Math.max(Number(appState.lastDeltaSyncAt) || 0, Date.parse(String(data.updatedAt || '')) || getSyncedNow());
       if (hadUnsyncedLocalChanges && navigator.onLine) {
         saveState(false);
         pushDatabaseToCloud(true, true, true);
@@ -1264,7 +1632,6 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
         saveState(false);
       }
 
-      // تحقق فوري مما إذا كان المدير قد حذف حساب المستخدم الحالي المتصل!
       if (!verifyActiveUserSession()) {
         return true;
       }

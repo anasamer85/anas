@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v73)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v75)
 // =========================================================================
 
 // =========================================================================
@@ -3569,24 +3569,24 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-committee-v73-modular-architecture';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v75-delta-sync';
 
-  // Force app hard reload & clear service worker caches (only when online so offline cache is never lost)
+  // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
     if (!navigator.onLine) {
       showToast('🟠 أنت غير متصل بالإنترنت حالياً — يرجى الاتصال بالإنترنت أولاً لتحديث نسخة التطبيق!', '🟠');
       return;
     }
-    showToast('جاري تحديث التطبيق ومسح الكاش القديم...', '⏳');
+    window.__manualForceUpdateRequested = true;
+    showToast('جاري تحديث نسخة التطبيق وتنشيط عامل الخدمة الجديد...', '⏳');
     try {
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      }
       if ('serviceWorker' in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
         for (const r of regs) {
           await r.update();
+          if (r.waiting) {
+            r.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
         }
       }
     } catch (e) {}
@@ -3600,24 +3600,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Purge only outdated caches while preserving ACTIVE_PWA_CACHE_NAME ('farm-sales-committee-v73-modular-architecture')
-  try {
-    if ('caches' in window && navigator.onLine) {
-      caches.keys().then(keys => {
-        keys.forEach(k => {
-          if (k !== ACTIVE_PWA_CACHE_NAME) {
-            caches.delete(k).catch(() => {});
-          }
-        });
-      }).catch(() => {});
-    }
-  } catch (e) {}
-
-  // Register Offline Service Worker (v73) without automatic reload loops
+  // Register Offline Service Worker (v75) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV73) {
-      window.__swRegisteredOnceV73 = true;
-      navigator.serviceWorker.register('./sw.js?v=73', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV75) {
+      window.__swRegisteredOnceV75 = true;
+      navigator.serviceWorker.register('./sw.js?v=75', { scope: './' }).catch(() => {});
     }
   }
 
@@ -4417,15 +4404,14 @@ function initFarmSalesApp() {
   document.getElementById('btnPushCloudNow').addEventListener('click', () => pushDatabaseToCloud(false, true));
   document.getElementById('btnPullCloudNow').addEventListener('click', () => pullDatabaseFromCloud(false, true));
 
-  // Copy Ready-Made Google Apps Script Cloud Database Code (Chunked at 2500 chars to stay well below 9KB UTF-8 limit for Arabic!)
+  // Copy Ready-Made Google Apps Script Cloud Database Code (v75: End-to-End Cloud Delta Sync & GAS LockService)
   document.getElementById('btnCopyCloudScriptCode').addEventListener('click', () => {
     const scriptCode = [
-      "// كود قاعدة البيانات السحابية المطور لـ GitHub Pages و Google Sites (يدعم اللغة العربية والأحجام الكبيرة بدون أخطاء 9KB)",
+      "// كود قاعدة البيانات السحابية المطور (الإصدار v75 — يدعم Delta Sync اللحظي + LockService الذري + الأحجام الكبيرة)",
       "// 1. افتح script.google.com وامسح الكود القديم بالكامل والصق هذا الكود ثم اضغط حفظ (Save 💾)",
       "// 2. اضغط Deploy -> Manage deployments -> Edit (أيقونة القلم ✏️) -> اختر Version: New version -> Deploy",
       "//    (أو Deploy -> New deployment -> Web app -> Execute as: Me -> Who has access: Anyone)",
-      "function doGet(e) {",
-      "  var store = PropertiesService.getScriptProperties();",
+      "function readFullDbString_(store) {",
       "  var count = Number(store.getProperty('DB_CHUNK_COUNT') || 0);",
       "  var out = '';",
       "  if (count > 0) {",
@@ -4435,25 +4421,168 @@ function initFarmSalesApp() {
       "  } else {",
       "    out = store.getProperty('FARM_CLOUD_DB') || '{}';",
       "  }",
+      "  return out || '{}';",
+      "}",
+      "function readDeltaLog_(store) {",
+      "  var count = Number(store.getProperty('DELTA_LOG_COUNT') || 0);",
+      "  var raw = '';",
+      "  if (count > 0) {",
+      "    for (var i = 0; i < count; i++) {",
+      "      raw += (store.getProperty('DELTA_LOG_' + i) || '');",
+      "    }",
+      "  }",
+      "  if (!raw) return [];",
+      "  try { var arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; } catch (e) { return []; }",
+      "}",
+      "function writeFullDbAndDeltaLog_(store, dbStr, deltaLogArr) {",
+      "  var chunkSize = 2500;",
+      "  var dbChunks = Math.ceil(dbStr.length / chunkSize);",
+      "  var props = { 'DB_CHUNK_COUNT': String(dbChunks) };",
+      "  for (var i = 0; i < dbChunks; i++) {",
+      "    props['DB_CHUNK_' + i] = dbStr.slice(i * chunkSize, (i + 1) * chunkSize);",
+      "  }",
+      "  var trimmedLog = Array.isArray(deltaLogArr) ? deltaLogArr.slice(-300) : [];",
+      "  var logStr = JSON.stringify(trimmedLog);",
+      "  var logChunks = Math.ceil(logStr.length / chunkSize);",
+      "  props['DELTA_LOG_COUNT'] = String(logChunks);",
+      "  for (var j = 0; j < logChunks; j++) {",
+      "    props['DELTA_LOG_' + j] = logStr.slice(j * chunkSize, (j + 1) * chunkSize);",
+      "  }",
+      "  store.deleteAllProperties();",
+      "  store.setProperties(props, false);",
+      "  return dbChunks;",
+      "}",
+      "function applyDeltaEventsOnServerState_(db, events) {",
+      "  if (!db || typeof db !== 'object') db = {};",
+      "  if (!db.days || typeof db.days !== 'object') db.days = {};",
+      "  if (!Array.isArray(db.merchants)) db.merchants = [];",
+      "  if (!Array.isArray(db.users)) db.users = [];",
+      "  if (!db.deletedIds || typeof db.deletedIds !== 'object') {",
+      "    db.deletedIds = { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] };",
+      "  }",
+      "  if (!db.deletedTimestamps || typeof db.deletedTimestamps !== 'object') {",
+      "    db.deletedTimestamps = { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} };",
+      "  }",
+      "  for (var i = 0; i < events.length; i++) {",
+      "    var ev = events[i];",
+      "    if (!ev || !ev.action) continue;",
+      "    var p = ev.payload || {};",
+      "    var evTs = Number(ev.ts) || Date.now();",
+      "    var dNum = String(Number(p.dayNum) || 1);",
+      "    var targetFarm = String(p.farmName || db.farmName || '').trim();",
+      "    var isSameFarm = (!targetFarm || !db.farmName || targetFarm === String(db.farmName).trim());",
+      "    var daysRef = isSameFarm ? db.days : ((db.farmsArchive && db.farmsArchive[targetFarm] && db.farmsArchive[targetFarm].days) ? db.farmsArchive[targetFarm].days : db.days);",
+      "    if (!daysRef[dNum]) daysRef[dNum] = { dayNumber: Number(dNum), dateLabel: 'اليوم ' + dNum, sales: [], pendingSales: [], expenses: [], deliveredCash: 0, carriedForwardCash: 0 };",
+      "    if (ev.action === 'UPSERT_SALE' || ev.action === 'UPSERT_PENDING' || ev.action === 'UPSERT_EXPENSE') {",
+      "      var cat = ev.action === 'UPSERT_SALE' ? 'sales' : (ev.action === 'UPSERT_PENDING' ? 'pendingSales' : 'expenses');",
+      "      var rec = p.record;",
+      "      if (!rec || !rec.id) continue;",
+      "      var rid = String(rec.id);",
+      "      var arr = Array.isArray(daysRef[dNum][cat]) ? daysRef[dNum][cat] : [];",
+      "      var idx = -1;",
+      "      for (var k = 0; k < arr.length; k++) { if (arr[k] && String(arr[k].id) === rid) { idx = k; break; } }",
+      "      if (idx === -1) { arr.push(rec); } else {",
+      "        var oldTs = Number(arr[idx].updatedAt || arr[idx].createdAt || 0);",
+      "        var newTs = Number(rec.updatedAt || rec.createdAt || evTs);",
+      "        if (newTs >= oldTs) arr[idx] = rec;",
+      "      }",
+      "      daysRef[dNum][cat] = arr;",
+      "      if (ev.action === 'UPSERT_SALE' && Array.isArray(daysRef[dNum].pendingSales)) {",
+      "        daysRef[dNum].pendingSales = daysRef[dNum].pendingSales.filter(function(x){ return x && String(x.id) !== rid; });",
+      "      }",
+      "    } else if (ev.action === 'DELETE_SALE' || ev.action === 'DELETE_PENDING' || ev.action === 'DELETE_EXPENSE') {",
+      "      var dCat = ev.action === 'DELETE_SALE' ? 'sales' : (ev.action === 'DELETE_PENDING' ? 'pendingSales' : 'expenses');",
+      "      var delId = String(p.id || '');",
+      "      if (!delId) continue;",
+      "      if (!Array.isArray(db.deletedIds[dCat])) db.deletedIds[dCat] = [];",
+      "      if (db.deletedIds[dCat].indexOf(delId) === -1) db.deletedIds[dCat].push(delId);",
+      "      if (!db.deletedTimestamps[dCat]) db.deletedTimestamps[dCat] = {};",
+      "      db.deletedTimestamps[dCat][delId] = evTs;",
+      "      for (var d = 1; d <= 10; d++) {",
+      "        var ds = String(d);",
+      "        if (daysRef[ds] && Array.isArray(daysRef[ds][dCat])) {",
+      "          daysRef[ds][dCat] = daysRef[ds][dCat].filter(function(x){ return x && String(x.id) !== delId; });",
+      "        }",
+      "      }",
+      "    } else if (ev.action === 'UPDATE_DAY_META') {",
+      "      var dayObj = daysRef[dNum];",
+      "      if (p.dateLabel !== undefined) { dayObj.dateLabel = p.dateLabel; dayObj.labelUpdatedAt = p.labelUpdatedAt || evTs; }",
+      "      if (p.deliveredCash !== undefined) { dayObj.deliveredCash = Number(p.deliveredCash) || 0; dayObj.deliveredCashUpdatedAt = p.deliveredCashUpdatedAt || evTs; }",
+      "      if (p.carriedForwardCash !== undefined) { dayObj.carriedForwardCash = Number(p.carriedForwardCash) || 0; dayObj.carriedForwardCashUpdatedAt = p.carriedForwardCashUpdatedAt || evTs; }",
+      "      if (p.isLocked !== undefined) { dayObj.isLocked = Boolean(p.isLocked); dayObj.lockedBy = p.lockedBy || ''; dayObj.lockedAtTxt = p.lockedAtTxt || ''; dayObj.lockUpdatedAt = p.lockUpdatedAt || evTs; }",
+      "    } else if (ev.action === 'UPSERT_MERCHANT' && p.merchant && p.merchant.code) {",
+      "      var mc = Number(p.merchant.code);",
+      "      var mIdx = -1;",
+      "      for (var m = 0; m < db.merchants.length; m++) { if (db.merchants[m] && Number(db.merchants[m].code) === mc) { mIdx = m; break; } }",
+      "      if (mIdx === -1) db.merchants.push(p.merchant); else db.merchants[mIdx] = p.merchant;",
+      "    } else if (ev.action === 'DELETE_MERCHANT' && p.code) {",
+      "      var delCode = Number(p.code);",
+      "      if (!Array.isArray(db.deletedIds.merchants)) db.deletedIds.merchants = [];",
+      "      if (db.deletedIds.merchants.indexOf(delCode) === -1) db.deletedIds.merchants.push(delCode);",
+      "      db.merchants = db.merchants.filter(function(x){ return x && Number(x.code) !== delCode; });",
+      "    } else if (ev.action === 'UPSERT_USER' && p.user && p.user.id) {",
+      "      var uid = String(p.user.id);",
+      "      var uIdx = -1;",
+      "      for (var u = 0; u < db.users.length; u++) { if (db.users[u] && String(db.users[u].id) === uid) { uIdx = u; break; } }",
+      "      if (uIdx === -1) db.users.push(p.user); else db.users[uIdx] = p.user;",
+      "    } else if (ev.action === 'DELETE_USER' && p.id) {",
+      "      var delUid = String(p.id);",
+      "      if (!Array.isArray(db.deletedIds.users)) db.deletedIds.users = [];",
+      "      if (db.deletedIds.users.indexOf(delUid) === -1) db.deletedIds.users.push(delUid);",
+      "      db.users = db.users.filter(function(x){ return x && String(x.id) !== delUid; });",
+      "    }",
+      "  }",
+      "  db.updatedAt = new Date().toISOString();",
+      "  return db;",
+      "}",
+      "function doGet(e) {",
+      "  var store = PropertiesService.getScriptProperties();",
+      "  var mode = (e && e.parameter && e.parameter.mode) ? String(e.parameter.mode) : '';",
+      "  if (mode === 'delta_pull') {",
+      "    var since = Number((e && e.parameter && e.parameter.since) || 0);",
+      "    var logArr = readDeltaLog_(store);",
+      "    var news = logArr.filter(function(ev){ return ev && Number(ev.ts) > since; });",
+      "    return ContentService.createTextOutput(JSON.stringify({ status: 'ok', mode: 'delta_pull', serverTs: Date.now(), deltaEvents: news })).setMimeType(ContentService.MimeType.JSON);",
+      "  }",
+      "  var out = readFullDbString_(store);",
       "  return ContentService.createTextOutput(out || '{}').setMimeType(ContentService.MimeType.JSON);",
       "}",
       "function doPost(e) {",
       "  var lock = LockService.getScriptLock();",
-      "  lock.tryLock(10000);",
+      "  try { lock.waitLock(15000); } catch (lockErr) { lock.tryLock(15000); }",
       "  try {",
       "    var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';",
       "    var store = PropertiesService.getScriptProperties();",
-      "    var chunkSize = 2500;",
-      "    var totalChunks = Math.ceil(raw.length / chunkSize);",
-      "    var props = { 'DB_CHUNK_COUNT': String(totalChunks) };",
-      "    for (var i = 0; i < totalChunks; i++) {",
-      "      props['DB_CHUNK_' + i] = raw.slice(i * chunkSize, (i + 1) * chunkSize);",
+      "    var parsed = {};",
+      "    try { parsed = JSON.parse(raw); } catch (pe) { parsed = {}; }",
+      "    var logArr = readDeltaLog_(store);",
+      "    var nowServerTs = Date.now();",
+      "    if (parsed && parsed.mode === 'delta_sync' && Array.isArray(parsed.deltaEvents)) {",
+      "      var curDbStr = readFullDbString_(store);",
+      "      var curDb = {};",
+      "      try { curDb = JSON.parse(curDbStr); } catch (de) { curDb = {}; }",
+      "      var sinceClient = Number(parsed.since || 0);",
+      "      var incomingForClient = logArr.filter(function(ev){ return ev && Number(ev.ts) > sinceClient; });",
+      "      var stampedEvents = parsed.deltaEvents.map(function(ev, idx){",
+      "        ev.ts = Math.max(Number(ev.ts) || 0, nowServerTs + idx);",
+      "        return ev;",
+      "      });",
+      "      curDb = applyDeltaEventsOnServerState_(curDb, stampedEvents);",
+      "      var mergedLog = logArr.concat(stampedEvents).slice(-300);",
+      "      var updatedDbStr = JSON.stringify(curDb);",
+      "      var chunks = writeFullDbAndDeltaLog_(store, updatedDbStr, mergedLog);",
+      "      return ContentService.createTextOutput(JSON.stringify({ status: 'ok', mode: 'delta_sync', serverTs: nowServerTs + stampedEvents.length, incomingDeltaEvents: incomingForClient, chunks: chunks })).setMimeType(ContentService.MimeType.JSON);",
       "    }",
-      "    store.deleteAllProperties();",
-      "    store.setProperties(props, false);",
-      "    return ContentService.createTextOutput(JSON.stringify({status:'ok', chunks: totalChunks, length: raw.length})).setMimeType(ContentService.MimeType.JSON);",
+      "    if (parsed && Array.isArray(parsed.deltaEvents) && parsed.deltaEvents.length > 0) {",
+      "      var extraStamped = parsed.deltaEvents.map(function(ev, idx){ ev.ts = Math.max(Number(ev.ts) || 0, nowServerTs + idx); return ev; });",
+      "      logArr = logArr.concat(extraStamped).slice(-300);",
+      "      delete parsed.deltaEvents;",
+      "      raw = JSON.stringify(parsed);",
+      "    }",
+      "    var totalChunks = writeFullDbAndDeltaLog_(store, raw, logArr);",
+      "    return ContentService.createTextOutput(JSON.stringify({ status: 'ok', serverTs: nowServerTs, chunks: totalChunks, length: raw.length })).setMimeType(ContentService.MimeType.JSON);",
       "  } finally {",
-      "    lock.releaseLock();",
+      "    try { lock.releaseLock(); } catch (re) {}",
       "  }",
       "}"
     ].join('\n');
@@ -4463,7 +4592,7 @@ function initFarmSalesApp() {
     ta.select();
     try { document.execCommand('copy'); } catch (err) {}
     document.body.removeChild(ta);
-    showToast('تم نسخ كود السحابة المطور! حدثه في script.google.com واختر (New version) عند النشر.', '📋');
+    showToast('تم نسخ كود السحابة المطور (v75 Delta Sync + LockService)! حدثه في script.google.com واختر (New version) عند النشر.', '📋');
   });
   window.addEventListener('offline', () => {
     updateConnectionAndSyncUI();
@@ -4516,6 +4645,14 @@ function initFarmSalesApp() {
     const curD = appState.days[appState.currentDay];
     curD.dateLabel = e.target.value.trim() || `اليوم ${appState.currentDay}`;
     curD.labelUpdatedAt = Math.max(getSyncedNow(), (Number(curD.labelUpdatedAt) || 0) + 10);
+    if (typeof enqueueDeltaSyncEvent === 'function') {
+      enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+        farmName: appState.farmName,
+        dayNum: appState.currentDay,
+        dateLabel: curD.dateLabel,
+        labelUpdatedAt: curD.labelUpdatedAt
+      });
+    }
     saveState(true);
     renderAll();
   });
@@ -4866,6 +5003,14 @@ function initFarmSalesApp() {
     const curD = appState.days[appState.currentDay];
     curD.deliveredCash = parseNum(e.target.value) || 0;
     curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
+    if (typeof enqueueDeltaSyncEvent === 'function') {
+      enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+        farmName: appState.farmName,
+        dayNum: appState.currentDay,
+        deliveredCash: curD.deliveredCash,
+        deliveredCashUpdatedAt: curD.deliveredCashUpdatedAt
+      });
+    }
     saveState(true);
     renderDailyView();
   });
@@ -4881,6 +5026,14 @@ function initFarmSalesApp() {
       const curD = appState.days[appState.currentDay];
       curD.carriedForwardCash = parseNum(e.target.value) || 0;
       curD.carriedForwardCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.carriedForwardCashUpdatedAt) || 0) + 10);
+      if (typeof enqueueDeltaSyncEvent === 'function') {
+        enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+          farmName: appState.farmName,
+          dayNum: appState.currentDay,
+          carriedForwardCash: curD.carriedForwardCash,
+          carriedForwardCashUpdatedAt: curD.carriedForwardCashUpdatedAt
+        });
+      }
       saveState(true);
       renderDailyView();
     });
@@ -6062,6 +6215,13 @@ function initFarmSalesApp() {
     if (existingIdx !== -1) dayObj.pendingSales[existingIdx] = pendingObj;
     else dayObj.pendingSales.push(pendingObj);
     dayObj.pendingSales = sortSalesListByScaleNo(dayObj.pendingSales);
+    if (typeof enqueueDeltaSyncEvent === 'function') {
+      enqueueDeltaSyncEvent('UPSERT_PENDING', {
+        farmName: appState.farmName,
+        dayNum: appState.currentDay,
+        record: pendingObj
+      });
+    }
 
     cancelOrClearCurrentSaleEntry(false);
     saveState(true);
@@ -6294,6 +6454,13 @@ function initFarmSalesApp() {
         return true;
       });
     }
+    if (typeof enqueueDeltaSyncEvent === 'function') {
+      enqueueDeltaSyncEvent('UPSERT_SALE', {
+        farmName: appState.farmName,
+        dayNum: appState.currentDay,
+        record: rowObj
+      });
+    }
     cancelOrClearCurrentSaleEntry(false);
     saveState(true);
     renderAll();
@@ -6446,6 +6613,13 @@ function initFarmSalesApp() {
           ...expAuditMeta,
           ...candidateExpFields
         };
+        if (typeof enqueueDeltaSyncEvent === 'function') {
+          enqueueDeltaSyncEvent('UPSERT_EXPENSE', {
+            farmName: appState.farmName,
+            dayNum: appState.currentDay,
+            record: dayExps[idx]
+          });
+        }
       }
       if (expDayObj) {
         expDayObj.addedAt = getSyncedNow();
@@ -6462,14 +6636,22 @@ function initFarmSalesApp() {
     const newExpId = generateRecordUUID(`exp_d${appState.currentDay}`);
     const newExpAuditMeta = buildRecordAuditMeta(null, false);
     unrecordDeletedItem('expenses', newExpId);
-    dayExps.push({
+    const newExpRecordObj = {
       id: newExpId,
       ...newExpAuditMeta,
       category,
       desc,
       recipient,
       amount
-    });
+    };
+    dayExps.push(newExpRecordObj);
+    if (typeof enqueueDeltaSyncEvent === 'function') {
+      enqueueDeltaSyncEvent('UPSERT_EXPENSE', {
+        farmName: appState.farmName,
+        dayNum: appState.currentDay,
+        record: newExpRecordObj
+      });
+    }
     if (expDayObj) {
       expDayObj.addedAt = getSyncedNow();
       expDayObj.clearedAt = 0;
@@ -7546,14 +7728,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v73)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v75)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=73',
-    './js/accounting.js?v=73',
-    './js/storage-sync.js?v=73',
-    './js/excel-engine.js?v=73',
-    './js/print-export.js?v=73',
-    './js/ui-controllers.js?v=73'
+    './js/core-state.js?v=75',
+    './js/accounting.js?v=75',
+    './js/storage-sync.js?v=75',
+    './js/excel-engine.js?v=75',
+    './js/print-export.js?v=75',
+    './js/ui-controllers.js?v=75'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -7637,7 +7819,7 @@ function initFarmSalesApp() {
     return copied;
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v73)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v75)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -7755,14 +7937,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=73');
+        scTpl.setAttribute('src', './excel-template.js?v=75');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=73');
+        lnk.setAttribute('href', './style.css?v=75');
         bundledStyleEl.replaceWith(lnk);
       }
     }
