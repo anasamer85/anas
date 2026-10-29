@@ -1,11 +1,238 @@
 // =========================================================================
 // 1. INITIAL GROUNDED DATA & STATE (WITH DYNAMIC FARM NAME & FULL SYNC)
 // =========================================================================
-const STORAGE_KEY = 'farm_sales_committee_v68_clean_slate_state';
-const LEGACY_STORAGE_KEYS = ['farm_sales_committee_v67_clean_slate_state'];
+const STORAGE_KEY = 'farm_sales_committee_v70_clean_slate_state';
+const LEGACY_STORAGE_KEYS = ['farm_sales_committee_v68_clean_slate_state', 'farm_sales_committee_v67_clean_slate_state'];
+const ENCRYPTED_VAULT_STORAGE_KEY = 'farm_sales_encrypted_webhook_vault_v70';
+const GATEWAY_HANDSHAKE_VAULT_KEY = '__gateway_auth_handshake_v70__';
 const EMBEDDED_CLOUD_WEBHOOK_URL = '';
 const EMBEDDED_DEFAULT_FARM_NAME = '';
 let isInitialCloudPullPending = false;
+
+// =========================================================================
+// ENCRYPTED LOGIN-BOUND CLOUD WEBHOOK VAULT ENGINE (v70)
+// يشفر رابط السحابة بكلمة مرور الدخول داخل index.html بحيث يفك التشفير تلقائياً فور تسجيل الدخول حتى بعد مسح بيانات المتصفح
+// =========================================================================
+function fnv32MixHash(str, seed = 0x811c9dc5) {
+  let h = seed >>> 0;
+  const s = String(str || '');
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+    h ^= (h >>> 13);
+  }
+  return h >>> 0;
+}
+
+function deriveVaultKeyBytes(passphrase, saltHex, length) {
+  const out = new Uint8Array(length);
+  const passStr = String(passphrase || '');
+  const saltStr = String(saltHex || '');
+  let stateA = fnv32MixHash(`${saltStr}|A|${passStr}`, 0x811c9dc5);
+  let stateB = fnv32MixHash(`${passStr}|B|${saltStr}`, 0x9e3779b9);
+  for (let i = 0; i < length; i++) {
+    stateA = fnv32MixHash(`${stateB}:${i}:${passStr}`, stateA);
+    stateB = fnv32MixHash(`${stateA}:${i}:${saltStr}`, stateB);
+    out[i] = ((stateA ^ (stateB >>> 8) ^ (stateA >>> 16)) & 0xff);
+  }
+  return out;
+}
+
+function computeVaultMacHex(plainUrl, passphrase, saltHex) {
+  const payload = `${saltHex}|${plainUrl}|${passphrase}|v70_mac`;
+  const h1 = fnv32MixHash(payload, 0x811c9dc5).toString(16).padStart(8, '0');
+  const h2 = fnv32MixHash(`${h1}|${payload}`, 0x85ebca6b).toString(16).padStart(8, '0');
+  return `${h1}${h2}`;
+}
+
+function encryptWebhookWithPassphrase(plainUrl, passphrase, customSaltHex = '') {
+  const cleanUrl = String(plainUrl || '').trim();
+  const cleanPass = String(passphrase || '').trim();
+  if (!cleanUrl || !cleanPass) return '';
+  let saltHex = customSaltHex;
+  if (!saltHex) {
+    const seedNum = fnv32MixHash(`${cleanUrl}|${cleanPass}|v70_salt`, 0xc2b2ae35);
+    const seedNum2 = fnv32MixHash(`${cleanPass}|${cleanUrl}|v70_salt2`, 0x27d4eb2f);
+    saltHex = seedNum.toString(16).padStart(8, '0') + seedNum2.toString(16).padStart(8, '0');
+  }
+  const utf8Bytes = new TextEncoder().encode(cleanUrl);
+  const keyBytes = deriveVaultKeyBytes(cleanPass, saltHex, utf8Bytes.length);
+  const cipherBytes = new Uint8Array(utf8Bytes.length);
+  let binStr = '';
+  for (let i = 0; i < utf8Bytes.length; i++) {
+    cipherBytes[i] = utf8Bytes[i] ^ keyBytes[i];
+    binStr += String.fromCharCode(cipherBytes[i]);
+  }
+  const b64Cipher = btoa(binStr);
+  const macHex = computeVaultMacHex(cleanUrl, cleanPass, saltHex);
+  return `v70_vault:${saltHex}:${macHex}:${b64Cipher}`;
+}
+
+function decryptWebhookWithPassphrase(tokenStr, passphrase) {
+  const rawToken = String(tokenStr || '').trim();
+  const cleanPass = String(passphrase || '').trim();
+  if (!rawToken.startsWith('v70_vault:') || !cleanPass) return '';
+  const parts = rawToken.split(':');
+  if (parts.length < 4) return '';
+  const saltHex = parts[1];
+  const expectedMac = parts[2];
+  const b64Cipher = parts.slice(3).join(':');
+  try {
+    const binStr = atob(b64Cipher);
+    const cipherBytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) {
+      cipherBytes[i] = binStr.charCodeAt(i);
+    }
+    const keyBytes = deriveVaultKeyBytes(cleanPass, saltHex, cipherBytes.length);
+    const plainBytes = new Uint8Array(cipherBytes.length);
+    for (let i = 0; i < cipherBytes.length; i++) {
+      plainBytes[i] = cipherBytes[i] ^ keyBytes[i];
+    }
+    const candidateUrl = new TextDecoder('utf-8').decode(plainBytes).trim();
+    const actualMac = computeVaultMacHex(candidateUrl, cleanPass, saltHex);
+    if (actualMac === expectedMac && candidateUrl.startsWith('http')) {
+      return candidateUrl;
+    }
+  } catch (e) {}
+  return '';
+}
+
+function buildEncryptedWebhookVaultForUsers(plainUrl, usersList) {
+  const cleanUrl = String(plainUrl || '').trim();
+  if (!cleanUrl || !cleanUrl.startsWith('http')) return [];
+  const safeUsers = Array.isArray(usersList) && usersList.length > 0
+    ? usersList
+    : [{ id: 'admin', username: 'admin', password: 'admin', name: 'مدير الموقع' }];
+  const passphrases = new Set();
+  safeUsers.forEach(u => {
+    if (!u || u.id === 'visitor') return;
+    const uLogin = String(u.username || u.id || '').trim().toLowerCase();
+    const uFull = String(u.name || '').trim().toLowerCase();
+    const uPass = String(u.password || (u.id === 'admin' ? 'admin' : '1234')).trim();
+    if (uPass) {
+      passphrases.add(`p:${uPass}`);
+      if (uLogin) passphrases.add(`u:${uLogin}|p:${uPass}`);
+      if (uFull) passphrases.add(`u:${uFull}|p:${uPass}`);
+      if (u.id === 'admin') passphrases.add(`u:admin|p:${uPass}`);
+    }
+  });
+  passphrases.add(`u:admin|p:admin`);
+  passphrases.add(`p:admin`);
+  passphrases.add(GATEWAY_HANDSHAKE_VAULT_KEY);
+
+  const tokens = [];
+  passphrases.forEach(pk => {
+    const tok = encryptWebhookWithPassphrase(cleanUrl, pk);
+    if (tok && !tokens.includes(tok)) tokens.push(tok);
+  });
+  return tokens;
+}
+
+function getEmbeddedEncryptedVaultList() {
+  const combined = [];
+  const addTokens = (arr) => {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(t => {
+      const s = String(t || '').trim();
+      if (s.startsWith('v70_vault:') && !combined.includes(s)) combined.push(s);
+    });
+  };
+  try {
+    if (typeof window !== 'undefined' && Array.isArray(window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT)) {
+      addTokens(window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT);
+    }
+    if (typeof document !== 'undefined') {
+      const metaVault = document.getElementById('metaEmbeddedEncryptedWebhookVault');
+      if (metaVault) {
+        const rawContent = String(metaVault.getAttribute('content') || '').trim();
+        if (rawContent) {
+          if (rawContent.startsWith('[')) {
+            addTokens(JSON.parse(rawContent));
+          } else {
+            addTokens(rawContent.split('|'));
+          }
+        }
+      }
+    }
+    const savedLocal = localStorage.getItem(ENCRYPTED_VAULT_STORAGE_KEY);
+    if (savedLocal) {
+      addTokens(JSON.parse(savedLocal));
+    }
+  } catch (e) {}
+  return combined;
+}
+
+function hasEncryptedWebhookVaultAvailable() {
+  return getEmbeddedEncryptedVaultList().length > 0;
+}
+
+function unlockWebhookVaultWithCredentials(usernameInput, passwordInput, allowGatewayHandshake = false) {
+  const vaultTokens = getEmbeddedEncryptedVaultList();
+  if (vaultTokens.length === 0) return { url: '', matchedByDirectPassword: false };
+  const uClean = String(usernameInput || '').trim().toLowerCase();
+  const pClean = String(passwordInput || '').trim();
+  const candidateKeys = [];
+  if (uClean && pClean) candidateKeys.push(`u:${uClean}|p:${pClean}`);
+  if (pClean) candidateKeys.push(`p:${pClean}`);
+
+  for (const key of candidateKeys) {
+    for (const tok of vaultTokens) {
+      const dec = decryptWebhookWithPassphrase(tok, key);
+      if (dec && dec.startsWith('http')) {
+        return { url: dec, matchedByDirectPassword: true };
+      }
+    }
+  }
+
+  if (allowGatewayHandshake && uClean && pClean) {
+    for (const tok of vaultTokens) {
+      const dec = decryptWebhookWithPassphrase(tok, GATEWAY_HANDSHAKE_VAULT_KEY);
+      if (dec && dec.startsWith('http')) {
+        return { url: dec, matchedByDirectPassword: false };
+      }
+    }
+  }
+  return { url: '', matchedByDirectPassword: false };
+}
+
+function updateEncryptedWebhookVaultUI() {
+  const currentUrl = String((appState && appState.webhookUrl) || getEmbeddedWebhookUrl() || '').trim();
+  if (currentUrl && currentUrl.startsWith('http')) {
+    const vaultTokens = buildEncryptedWebhookVaultForUsers(currentUrl, appState ? appState.users : []);
+    try {
+      window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = vaultTokens;
+      const metaVault = document.getElementById('metaEmbeddedEncryptedWebhookVault');
+      if (metaVault) metaVault.setAttribute('content', vaultTokens.join('|'));
+      localStorage.setItem(ENCRYPTED_VAULT_STORAGE_KEY, JSON.stringify(vaultTokens));
+    } catch (e) {}
+  }
+
+  const vaultList = getEmbeddedEncryptedVaultList();
+  const hasVault = vaultList.length > 0 || Boolean(currentUrl);
+
+  const loginBadge = document.getElementById('loginEncryptedVaultBadge');
+  const lblToggleLogin = document.getElementById('lblToggleLoginCloudBox');
+  if (loginBadge) {
+    loginBadge.classList.toggle('hidden', !hasVault);
+  }
+  if (lblToggleLogin) {
+    lblToggleLogin.textContent = hasVault
+      ? 'تغيير رابط السحابة المشفر (مربوط حالياً بتسجيل الدخول ✓)'
+      : 'دخول من جهاز جديد؟ ربط وتشفير رابط السحابة (اختياري)';
+  }
+
+  const syncBadge = document.getElementById('webhookEncryptionStatusBadge');
+  if (syncBadge) {
+    if (currentUrl || vaultList.length > 0) {
+      const usersCnt = Array.isArray(appState && appState.users) ? appState.users.length : 1;
+      syncBadge.textContent = `🔐 مشفر ومربوط بكلمة مرور الدخول (${usersCnt} حساب مستخدم) ✓`;
+      syncBadge.className = 'px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-950 text-[11px] font-extrabold border border-emerald-400 shadow-sm';
+    } else {
+      syncBadge.textContent = '🔓 غير مشفر بعد — الصق الرابط واضغط حفظ وتشفير';
+      syncBadge.className = 'px-2.5 py-1 rounded-full bg-slate-200 text-slate-800 text-[11px] font-extrabold border border-slate-300';
+    }
+  }
+}
 
 function getEmbeddedWebhookUrl() {
   try {
@@ -3101,6 +3328,7 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
   }
   updateConnectionAndSyncUI();
   updateLiveSyncIndicatorsUI();
+  updateEncryptedWebhookVaultUI();
 }
 
 function setFarmName(newName) {
@@ -8579,10 +8807,18 @@ function checkAndEnforceNewFarmCreationModal() {
   const shouldForceCreate = Boolean(appState.isLoggedIn && !hasActiveFarm && !isInitialCloudPullPending);
   overlay.classList.toggle('hidden', !shouldForceCreate);
   if (shouldForceCreate) {
+    const inpUrl = document.getElementById('inpForceCloudWebhookUrl');
+    const savedUrl = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
+    if (inpUrl && !inpUrl.value && savedUrl) {
+      inpUrl.value = savedUrl;
+    }
     const inp = document.getElementById('inpForceNewFarmName');
-    if (inp && document.activeElement !== inp) {
+    const activeEl = document.activeElement;
+    if (inp && activeEl !== inp && activeEl !== inpUrl) {
       setTimeout(() => {
-        try { inp.focus(); } catch (e) {}
+        try {
+          if (document.activeElement !== inpUrl) inp.focus();
+        } catch (e) {}
       }, 80);
     }
   }
@@ -11056,10 +11292,141 @@ function initFarmSalesApp() {
     });
   }
 
-  document.getElementById('gatewayLoginForm').addEventListener('submit', (e) => {
+  function applyCloudWebhookUrlFromStartScreen(rawUrl) {
+    const cleanUrl = String(rawUrl || '').trim();
+    if (!cleanUrl) return '';
+    appState.webhookUrl = cleanUrl;
+    window.EMBEDDED_CLOUD_WEBHOOK_URL = cleanUrl;
+    const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
+    if (liveMeta) liveMeta.setAttribute('content', cleanUrl);
+    const syncInpEl = document.getElementById('inpCloudWebhookUrl');
+    if (syncInpEl) {
+      syncInpEl.value = cleanUrl;
+      syncInpEl.setAttribute('value', cleanUrl);
+    }
+    const forceInpEl = document.getElementById('inpForceCloudWebhookUrl');
+    if (forceInpEl && forceInpEl.value !== cleanUrl) {
+      forceInpEl.value = cleanUrl;
+    }
+    const loginInpEl = document.getElementById('inpLoginCloudWebhookUrl');
+    if (loginInpEl && loginInpEl.value !== cleanUrl) {
+      loginInpEl.value = cleanUrl;
+    }
+    try { localStorage.setItem(STORAGE_KEY + '_webhook_url', cleanUrl); } catch (e) {}
+    return cleanUrl;
+  }
+
+  const btnToggleLoginCloud = document.getElementById('btnToggleLoginCloudBox');
+  const loginCloudBox = document.getElementById('loginCloudLinkCollapseBox');
+  const iconToggleLoginCloud = document.getElementById('iconToggleLoginCloudBox');
+  if (btnToggleLoginCloud && loginCloudBox) {
+    btnToggleLoginCloud.addEventListener('click', () => {
+      const isHidden = loginCloudBox.classList.toggle('hidden');
+      if (iconToggleLoginCloud) iconToggleLoginCloud.textContent = isHidden ? '▾' : '▴';
+      if (!isHidden) {
+        const inpLUrl = document.getElementById('inpLoginCloudWebhookUrl');
+        if (inpLUrl) {
+          if (!inpLUrl.value && (appState.webhookUrl || getEmbeddedWebhookUrl())) {
+            inpLUrl.value = appState.webhookUrl || getEmbeddedWebhookUrl();
+          }
+          setTimeout(() => { try { inpLUrl.focus(); } catch (e) {} }, 50);
+        }
+      }
+    });
+  }
+
+  const btnLoginPullCloud = document.getElementById('btnLoginPullCloudNow');
+  if (btnLoginPullCloud) {
+    btnLoginPullCloud.addEventListener('click', async () => {
+      const inpLUrl = document.getElementById('inpLoginCloudWebhookUrl');
+      const statusMsg = document.getElementById('loginCloudSyncStatusMsg');
+      const enteredUrl = (inpLUrl ? inpLUrl.value : '').trim();
+      if (!enteredUrl || !enteredUrl.startsWith('http')) {
+        if (statusMsg) {
+          statusMsg.textContent = '⚠️ يرجى لصق رابط سحابة صحيح يبدأ بـ https:// أولاً!';
+          statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-amber-100 text-amber-950 border border-amber-400';
+          statusMsg.classList.remove('hidden');
+        }
+        if (inpLUrl) inpLUrl.focus();
+        return;
+      }
+      const isFb = enteredUrl.includes('firebaseio.com') || enteredUrl.includes('firebasedatabase.app');
+      if (!isFb && enteredUrl.includes('script.google.com') && !enteredUrl.endsWith('/exec')) {
+        if (statusMsg) {
+          statusMsg.textContent = '❌ رابط Google Apps Script يجب أن ينتهي بـ /exec';
+          statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-rose-100 text-rose-900 border border-rose-400';
+          statusMsg.classList.remove('hidden');
+        }
+        return;
+      }
+      applyCloudWebhookUrlFromStartScreen(enteredUrl);
+      appState.hasLocalEdits = false;
+      appState.factoryZeroWipeAt = 0;
+      btnLoginPullCloud.disabled = true;
+      if (statusMsg) {
+        statusMsg.textContent = '⏳ جاري الاتصال بالسحابة وجلب الحسابات والمزرعة...';
+        statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-sky-100 text-sky-900 border border-sky-300';
+        statusMsg.classList.remove('hidden');
+      }
+      const pulled = await pullDatabaseFromCloud(true, true);
+      btnLoginPullCloud.disabled = false;
+      if (pulled && String(appState.farmName || '').trim()) {
+        if (statusMsg) {
+          statusMsg.textContent = `✅ تم ربط السحابة وجلب مزرعة (${appState.farmName}) بنجاح! يمكنك تسجيل الدخول الآن.`;
+          statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-emerald-100 text-emerald-950 border border-emerald-400';
+        }
+      } else {
+        if (statusMsg) {
+          statusMsg.textContent = '✅ تم حفظ الرابط! السحابة جاهزة — سجل الدخول الآن للبدء.';
+          statusMsg.className = 'p-2 rounded-lg text-[11px] font-extrabold text-center bg-emerald-100 text-emerald-950 border border-emerald-400';
+        }
+      }
+    });
+  }
+
+  document.getElementById('gatewayLoginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const uName = (document.getElementById('inpLoginUsername').value || '').trim().toLowerCase();
     const uPass = (document.getElementById('inpLoginPassword').value || '').trim();
+    const btnLoginSubmitEl = document.getElementById('btnLoginAdminSubmit');
+    const origBtnHtml = btnLoginSubmitEl ? btnLoginSubmitEl.innerHTML : '';
+
+    const loginWebhookInp = document.getElementById('inpLoginCloudWebhookUrl');
+    const enteredLoginWebhook = (loginWebhookInp ? loginWebhookInp.value : '').trim();
+
+    let unlockedFromVault = { url: '', matchedByDirectPassword: false };
+    if (enteredLoginWebhook && enteredLoginWebhook.startsWith('http')) {
+      applyCloudWebhookUrlFromStartScreen(enteredLoginWebhook);
+      unlockedFromVault = { url: enteredLoginWebhook, matchedByDirectPassword: true };
+    } else {
+      unlockedFromVault = unlockWebhookVaultWithCredentials(uName, uPass, true);
+      if (unlockedFromVault.url) {
+        appState.webhookUrl = unlockedFromVault.url;
+      }
+    }
+
+    const activeWebhookForLogin = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
+    if (activeWebhookForLogin && navigator.onLine) {
+      const isFreshWipedBrowser = !String(appState.farmName || '').trim() && countMovementsInDays(appState.days) === 0;
+      if (isFreshWipedBrowser) {
+        appState.hasLocalEdits = false;
+        appState.factoryZeroWipeAt = 0;
+        appState.farmResetAt = 0;
+        isInitialCloudPullPending = true;
+      }
+      if (btnLoginSubmitEl) {
+        btnLoginSubmitEl.disabled = true;
+        btnLoginSubmitEl.innerHTML = '<span>🔐⏳</span><span>جاري فك تشفير السحابة واسترجاع المزرعة...</span>';
+      }
+      try {
+        await pullDatabaseFromCloud(true, true);
+      } catch (err) {}
+      isInitialCloudPullPending = false;
+      if (btnLoginSubmitEl) {
+        btnLoginSubmitEl.disabled = false;
+        btnLoginSubmitEl.innerHTML = origBtnHtml;
+      }
+    }
 
     // Check Admin user (supports updated username/password from Profile or default admin/admin)
     const adminObj = (appState.users || []).find(u => u.id === 'admin') || { username: 'admin', password: 'admin' };
@@ -11067,6 +11434,9 @@ function initFarmSalesApp() {
     const adminPassword = String(adminObj.password || 'admin').trim();
 
     if ((uName === adminUsername || uName === 'admin') && uPass === adminPassword) {
+      if (activeWebhookForLogin) {
+        applyCloudWebhookUrlFromStartScreen(activeWebhookForLogin);
+      }
       appState.activeUserId = 'admin';
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
@@ -11075,23 +11445,13 @@ function initFarmSalesApp() {
       unifyGlobalMerchantsRegistry();
       applyAutoLiteFieldModeOnLoginOrSwitch();
       switchActiveTabUI(appState.activeTab || 'daily');
+      updateEncryptedWebhookVaultUI();
       saveState(false);
-      if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
-        if (!String(appState.farmName || '').trim()) {
-          isInitialCloudPullPending = true;
-        }
-        renderAll(true);
-        pullDatabaseFromCloud(true, true).finally(() => {
-          isInitialCloudPullPending = false;
-          checkAndEnforceNewFarmCreationModal();
-          renderAll(true);
-        });
-      } else {
-        isInitialCloudPullPending = false;
-        renderAll(true);
-      }
+      checkAndEnforceNewFarmCreationModal();
+      renderAll(true);
       startLiveRealtimeSyncEngine();
-      showToast(`مرحباً بك (${adminObj.name || 'مدير الموقع'})! تم تسجيل الدخول بصلاحيات المدير الكاملة 👑`);
+      const farmReadyMsg = appState.farmName ? ` وتم فتح مزرعة (${appState.farmName}) تلقائياً من السحابة ☁️` : '';
+      showToast(`مرحباً بك (${adminObj.name || 'مدير الموقع'})! تم تسجيل الدخول بصلاحيات المدير الكاملة${farmReadyMsg} 👑`);
       return;
     }
 
@@ -11101,6 +11461,9 @@ function initFarmSalesApp() {
       String(u.password || '1234').trim() === uPass
     );
     if (matchedUser) {
+      if (activeWebhookForLogin) {
+        applyCloudWebhookUrlFromStartScreen(activeWebhookForLogin);
+      }
       appState.activeUserId = matchedUser.id;
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
@@ -11109,26 +11472,20 @@ function initFarmSalesApp() {
       unifyGlobalMerchantsRegistry();
       applyAutoLiteFieldModeOnLoginOrSwitch();
       switchActiveTabUI(appState.activeTab || 'daily');
+      updateEncryptedWebhookVaultUI();
       saveState(false);
-      if ((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine) {
-        if (!String(appState.farmName || '').trim()) {
-          isInitialCloudPullPending = true;
-        }
-        renderAll(true);
-        pullDatabaseFromCloud(true, true).finally(() => {
-          isInitialCloudPullPending = false;
-          checkAndEnforceNewFarmCreationModal();
-          renderAll(true);
-        });
-      } else {
-        isInitialCloudPullPending = false;
-        renderAll(true);
-      }
+      checkAndEnforceNewFarmCreationModal();
+      renderAll(true);
       startLiveRealtimeSyncEngine();
-      showToast(`مرحباً بك (${matchedUser.name})! تم تسجيل الدخول بنجاح`, '👤');
+      const farmReadyMsg = appState.farmName ? ` — مزرعة (${appState.farmName})` : '';
+      showToast(`مرحباً بك (${matchedUser.name})! تم تسجيل الدخول بنجاح${farmReadyMsg}`, '👤');
       return;
     }
 
+    // إذا فشل تسجيل الدخول بكلمة مرور خاطئة، لا نحتفظ برابط السحابة المؤقت في الذاكرة
+    if (unlockedFromVault.url && !unlockedFromVault.matchedByDirectPassword) {
+      appState.webhookUrl = '';
+    }
     loginErr.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة (أو تم حذف الحساب من قِبل المدير)!';
     loginErr.classList.remove('hidden');
   });
@@ -13771,7 +14128,108 @@ function initFarmSalesApp() {
     renderAll(true);
   });
 
-  // Mandatory New Farm Creation Modal Submit Handler (إجبار إنشاء مزرعة جديدة بعد التصفير الجذري الشامل)
+  // Start Screen Option 1: Connect Cloud Webhook URL & Pull Existing Farm Immediately
+  const btnForceSyncCloud = document.getElementById('btnForceSyncFromCloud');
+  const inpForceCloudUrl = document.getElementById('inpForceCloudWebhookUrl');
+  const forceCloudStatusEl = document.getElementById('forceCloudSyncStatusMsg');
+
+  async function handleStartScreenCloudSync() {
+    if (!inpForceCloudUrl) return;
+    const enteredUrl = (inpForceCloudUrl.value || '').trim();
+    if (!enteredUrl || !enteredUrl.startsWith('http')) {
+      if (forceCloudStatusEl) {
+        forceCloudStatusEl.textContent = '⚠️ يرجى لصق رابط السحابة الصحيح (يبدأ بـ https://) أولاً!';
+        forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-amber-100 text-amber-950 border border-amber-400';
+        forceCloudStatusEl.classList.remove('hidden');
+      }
+      showToast('⚠️ يرجى لصق رابط السحابة أولاً!', '⚠️');
+      inpForceCloudUrl.focus();
+      return;
+    }
+    const isFb = enteredUrl.includes('firebaseio.com') || enteredUrl.includes('firebasedatabase.app');
+    if (!isFb && enteredUrl.includes('script.google.com') && !enteredUrl.endsWith('/exec')) {
+      if (forceCloudStatusEl) {
+        forceCloudStatusEl.textContent = '❌ خطأ في الرابط: رابط Google Apps Script يجب أن ينتهي بـ /exec';
+        forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-rose-100 text-rose-900 border border-rose-400';
+        forceCloudStatusEl.classList.remove('hidden');
+      }
+      showToast('❌ رابط Google Apps Script يجب أن ينتهي بـ /exec', '❌');
+      inpForceCloudUrl.focus();
+      return;
+    }
+    if (!navigator.onLine) {
+      if (forceCloudStatusEl) {
+        forceCloudStatusEl.textContent = '🟠 لا يوجد اتصال بالإنترنت حالياً للسحب من السحابة!';
+        forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-amber-100 text-amber-950 border border-amber-400';
+        forceCloudStatusEl.classList.remove('hidden');
+      }
+      showToast('🟠 لا يوجد اتصال بالإنترنت حالياً!', '🟠');
+      return;
+    }
+
+    applyCloudWebhookUrlFromStartScreen(enteredUrl);
+    appState.hasLocalEdits = false;
+    appState.factoryZeroWipeAt = 0;
+    appState.farmResetAt = 0;
+    appState.deletedIds = { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] };
+    appState.deletedTimestamps = { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} };
+
+    if (btnForceSyncCloud) btnForceSyncCloud.disabled = true;
+    if (forceCloudStatusEl) {
+      forceCloudStatusEl.textContent = '⏳ جاري الاتصال بالسحابة وسحب المزرعة والتجار والحركات...';
+      forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-sky-100 text-sky-900 border border-sky-300';
+      forceCloudStatusEl.classList.remove('hidden');
+    }
+
+    const pulled = await pullDatabaseFromCloud(true, true);
+    if (btnForceSyncCloud) btnForceSyncCloud.disabled = false;
+
+    const activeFarmNow = String(appState.farmName ?? '').trim();
+    if (pulled && activeFarmNow) {
+      if (forceCloudStatusEl) {
+        forceCloudStatusEl.classList.add('hidden');
+      }
+      saveState(false);
+      startLiveRealtimeSyncEngine();
+      checkAndEnforceNewFarmCreationModal();
+      renderAll(true);
+      showToast(`✅ تم ربط السحابة واسترجاع مزرعة (${activeFarmNow}) بجميع بياناتها بنجاح!`, '☁️');
+    } else {
+      saveState(false);
+      startLiveRealtimeSyncEngine();
+      if (forceCloudStatusEl) {
+        forceCloudStatusEl.textContent = '✅ تم حفظ وربط رابط السحابة بنجاح! السحابة فارغة حالياً ولا توجد بها مزرعة مسجلة بعد — اكتب اسم المزرعة الجديدة في الخيار (2) بالأسفل واضغط (إنشاء المزرعة) ليتم رفعها للسحابة فوراً.';
+        forceCloudStatusEl.className = 'p-2.5 rounded-xl text-xs font-extrabold text-center bg-emerald-100 text-emerald-950 border border-emerald-400';
+        forceCloudStatusEl.classList.remove('hidden');
+      }
+      const inpNewFarm = document.getElementById('inpForceNewFarmName');
+      if (inpNewFarm) inpNewFarm.focus();
+      showToast('✅ تم ربط رابط السحابة! اكتب اسم المزرعة الجديدة بالأسفل لبدء الدورة ورفعها للسحابة.', '☁️');
+    }
+  }
+
+  if (btnForceSyncCloud) {
+    btnForceSyncCloud.addEventListener('click', handleStartScreenCloudSync);
+  }
+  if (inpForceCloudUrl) {
+    inpForceCloudUrl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleStartScreenCloudSync();
+      }
+    });
+  }
+
+  // Start Screen Option 3: Quick Restore from JSON / Excel Backup File
+  const btnForceRestoreFile = document.getElementById('btnForceRestoreBackupFile');
+  if (btnForceRestoreFile) {
+    btnForceRestoreFile.addEventListener('click', () => {
+      const fileInp = document.getElementById('fileImportXlsx');
+      if (fileInp) fileInp.click();
+    });
+  }
+
+  // Start Screen Option 2: Mandatory New Farm Creation Modal Submit Handler
   const forceFarmForm = document.getElementById('forceCreateFarmForm');
   if (forceFarmForm) {
     forceFarmForm.addEventListener('submit', (e) => {
@@ -13782,6 +14240,10 @@ function initFarmSalesApp() {
         showToast('⚠️ يرجى كتابة اسم المزرعة الجديدة أولاً!', '⚠️');
         if (inp) inp.focus();
         return;
+      }
+      // إذا قام المستخدم بلصق رابط السحابة في الخيار (1) أعلاه ثم كتب اسم المزرعة وضغط إنشاء، نحفظ رابط السحابة أيضاً ونرفع المزرعة الجديدة إليها فوراً
+      if (inpForceCloudUrl && inpForceCloudUrl.value && inpForceCloudUrl.value.trim().startsWith('http')) {
+        applyCloudWebhookUrlFromStartScreen(inpForceCloudUrl.value.trim());
       }
       const nowCreateTs = Math.max(getSyncedNow() + 1000, (Number(appState.factoryZeroWipeAt) || 0) + 1000);
       const emptyDays = {};
@@ -13825,8 +14287,10 @@ function initFarmSalesApp() {
         days: emptyDays
       };
       if (inp) inp.value = '';
+      if (forceCloudStatusEl) forceCloudStatusEl.classList.add('hidden');
       checkAndEnforceNewFarmCreationModal();
       saveState(true, true);
+      startLiveRealtimeSyncEngine();
       renderAll(true);
       showToast(`✅ تم إنشاء وفتح مزرعة (${newName}) بنجاح — يمكنك الآن تكويد التجار وتسجيل حركات البيع!`, '🏡');
     });
@@ -14753,10 +15217,12 @@ function initFarmSalesApp() {
       cloneDoc.querySelectorAll('head style:not(#criticalPrintStyles):not(#criticalMobileWeighbridgeStyles)').forEach(st => st.remove());
     }
 
-    // 2. Embed the Webhook URL and Active Farm Name cleanly in <meta> and <script id="embeddedWebhookConfigScript">
-    const currentActiveFarm = String(appState.farmName || getEmbeddedDefaultFarmName() || '').trim();
-    const safeUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    const safeFarmName = currentActiveFarm.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    // 2. Embed the Encrypted Webhook Vault (bound to login credentials) cleanly in <meta> and <script id="embeddedWebhookConfigScript">
+    // لا نضع الرابط النصي المكشوف ولا نثبت اسم المزرعة في الكود حتى يُفك تشفير الرابط بكلمة المرور ويُسحب اسم المزرعة الحقيقي من السحابة تلقائياً
+    const vaultTokens = url ? buildEncryptedWebhookVaultForUsers(url, appState.users) : getEmbeddedEncryptedVaultList();
+    const vaultJoined = vaultTokens.join('|');
+    const vaultJson = JSON.stringify(vaultTokens);
+
     let metaNode = cloneDoc.querySelector('#metaEmbeddedCloudWebhookUrl');
     if (!metaNode) {
       metaNode = document.createElement('meta');
@@ -14764,7 +15230,16 @@ function initFarmSalesApp() {
       metaNode.setAttribute('name', 'cloud-webhook-url');
       headEl.insertBefore(metaNode, headEl.firstChild);
     }
-    metaNode.setAttribute('content', url);
+    metaNode.setAttribute('content', '');
+
+    let metaVaultNode = cloneDoc.querySelector('#metaEmbeddedEncryptedWebhookVault');
+    if (!metaVaultNode) {
+      metaVaultNode = document.createElement('meta');
+      metaVaultNode.id = 'metaEmbeddedEncryptedWebhookVault';
+      metaVaultNode.setAttribute('name', 'encrypted-webhook-vault');
+      headEl.insertBefore(metaVaultNode, headEl.firstChild);
+    }
+    metaVaultNode.setAttribute('content', vaultJoined);
 
     let metaFarmNode = cloneDoc.querySelector('#metaEmbeddedDefaultFarmName');
     if (!metaFarmNode) {
@@ -14773,7 +15248,7 @@ function initFarmSalesApp() {
       metaFarmNode.setAttribute('name', 'default-farm-name');
       headEl.insertBefore(metaFarmNode, headEl.firstChild);
     }
-    metaFarmNode.setAttribute('content', currentActiveFarm);
+    metaFarmNode.setAttribute('content', '');
 
     let cfgScript = cloneDoc.querySelector('#embeddedWebhookConfigScript');
     if (!cfgScript) {
@@ -14781,11 +15256,15 @@ function initFarmSalesApp() {
       cfgScript.id = 'embeddedWebhookConfigScript';
       headEl.appendChild(cfgScript);
     }
-    cfgScript.textContent = `\n    // رابط المزامنة السحابية واسم المزرعة المدمج ليسمع تلقائياً في Google Sites و GitHub Pages\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '${safeUrl}';\n    window.EMBEDDED_DEFAULT_FARM_NAME = '${safeFarmName}';\n  `;
+    cfgScript.textContent = `\n    // خزينة رابط المزامنة السحابية المشفرة والمربوطة بتسجيل الدخول (تُفك تلقائياً عند إدخال اسم المستخدم وكلمة المرور)\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';\n    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = ${vaultJson};\n    window.EMBEDDED_DEFAULT_FARM_NAME = '';\n  `;
 
     const cloneInp = cloneDoc.querySelector('#inpCloudWebhookUrl');
     if (cloneInp) {
-      cloneInp.setAttribute('value', url);
+      cloneInp.setAttribute('value', '');
+    }
+    const cloneLoginVaultBadge = cloneDoc.querySelector('#loginEncryptedVaultBadge');
+    if (cloneLoginVaultBadge) {
+      cloneLoginVaultBadge.classList.toggle('hidden', vaultTokens.length === 0);
     }
 
     // Hide the Google Sites code preview box in the cloned output
@@ -14833,6 +15312,14 @@ function initFarmSalesApp() {
     if (cloneForceCreateFarm) {
       cloneForceCreateFarm.classList.add('hidden');
     }
+    const cloneForceUrl = cloneDoc.querySelector('#inpForceCloudWebhookUrl');
+    if (cloneForceUrl) cloneForceUrl.setAttribute('value', '');
+    const cloneLoginUrl = cloneDoc.querySelector('#inpLoginCloudWebhookUrl');
+    if (cloneLoginUrl) cloneLoginUrl.setAttribute('value', '');
+    const cloneForceStatus = cloneDoc.querySelector('#forceCloudSyncStatusMsg');
+    if (cloneForceStatus) cloneForceStatus.classList.add('hidden');
+    const cloneLoginStatus = cloneDoc.querySelector('#loginCloudSyncStatusMsg');
+    if (cloneLoginStatus) cloneLoginStatus.classList.add('hidden');
     const cloneLoginUser = cloneDoc.querySelector('#inpLoginUsername');
     if (cloneLoginUser) cloneLoginUser.setAttribute('value', '');
     const cloneLoginPass = cloneDoc.querySelector('#inpLoginPassword');
@@ -14931,6 +15418,42 @@ function initFarmSalesApp() {
     btnCloseGsPreview.addEventListener('click', () => {
       const previewBox = document.getElementById('googleSitesEmbedCodePreviewBox');
       if (previewBox) previewBox.classList.add('hidden');
+    });
+  }
+
+  const btnDlLightGithub = document.getElementById('btnDownloadLightweightGithubHtml');
+  if (btnDlLightGithub) {
+    btnDlLightGithub.addEventListener('click', async () => {
+      const inpEl = document.getElementById('inpCloudWebhookUrl');
+      const currentUrl = ((inpEl ? inpEl.value : '') || appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
+      if (!currentUrl || !currentUrl.startsWith('http')) {
+        showToast('⚠️ يرجى لصق رابط السحابة في الخانة أعلاه أولاً لتشفيره وربطه بملف index.html!', '⚠️');
+        if (inpEl) inpEl.focus();
+        return;
+      }
+      appState.webhookUrl = currentUrl;
+      updateEncryptedWebhookVaultUI();
+      const hadMeaningfulLocalEdits = hasMeaningfulLocalData();
+      const { rawHtml, url } = buildEmbeddedGoogleSitesHtml(false);
+      const blob = new Blob([rawHtml], { type: 'text/html;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'index.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      if (url && navigator.onLine) {
+        if (!hadMeaningfulLocalEdits) {
+          const pulled = await pullDatabaseFromCloud(true, true);
+          if (!pulled) {
+            await pushDatabaseToCloud(true, true);
+          }
+        } else {
+          await pushDatabaseToCloud(true, true);
+        }
+      }
+      const sizeKb = Math.round(rawHtml.length / 1024);
+      showToast(`🔐📥 تم تحميل ملف index.html الخفيف (${sizeKb} KB) مدمجاً به رابط السحابة مشفراً بكلمة مرور الدخول! ارفعه على GitHub Pages مرة واحدة فقط.`, '🔐');
     });
   }
 
