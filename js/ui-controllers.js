@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v81)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v82)
 // =========================================================================
 
 // =========================================================================
@@ -2173,30 +2173,24 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-  // 2. Inside #view-sync:
-  //    - Admin sees everything.
-  //    - Regular user sees their own account (#myProfileCardSection) + only sections explicitly permitted by Admin.
-  //    - Users management (#usersPermissionsModal) and Full JSON Backup & Audit (#fullJsonBackupAndAuditCard) are strictly for Admin only.
-  //    - Each permission is completely independent (showCloudHub depends strictly on uPerms.showSyncCloud, not uPerms.farms).
+  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v82):
+  //    - Admin sees all 5 sub-tabs.
+  //    - Regular delegate sees only (🗂️ المزارع والإكسيل if permitted) and (🎨 تفضيلات الواجهة), while the 3 Admin sub-tabs (🔐 المستخدمون والصلاحيات, ☁️ الربط السحابي, 🕵️ الرقابة والنسخ) are completely hidden.
   const uPerms = (activeUser && activeUser.perms) || {};
   const showQuickCtrl = isAdm || (!isVis && Boolean(uPerms.showSyncExcel));
   const showCloudHub = isAdm || (!isVis && Boolean(uPerms.showSyncCloud));
-  const showTwoWay = isAdm || (!isVis && Boolean(uPerms.showSyncWebhook));
 
-  const cardQuick = document.getElementById('syncQuickControlCard');
-  if (cardQuick) cardQuick.classList.toggle('hidden', !showQuickCtrl);
-  const excelHdrRow = document.getElementById('syncQuickExcelHeaderRow');
-  if (excelHdrRow) excelHdrRow.classList.toggle('hidden', !showQuickCtrl);
+  const panelExcelDays = document.getElementById('syncExcelAndDaysPanel');
+  if (panelExcelDays) panelExcelDays.classList.toggle('hidden', !showQuickCtrl);
   const dayMgmtSec = document.getElementById('syncDayMgmtSection');
   if (dayMgmtSec) dayMgmtSec.classList.toggle('hidden', !showQuickCtrl);
-  const cardCloud = document.getElementById('syncCloudDbHubCard');
-  if (cardCloud) cardCloud.classList.toggle('hidden', !showCloudHub);
-  const cardBackupAudit = document.getElementById('fullJsonBackupAndAuditCard');
-  if (cardBackupAudit) cardBackupAudit.classList.toggle('hidden', !isAdm);
-  const cardTwoWay = document.getElementById('syncTwoWayExcelCard');
-  if (cardTwoWay) cardTwoWay.classList.toggle('hidden', !isAdm);
-  const usersModalCard = document.getElementById('usersPermissionsModal');
-  if (usersModalCard) usersModalCard.classList.toggle('hidden', !isAdm);
+  const panelFarmsArchive = document.getElementById('syncFarmsArchivePanel');
+  if (panelFarmsArchive) panelFarmsArchive.classList.toggle('hidden', !showCloudHub);
+
+  ['syncSubView-users_perms', 'syncSubView-cloud_link', 'syncSubView-audit_backup'].forEach(adminSubId => {
+    const el = document.getElementById(adminSubId);
+    if (el && !isAdm) el.classList.add('hidden');
+  });
   switchSyncSubTabUI(appState.activeSyncSubTab);
 
   // Toggle Forms based on granular permissions & active day lock status
@@ -3759,7 +3753,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v81-sub-tabs';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v82-final-dashboard';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3790,11 +3784,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v81) without automatic reload loops
+  // Register Offline Service Worker (v82) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV81) {
-      window.__swRegisteredOnceV81 = true;
-      navigator.serviceWorker.register('./sw.js?v=81', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV82) {
+      window.__swRegisteredOnceV82 = true;
+      navigator.serviceWorker.register('./sw.js?v=82', { scope: './' }).catch(() => {});
     }
   }
 
@@ -4496,13 +4490,9 @@ function initFarmSalesApp() {
     if (syncTabBtn) syncTabBtn.click();
     switchSyncSubTabUI('users_perms');
     setTimeout(() => {
-      const permSec = document.getElementById('usersPermissionsModal');
+      const permSec = document.getElementById('syncUsersAndPermissionsPanel');
       if (permSec) permSec.scrollIntoView({ behavior: 'smooth' });
     }, 80);
-  });
-
-  document.getElementById('btnCloseUsersModal').addEventListener('click', () => {
-    document.getElementById('usersPermissionsModal').classList.add('hidden');
   });
 
   const SUB_PERM_CHECKBOX_IDS = [
@@ -7790,9 +7780,8 @@ function initFarmSalesApp() {
     }
   });
 
-  // Export Excel Buttons & Full JSON Backup / Restore Buttons
+  // Export Excel Button & Full JSON Backup / Restore Buttons
   document.getElementById('btnQuickExportXlsx').addEventListener('click', exportFullWorkbookXlsx);
-  document.getElementById('btnExportFullExcel2').addEventListener('click', exportFullWorkbookXlsx);
 
   const btnQuickJsonEl = document.getElementById('btnQuickExportJsonBackup');
   if (btnQuickJsonEl) btnQuickJsonEl.addEventListener('click', exportFullJsonBackup);
@@ -7810,7 +7799,7 @@ function initFarmSalesApp() {
       if (syncTabBtn) syncTabBtn.click();
       switchSyncSubTabUI('audit_backup');
       setTimeout(() => {
-        const cardEl = document.getElementById('fullJsonBackupAndAuditCard');
+        const cardEl = document.getElementById('syncAuditAndBackupPanel');
         if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth' });
       }, 80);
     });
@@ -7953,14 +7942,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v81)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v82)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=81',
-    './js/accounting.js?v=81',
-    './js/storage-sync.js?v=81',
-    './js/excel-engine.js?v=81',
-    './js/print-export.js?v=81',
-    './js/ui-controllers.js?v=81'
+    './js/core-state.js?v=82',
+    './js/accounting.js?v=82',
+    './js/storage-sync.js?v=82',
+    './js/excel-engine.js?v=82',
+    './js/print-export.js?v=82',
+    './js/ui-controllers.js?v=82'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8052,7 +8041,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v81)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v82)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8170,14 +8159,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=81');
+        scTpl.setAttribute('src', './excel-template.js?v=82');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=81');
+        lnk.setAttribute('href', './style.css?v=82');
         bundledStyleEl.replaceWith(lnk);
       }
     }

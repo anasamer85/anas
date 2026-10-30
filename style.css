@@ -2176,8 +2176,8 @@ body.lite-field-mode-active #btnInlineSavePendingW1 {
     max-height: 55vh !important;
   }
 
-  body.sticky-headers-on #fullJsonBackupAndAuditCard .table-scroll-wrapper,
-  body.sticky-footers-on #fullJsonBackupAndAuditCard .table-scroll-wrapper {
+  body.sticky-headers-on #syncAuditAndBackupPanel .table-scroll-wrapper,
+  body.sticky-footers-on #syncAuditAndBackupPanel .table-scroll-wrapper {
     max-height: 60vh !important;
   }
 

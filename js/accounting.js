@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v81)
+// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v82)
 // =========================================================================
 
 function addSpecificDayToCycle(targetDayNum, customLabel = '') {
@@ -922,7 +922,8 @@ function fmtDec(n) {
 }
 
 function formatLiveMoneyInputString(rawStr) {
-  const cleaned = String(rawStr || '').replace(/[^0-9.]/g, '');
+  const asciiStr = typeof toAsciiDigits === 'function' ? toAsciiDigits(rawStr) : String(rawStr || '');
+  const cleaned = String(asciiStr || '').replace(/[^0-9.]/g, '');
   if (!cleaned) return '';
   const parts = cleaned.split('.');
   const intPart = parts[0] ? Number(parts[0]).toLocaleString('en-US') : '0';
