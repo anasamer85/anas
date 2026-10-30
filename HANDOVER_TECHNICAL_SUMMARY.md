@@ -1,7 +1,7 @@
 # 📘 وثيقة التسليم التقنية الشاملة (Comprehensive Technical Handover Document)
 
 **المشروع:** نظام محاضر لجان بيع المزارع (Offline-First PWA + Two-Way Excel Sync + Cloud Sync)
-**الإصدار المرجعي الحالي:** `v76` (`farm-sales-v76-performance-sync` — Performance, QA Fortification & Enterprise Delta Sync) (Modular Architecture & Client-Side Delta Outbox Engine)
+**الإصدار المرجعي الحالي:** `v77` (`farm-sales-v77-mobile-default` — Performance, QA Fortification & Enterprise Delta Sync) (Modular Architecture & Client-Side Delta Outbox Engine)
 **الهدف القادم المباشر:** تنفيذ المرحلة الرابعة والأخيرة (`v75`: End-to-End Cloud Delta Sync & GAS LockService)
 
 ---
@@ -17,7 +17,7 @@
 | `style.css` | التنسيقات المخصصة، قواعد الطباعة الحرجة (`@media print` بحجم A4 Landscape)، فئات التثبيت الاختياري للجداول الـ 12 (`sticky-headers-on`, `sticky-footers-on`, `sticky-right-cols-on`, `sticky-left-cols-on`)، وقواعد إخفاء العناصر غير الضرورية عند تفعيل وضع المندوب (`body.lite-field-mode-active`). |
 | `excel-template.js` | القالب الهيكلي ومحرك بناء وتنسيق شيتات الإكسيل الـ 15 بالمعادلات الحية والألوان والحدود الرسمية. |
 | `vendor/vendor-loader.js` | **محرك التحميل المحلي الذكي للمكتبات + درع منع التحديث اللانهائي:** يحمل المكتبات الـ 4 (`XLSX`, `Chart`, `html2canvas`, `jspdf`) بترتيب (`CacheStorage -> CDN -> Local Fallback`)، ويوفر دالة `downloadAndBundleVendorPackagesLocally()` لتنزيلها محلياً للعمل أوفلاين بنسبة 100%، كما يعترض `navigator.serviceWorker.register` وحدث `controllerchange` لمنع دخول الصفحة في حلقة تحديث لا نهائية (Infinite Reload Loop). |
-| `sw.js` | عامل الخدمة (Service Worker) بإصدار كاش `farm-sales-v76-performance-sync`؛ يدير التخزين المسبق للأصول المحلية والـ CDN ودالة المطابقة الذكية `matchFromCacheSmart`. |
+| `sw.js` | عامل الخدمة (Service Worker) بإصدار كاش `farm-sales-v77-mobile-default`؛ يدير التخزين المسبق للأصول المحلية والـ CDN ودالة المطابقة الذكية `matchFromCacheSmart`. |
 | `manifest.json` & Icons | إعدادات تطبيق الـ PWA (`icon-192.png`, `icon-512.png`) لدعم التثبيت المباشر على شاشة الهاتف والكمبيوتر. |
 
 ### ب. الوحدات البرمجية الـ 6 داخل مجلد `./js/` (تُحمّل بهذا الترتيب):
@@ -321,11 +321,15 @@
 
 ---
 
-## 7. ✅ سجل إنجازات وترقيات الإصدار `v76` (`farm-sales-v76-performance-sync`)
+## 7. ✅ سجل إنجازات وترقيات الإصدار `v77` (`farm-sales-v77-mobile-default`)
 
-تم في الإصدار **`v76`** إغلاق كافة ملاحظات الفحص التقني والجودة الشاملة (QA Audit) واعتماد التحسينات المعمارية والمحاسبية التالية:
+تم في الإصدار **`v77`** إغلاق كافة ملاحظات الفحص التقني والجودة الشاملة (QA Audit) واعتماد التحسينات المعمارية والمحاسبية التالية:
 1. **إحكام طابور المزامنة الجزئية (`syncOutbox`):** إدراج أحداث تعديل أسماء التجار (`UPSERT_MERCHANT`) وإضافة/تعديل المستخدمين وتحديث الملف الشخصي (`UPSERT_USER`) في طابور `syncOutbox` لضمان مزامنتها اللحظية عبر بروتوكول `delta_sync`.
 2. **دقة الفاصلة العائمة بنسبة 100% (`roundMoney2`):** تغليف كافة العمليات الحسابية التراكمية والفرعية في `js/accounting.js` و `js/storage-sync.js` بدالة `roundMoney2`.
 3. **تطوير تجربة المندوب الميداني (`Lite Field Mode`):** إخفاء الهيدر الرئيسي (`#mainHeader`) في وضع المندوب لمنع الازدواجية، ورفع الهامش السفلي (`padding-bottom: 135px / 150px`)، وإضافة خيار تثبيت شريط المندوب العلوي (`#chkStickyLiteBanner` / `.sticky-lite-banner`) المحفوظ في `LocalStorage` (`pref_sticky_lite_banner`).
-4. **مهلة الشبكة الذكية (`3s Network Timeout`) وترقية الكاش (`v76`):** إضافة مهلة 3 ثوانٍ باستخدام `Promise.race` و `AbortController` لطلبات الملفات الأساسية في `sw.js` للتحول الفوري للكاش عند ضعف شبكة المزرعة، وترقية الكاش الموحد إلى `farm-sales-v76-performance-sync` دون استخدام `caches.delete` خارج حدث `activate`.
+4. **مهلة الشبكة الذكية (`3s Network Timeout`) وترقية الكاش (`v77`):** إضافة مهلة 3 ثوانٍ باستخدام `Promise.race` و `AbortController` لطلبات الملفات الأساسية في `sw.js` للتحول الفوري للكاش عند ضعف شبكة المزرعة، وترقية الكاش الموحد إلى `farm-sales-v77-mobile-default` دون استخدام `caches.delete` خارج حدث `activate`.
 5. **الاستنساخ الكسول للفلاتر (`Lazy DOM Cloning`):** تأجيل استنساخ عقد الـ DOM (`cloneNode(true)`) في `applyDomTableExcelEngine` ليتم فقط عند تفعيل الفلتر أو الفرز فعلياً عبر `captureDomTableRawRows` لتقليل استهلاك الذاكرة على الهواتف الضعيفة.
+
+6. **تحديثات الإصدار `v77` (`farm-sales-v77-mobile-default`):**
+   - **إصلاح ظهور شريط المندوب في صفحة الدخول:** إزالة الكلاس `lite-field-mode-active` وإخفاء `#liteFieldModeActiveBanner` (`style.display = 'none'`) فور تسجيل الخروج اليدوي أو التلقائي (`Session Timeout`) أو عند عدم تسجيل الدخول.
+   - **جعل وضع المندوب المبسط هو الوضع الافتراضي للموبايل:** تفعيل وضع المندوب المبسط تلقائياً وإظهار شريط المندوب فور تسجيل الدخول من الهواتف المحمولة (`window.innerWidth <= 768`) دون الحاجة لتفعيله يدوياً في كل جلسة.

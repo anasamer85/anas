@@ -1565,7 +1565,13 @@ img, video {
    3. PROJECT CUSTOM STYLES (FROM UNIFIED SINGLE-FILE)
    ========================================================================= */
 
+#loginGatewayOverlay {
+  z-index: 2000 !important;
+}
 #loginGatewayOverlay.hidden {
+  display: none !important;
+}
+body:not(.lite-field-mode-active) #liteFieldModeActiveBanner {
   display: none !important;
 }
 

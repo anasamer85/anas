@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v76)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v77)
 // =========================================================================
 
 // =========================================================================
@@ -2384,7 +2384,7 @@ function setAuditMetadataVisibility(showFlag, notify = true) {
 // =========================================================================
 function isMobileViewportDevice() {
   if (typeof window === 'undefined') return false;
-  return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
 }
 
 function isUserLockedToLiteFieldMode(userObj = getActiveUser()) {
@@ -2394,6 +2394,7 @@ function isUserLockedToLiteFieldMode(userObj = getActiveUser()) {
 }
 
 function isLiteFieldModeEffective() {
+  if (!appState || !appState.isLoggedIn) return false;
   const u = getActiveUser();
   if (isUserLockedToLiteFieldMode(u)) {
     if (appState.autoLiteFieldOnMobile !== false && isMobileViewportDevice()) {
@@ -2404,14 +2405,23 @@ function isLiteFieldModeEffective() {
   return Boolean(appState.liteFieldMode);
 }
 
-function applyAutoLiteFieldModeOnLoginOrSwitch() {
-  const u = getActiveUser();
-  if (isUserLockedToLiteFieldMode(u) && isMobileViewportDevice() && appState.autoLiteFieldOnMobile !== false) {
-    appState.liteFieldMode = true;
-    appState.activeTab = 'daily';
-    try {
-      localStorage.setItem(STORAGE_KEY + '_lite_field_mode', '1');
-    } catch (e) {}
+function applyAutoLiteFieldModeOnLoginOrSwitch(forceMobileDefault = false) {
+  if (typeof window !== 'undefined' && (window.innerWidth <= 768 || isMobileViewportDevice())) {
+    if (forceMobileDefault || appState.autoLiteFieldOnMobile !== false) {
+      appState.liteFieldMode = true;
+      appState.activeTab = 'daily';
+      try {
+        localStorage.setItem(STORAGE_KEY + '_lite_field_mode', '1');
+      } catch (e) {}
+      if (typeof document !== 'undefined' && document.body && appState.isLoggedIn) {
+        document.body.classList.add('lite-field-mode-active');
+        const bannerEl = document.getElementById('liteFieldModeActiveBanner');
+        if (bannerEl) {
+          bannerEl.classList.remove('hidden');
+          bannerEl.style.display = 'flex';
+        }
+      }
+    }
   }
   updateLiteFieldModeUI();
 }
@@ -2495,7 +2505,7 @@ function setStickyLiteBanner(enableFlag, notify = true) {
 
 function updateLiteFieldModeUI() {
   updateStickyLiteBannerUI();
-  const active = isLiteFieldModeEffective();
+  const active = Boolean(appState && appState.isLoggedIn && isLiteFieldModeEffective());
   if (typeof document !== 'undefined' && document.body) {
     document.body.classList.toggle('lite-field-mode-active', active);
   }
@@ -2511,6 +2521,7 @@ function updateLiteFieldModeUI() {
   const bannerEl = document.getElementById('liteFieldModeActiveBanner');
   if (bannerEl) {
     bannerEl.classList.toggle('hidden', !active);
+    bannerEl.style.display = active ? 'flex' : 'none';
   }
   const fNameEl = document.getElementById('liteBannerFarmName');
   if (fNameEl) fNameEl.textContent = appState.farmName || 'مزرعة جديدة';
@@ -3634,7 +3645,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v76-performance-sync';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v77-mobile-default';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3665,11 +3676,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v76) without automatic reload loops
+  // Register Offline Service Worker (v77) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV76) {
-      window.__swRegisteredOnceV76 = true;
-      navigator.serviceWorker.register('./sw.js?v=76', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV77) {
+      window.__swRegisteredOnceV77 = true;
+      navigator.serviceWorker.register('./sw.js?v=77', { scope: './' }).catch(() => {});
     }
   }
 
@@ -3726,6 +3737,11 @@ function initFarmSalesApp() {
 
   function performLogout(reasonMsg = 'تم تسجيل الخروج بنجاح 👋') {
     appState.isLoggedIn = false;
+    document.body.classList.remove('lite-field-mode-active');
+    if (document.getElementById('liteFieldModeActiveBanner')) {
+      document.getElementById('liteFieldModeActiveBanner').style.display = 'none';
+      document.getElementById('liteFieldModeActiveBanner').classList.add('hidden');
+    }
     saveState(false);
     document.getElementById('inpLoginUsername').value = '';
     document.getElementById('inpLoginPassword').value = '';
@@ -3756,6 +3772,11 @@ function initFarmSalesApp() {
     renderAll();
   } else {
     appState.isLoggedIn = false;
+    document.body.classList.remove('lite-field-mode-active');
+    if (document.getElementById('liteFieldModeActiveBanner')) {
+      document.getElementById('liteFieldModeActiveBanner').style.display = 'none';
+      document.getElementById('liteFieldModeActiveBanner').classList.add('hidden');
+    }
     loginOverlay.classList.remove('hidden');
   }
 
@@ -3959,7 +3980,17 @@ function initFarmSalesApp() {
       loginErr.classList.add('hidden');
       loginOverlay.classList.add('hidden');
       unifyGlobalMerchantsRegistry();
-      applyAutoLiteFieldModeOnLoginOrSwitch();
+      if (window.innerWidth <= 768) {
+        appState.liteFieldMode = true;
+        appState.activeTab = 'daily';
+        try { localStorage.setItem(STORAGE_KEY + '_lite_field_mode', '1'); } catch (e) {}
+        document.body.classList.add('lite-field-mode-active');
+        if (document.getElementById('liteFieldModeActiveBanner')) {
+          document.getElementById('liteFieldModeActiveBanner').classList.remove('hidden');
+          document.getElementById('liteFieldModeActiveBanner').style.display = 'flex';
+        }
+      }
+      applyAutoLiteFieldModeOnLoginOrSwitch(true);
       switchActiveTabUI(appState.activeTab || 'daily');
       updateEncryptedWebhookVaultUI();
       saveState(false);
@@ -3986,7 +4017,17 @@ function initFarmSalesApp() {
       loginErr.classList.add('hidden');
       loginOverlay.classList.add('hidden');
       unifyGlobalMerchantsRegistry();
-      applyAutoLiteFieldModeOnLoginOrSwitch();
+      if (window.innerWidth <= 768) {
+        appState.liteFieldMode = true;
+        appState.activeTab = 'daily';
+        try { localStorage.setItem(STORAGE_KEY + '_lite_field_mode', '1'); } catch (e) {}
+        document.body.classList.add('lite-field-mode-active');
+        if (document.getElementById('liteFieldModeActiveBanner')) {
+          document.getElementById('liteFieldModeActiveBanner').classList.remove('hidden');
+          document.getElementById('liteFieldModeActiveBanner').style.display = 'flex';
+        }
+      }
+      applyAutoLiteFieldModeOnLoginOrSwitch(true);
       switchActiveTabUI(appState.activeTab || 'daily');
       updateEncryptedWebhookVaultUI();
       saveState(false);
@@ -4485,10 +4526,10 @@ function initFarmSalesApp() {
   document.getElementById('btnPushCloudNow').addEventListener('click', () => pushDatabaseToCloud(false, true));
   document.getElementById('btnPullCloudNow').addEventListener('click', () => pullDatabaseFromCloud(false, true));
 
-  // Copy Ready-Made Google Apps Script Cloud Database Code (v76: End-to-End Cloud Delta Sync & GAS LockService)
+  // Copy Ready-Made Google Apps Script Cloud Database Code (v77: End-to-End Cloud Delta Sync & GAS LockService)
   document.getElementById('btnCopyCloudScriptCode').addEventListener('click', () => {
     const scriptCode = [
-      "// كود قاعدة البيانات السحابية المطور (الإصدار v76 — يدعم Delta Sync اللحظي + LockService الذري + الأحجام الكبيرة)",
+      "// كود قاعدة البيانات السحابية المطور (الإصدار v77 — يدعم Delta Sync اللحظي + LockService الذري + الأحجام الكبيرة)",
       "// 1. افتح script.google.com وامسح الكود القديم بالكامل والصق هذا الكود ثم اضغط حفظ (Save 💾)",
       "// 2. اضغط Deploy -> Manage deployments -> Edit (أيقونة القلم ✏️) -> اختر Version: New version -> Deploy",
       "//    (أو Deploy -> New deployment -> Web app -> Execute as: Me -> Who has access: Anyone)",
@@ -4668,7 +4709,7 @@ function initFarmSalesApp() {
       "}"
     ].join('\n');
     copyTextToClipboardReliable(scriptCode);
-    showToast('تم نسخ كود السحابة المطور (v76 Delta Sync + LockService)! حدثه في script.google.com واختر (New version) عند النشر.', '📋');
+    showToast('تم نسخ كود السحابة المطور (v77 Delta Sync + LockService)! حدثه في script.google.com واختر (New version) عند النشر.', '📋');
   });
   window.addEventListener('offline', () => {
     updateConnectionAndSyncUI();
@@ -7839,14 +7880,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v76)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v77)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=76',
-    './js/accounting.js?v=76',
-    './js/storage-sync.js?v=76',
-    './js/excel-engine.js?v=76',
-    './js/print-export.js?v=76',
-    './js/ui-controllers.js?v=76'
+    './js/core-state.js?v=77',
+    './js/accounting.js?v=77',
+    './js/storage-sync.js?v=77',
+    './js/excel-engine.js?v=77',
+    './js/print-export.js?v=77',
+    './js/ui-controllers.js?v=77'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -7938,7 +7979,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v76)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v77)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8056,14 +8097,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=76');
+        scTpl.setAttribute('src', './excel-template.js?v=77');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=76');
+        lnk.setAttribute('href', './style.css?v=77');
         bundledStyleEl.replaceWith(lnk);
       }
     }

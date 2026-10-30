@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v76)
+// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v77)
 // =========================================================================
 
 function loadState() {
@@ -553,6 +553,14 @@ function verifyActiveUserSession() {
   if (isDeletedInLog || !stillExistsInUsers) {
     appState.isLoggedIn = false;
     appState.activeUserId = 'admin';
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.classList.remove('lite-field-mode-active');
+      const liteBannerEl = document.getElementById('liteFieldModeActiveBanner');
+      if (liteBannerEl) {
+        liteBannerEl.style.display = 'none';
+        liteBannerEl.classList.add('hidden');
+      }
+    }
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); } catch (e) {}
     const loginOverlay = document.getElementById('loginGatewayOverlay');
     const loginErr = document.getElementById('loginErrorMsg');

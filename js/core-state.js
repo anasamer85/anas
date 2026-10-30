@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v76)
+// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v77)
 // =========================================================================
 
 // =========================================================================
