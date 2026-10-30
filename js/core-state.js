@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v85)
+// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v86)
 // =========================================================================
 
 // =========================================================================
@@ -1363,5 +1363,17 @@ function getVisibleDays() {
   }
   appState.visibleDays = Array.from(set).sort((a, b) => a - b);
   return appState.visibleDays;
+}
+
+function isAdvanceCustodyOnlyPendingRecord(r) {
+  if (!r) return false;
+  const w1 = Number(r.w1) || 0;
+  const w2 = Number(r.w2) || 0;
+  const custCash = Number(r.custodyCash) || 0;
+  const custTr = Number(r.custodyTransfer) || 0;
+  return Boolean(w1 <= 0 && w2 <= 0 && (custCash > 0 || custTr > 0));
+}
+if (typeof window !== 'undefined') {
+  window.isAdvanceCustodyOnlyPendingRecord = isAdvanceCustodyOnlyPendingRecord;
 }
 

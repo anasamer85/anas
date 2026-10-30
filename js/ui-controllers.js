@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v85)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v86)
 // =========================================================================
 
 // =========================================================================
@@ -2174,7 +2174,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v85):
+  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v86):
   //    - Admin sees all 5 sub-tabs.
   //    - Regular delegate sees only (🗂️ المزارع والإكسيل if permitted) and (🎨 تفضيلات الواجهة), while the 3 Admin sub-tabs (🔐 المستخدمون والصلاحيات, ☁️ الربط السحابي, 🕵️ الرقابة والنسخ) are completely hidden.
   const uPerms = (activeUser && activeUser.perms) || {};
@@ -3950,7 +3950,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v85-final-polish';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v86-advance-custody';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3981,11 +3981,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v85) without automatic reload loops
+  // Register Offline Service Worker (v86) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV85) {
-      window.__swRegisteredOnceV85 = true;
-      navigator.serviceWorker.register('./sw.js?v=85', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV86) {
+      window.__swRegisteredOnceV86 = true;
+      navigator.serviceWorker.register('./sw.js?v=86', { scope: './' }).catch(() => {});
     }
   }
 
@@ -6521,13 +6521,17 @@ function initFarmSalesApp() {
     }
     const mName = document.getElementById('inpMerchantName').value.trim();
     const w1Val = parseNum(document.getElementById('inpW1').value);
+    const custCashVal = parseNum(document.getElementById('inpCustodyCash').value) || 0;
+    const custTrVal = parseNum(document.getElementById('inpCustodyTransfer').value) || 0;
+    const isAdvanceCustodyOnly = Boolean(w1Val <= 0 && (custCashVal > 0 || custTrVal > 0));
+
     if (!mName) {
-      showToast('يرجى إدخال اسم التاجر / السيارة أولاً لحفظ الوزنة الأولى مؤقتاً!', '⚠️');
+      showToast('يرجى إدخال اسم التاجر / السيارة أولاً لحفظ الحركة مؤقتاً!', '⚠️');
       document.getElementById('inpMerchantName').focus();
       return;
     }
-    if (w1Val <= 0) {
-      showToast('يرجى إدخال (الوزنة الأولى - فارغ) لحفظ الحركة مؤقتاً!', '⚠️');
+    if (w1Val <= 0 && !isAdvanceCustodyOnly) {
+      showToast('يرجى إدخال (الوزنة الأولى - فارغ) أو مبلغ (العهدة المسبقة) لحفظ الحركة مؤقتاً!', '⚠️');
       document.getElementById('inpW1').focus();
       return;
     }
@@ -6535,7 +6539,13 @@ function initFarmSalesApp() {
     const dayObj = appState.days[appState.currentDay];
     if (!Array.isArray(dayObj.pendingSales)) dayObj.pendingSales = [];
 
-    let enteredScale = Number(document.getElementById('inpScaleNo').value) || getNextSequentialScaleNo();
+    let enteredScale = '';
+    if (!isAdvanceCustodyOnly) {
+      enteredScale = Number(document.getElementById('inpScaleNo').value) || getNextSequentialScaleNo();
+    } else {
+      const manualScale = Number(document.getElementById('inpScaleNo').value) || 0;
+      enteredScale = manualScale > 0 ? manualScale : '';
+    }
     const scaleConflict = [
       ...(dayObj.sales || []).filter(x => !isRecordDebtOnlyVoucher(x)),
       ...(dayObj.pendingSales || [])
@@ -8196,14 +8206,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v85)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=85',
-    './js/accounting.js?v=85',
-    './js/storage-sync.js?v=85',
-    './js/excel-engine.js?v=85',
-    './js/print-export.js?v=85',
-    './js/ui-controllers.js?v=85'
+    './js/core-state.js?v=86',
+    './js/accounting.js?v=86',
+    './js/storage-sync.js?v=86',
+    './js/excel-engine.js?v=86',
+    './js/print-export.js?v=86',
+    './js/ui-controllers.js?v=86'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8295,7 +8305,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v85)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v86)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8413,14 +8423,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=85');
+        scTpl.setAttribute('src', './excel-template.js?v=86');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=85');
+        lnk.setAttribute('href', './style.css?v=86');
         bundledStyleEl.replaceWith(lnk);
       }
     }
@@ -8849,4 +8859,25 @@ if (document.readyState === 'loading') {
 } else {
   initFarmSalesApp();
 }
+
+  const btnLiteQuickNewSaleEl = document.getElementById('btnLiteQuickNewSale');
+  if (btnLiteQuickNewSaleEl) {
+    btnLiteQuickNewSaleEl.addEventListener('click', () => {
+      cancelOrClearCurrentSaleEntry(false);
+      const saleCardEl = document.getElementById('saleFormCard');
+      const merchInpEl = document.getElementById('inpMerchantName');
+      if (saleCardEl) {
+        saleCardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      if (merchInpEl) {
+        setTimeout(() => {
+          try {
+            merchInpEl.focus();
+            merchInpEl.select();
+          } catch (e) {}
+        }, 120);
+      }
+      showToast('➕ جاهز لتسجيل حركة جديدة — اكتب اسم التاجر الآن', '🚛');
+    });
+  }
 

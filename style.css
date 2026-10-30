@@ -2577,3 +2577,22 @@ body:not(.lite-field-mode-active) #liteScrollNavFloatingBtns,
   }
 }
 
+/* =========================================================================
+   10. ADVANCE CUSTODY & QUICK NEW SALE BUTTON (v86)
+   ========================================================================= */
+#liteFieldModeActiveBanner button,
+#liteFieldModeActiveBanner select {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+@media screen and (max-width: 400px) {
+  #liteFieldModeActiveBanner {
+    padding: 6px 8px !important;
+    gap: 6px !important;
+  }
+  #btnLiteQuickNewSale {
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+}
+

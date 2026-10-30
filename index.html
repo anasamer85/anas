@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=85"></script>
+  <script src="./vendor/vendor-loader.js?v=86"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
@@ -24,7 +24,7 @@
     window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=85" />
+  <link rel="stylesheet" href="./style.css?v=86" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -534,7 +534,7 @@
             مزرعة <strong id="liteBannerFarmName">مزرعة جديدة</strong> — <strong id="liteBannerDayLabel">يوم 1</strong>
           </span>
         </div>
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-1.5 flex-wrap"><button type="button" id="btnLiteQuickNewSale" class="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-extrabold transition flex items-center gap-1 shadow-sm border border-emerald-300" title="تجهيز حركة بيع جديدة والانتقال الفوري لحقل اسم التاجر"><span>➕</span><span>حركة جديدة</span></button>
           <button type="button" id="btnQuickToggleStickyLiteBanner" class="px-2 py-1 rounded-lg bg-amber-400 text-slate-950 text-[11px] font-extrabold transition flex items-center gap-1 shadow-sm" title="تثبيت أو إلغاء تثبيت شريط المندوب في أعلى الشاشة أثناء التمرير">
             <span id="iconQuickStickyLiteBanner">📌</span>
             <span id="txtQuickStickyLiteBanner" class="hidden sm:inline">مثبت</span>
@@ -2544,7 +2544,7 @@
               class="w-full p-2 rounded-lg bg-slate-900 text-emerald-300 font-mono text-[11px] border border-slate-700 focus:outline-none select-all"></textarea>
           </div>
         </div>
-        </div>
+      </div>
       </div>
 
       <!-- =================================================================== -->
@@ -2995,45 +2995,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=85"></script>
-  <script src="./js/core-state.js?v=85"></script>
-  <script src="./js/accounting.js?v=85"></script>
-  <script src="./js/storage-sync.js?v=85"></script>
-  <script src="./js/excel-engine.js?v=85"></script>
-  <script src="./js/print-export.js?v=85"></script>
-  <script src="./js/ui-controllers.js?v=85"></script>
+  <script src="./excel-template.js?v=86"></script>
+  <script src="./js/core-state.js?v=86"></script>
+  <script src="./js/accounting.js?v=86"></script>
+  <script src="./js/storage-sync.js?v=86"></script>
+  <script src="./js/excel-engine.js?v=86"></script>
+  <script src="./js/print-export.js?v=86"></script>
+  <script src="./js/ui-controllers.js?v=86"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v85-final-polish';
+      var SW_CACHE_NAME = 'farm-sales-v86-advance-custody';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=85',
+        './style.css?v=86',
         './excel-template.js',
-        './excel-template.js?v=85',
+        './excel-template.js?v=86',
         './js/core-state.js',
-        './js/core-state.js?v=85',
+        './js/core-state.js?v=86',
         './js/accounting.js',
-        './js/accounting.js?v=85',
+        './js/accounting.js?v=86',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=85',
+        './js/storage-sync.js?v=86',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=85',
+        './js/excel-engine.js?v=86',
         './js/print-export.js',
-        './js/print-export.js?v=85',
+        './js/print-export.js?v=86',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=85',
+        './js/ui-controllers.js?v=86',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=85'
+        './vendor/vendor-loader.js?v=86'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-        if (!window.__swRegisteredOnceV85) {
-          window.__swRegisteredOnceV85 = true;
-          navigator.serviceWorker.register('./sw.js?v=85', { scope: './' }).catch(function () {});
+        if (!window.__swRegisteredOnceV86) {
+          window.__swRegisteredOnceV86 = true;
+          navigator.serviceWorker.register('./sw.js?v=86', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {

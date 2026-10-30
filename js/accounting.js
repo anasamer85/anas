@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v85)
+// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v86)
 // =========================================================================
 
 function addSpecificDayToCycle(targetDayNum, customLabel = '') {
@@ -741,6 +741,24 @@ function computeDaySummary(dayNum) {
   let sumPrevCash = 0, sumPrevTransfer = 0;
   let sumPaidAndCredit = 0, sumInvoiceDiff = 0;
 
+  let sumPendingAdvanceCashInBox = 0;
+  let sumPendingAdvanceTransfers = 0;
+
+  pendingRows.forEach(pr => {
+    const pCustCash = roundMoney2(Math.max(0, Number(pr.custodyCash) || 0));
+    const pCustTr = roundMoney2(Math.max(0, Number(pr.custodyTransfer) || 0));
+    const pDebtCash = roundMoney2(Math.max(0, Number(pr.debtCash) || 0));
+    const pDebtTr = roundMoney2(Math.max(0, Number(pr.debtTransfer) || 0));
+    const pCashSales = roundMoney2(Math.max(0, Number(pr.cashSales) || 0));
+    const pTrSales = roundMoney2(Math.max(0, Number(pr.transferSales) || 0));
+
+    const effectivePendingCashIn = roundMoney2(Math.max(pCustCash, pDebtCash + pCashSales));
+    const effectivePendingTrIn = roundMoney2(Math.max(pCustTr, pDebtTr + pTrSales));
+
+    sumPendingAdvanceCashInBox = roundMoney2(sumPendingAdvanceCashInBox + effectivePendingCashIn);
+    sumPendingAdvanceTransfers = roundMoney2(sumPendingAdvanceTransfers + effectivePendingTrIn);
+  });
+
   rows.forEach(r => {
     if (r.isDebtCollectionOnly) {
       countDebtVouchers++;
@@ -807,7 +825,7 @@ function computeDaySummary(dayNum) {
       ? (Number(appState.days && appState.days[dayNum - 1] && appState.days[dayNum - 1].carriedForwardCash) || 0)
       : (Number(dayObj.openingCash) || 0)
   );
-  const totalCashBeforeExpenses = roundMoney2(sumCashSales + sumDebtCash + sumPrevCash);
+  const totalCashBeforeExpenses = roundMoney2(sumCashSales + sumDebtCash + sumPrevCash + sumPendingAdvanceCashInBox);
   const netCashInBox = roundMoney2(totalCashBeforeExpenses - sumExpenses);
   const totalAvailableCashInBox = roundMoney2(openingCashFromPrevDay + netCashInBox);
   const deliveredCash = roundMoney2(Number(dayObj.deliveredCash) || 0);
@@ -815,7 +833,7 @@ function computeDaySummary(dayNum) {
   const totalSettledAndCarriedCash = roundMoney2(deliveredCash + carriedForwardCash);
   const cashBoxDiff = roundMoney2(totalAvailableCashInBox - totalSettledAndCarriedCash);
 
-  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer);
+  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer + sumPendingAdvanceTransfers);
   const totalAllTransfers = roundMoney2(currentFarmTransfers + sumPrevTransfer);
 
   const weightAuditDiff = roundMoney2(sumNetW - (sumW2 - sumW1));
@@ -988,7 +1006,7 @@ function computeFarmCumulativeTrialBalance(summariesList = null) {
   const avgCarWeight = countCars > 0 ? Math.round(sumNetW / countCars) : 0;
   const weightAuditDiff = roundMoney2(sumNetW - roundMoney2(sumW2 - sumW1));
 
-  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer);
+  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer + sumPendingAdvanceTransfers);
   const totalAllTransfers = roundMoney2(currentFarmTransfers + sumPrevTransfer);
   const totalDebtCollected = roundMoney2(sumDebtCash + sumDebtTransfer);
   const closingFarmDebt = roundMoney2(sumCreditSales - totalDebtCollected);
