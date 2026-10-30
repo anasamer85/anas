@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 4: 15-SHEET EXCEL (.XLSX) ENGINE & JSON BACKUP (js/excel-engine.js — v83)
+// MODULE 4: 15-SHEET EXCEL (.XLSX) ENGINE & JSON BACKUP (js/excel-engine.js — v84)
 // =========================================================================
 
 function exportMerchantDrillDownToExcel() {

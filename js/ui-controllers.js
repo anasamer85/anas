@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v83)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v84)
 // =========================================================================
 
 // =========================================================================
@@ -1432,6 +1432,7 @@ function renderMerchantsAndStatements(scopeTab = 'all') {
   } // end if (renderMerchTable)
 
   if (renderTransfersTables) {
+  switchTransfersSubTabUI(appState.activeTransfersSubTab);
   // 1) Transfers Table Filter (Active = merchants with transfers > 0 vs All coded merchants)
   const activeTransfersList = fullList.filter(m => (m.transferSales + m.debtTransfer + m.prevTransfer) > 0);
   const trFilterMode = appState.transfersViewFilter === 'active' ? 'active' : 'all';
@@ -2173,7 +2174,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v83):
+  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v84):
   //    - Admin sees all 5 sub-tabs.
   //    - Regular delegate sees only (🗂️ المزارع والإكسيل if permitted) and (🎨 تفضيلات الواجهة), while the 3 Admin sub-tabs (🔐 المستخدمون والصلاحيات, ☁️ الربط السحابي, 🕵️ الرقابة والنسخ) are completely hidden.
   const uPerms = (activeUser && activeUser.perms) || {};
@@ -3142,10 +3143,83 @@ function syncPrevFarmsCollapsibleState(info = {}) {
 // DEBT-COLLECTION-ONLY MODE ENGINE (وضع سند تحصيل مديونية فقط بدون ميزان — v51)
 // =========================================================================
 let activeSaleEntryMode = 'sale'; // 'sale' | 'debt_only'
+let isDebtCollectionOptionsExpanded = false;
 
 function isDebtCollectionOnlyMode() {
   return activeSaleEntryMode === 'debt_only';
 }
+
+function setDebtCollectionOptionsVisible(visible, options = {}) {
+  const { switchBackToScaleIfHidden = true } = options;
+  isDebtCollectionOptionsExpanded = Boolean(visible);
+
+  const chkEl = document.getElementById('chkShowDebtCollectionOptions');
+  if (chkEl) chkEl.checked = isDebtCollectionOptionsExpanded;
+
+  const modeBarEl = document.getElementById('saleEntryModeToggleBar');
+  if (modeBarEl) {
+    modeBarEl.classList.toggle('hidden', !isDebtCollectionOptionsExpanded);
+    modeBarEl.classList.toggle('inline-flex', isDebtCollectionOptionsExpanded);
+  }
+
+  const iconBtnEl = document.getElementById('iconToggleDebtCollectionOptions');
+  const txtBtnEl = document.getElementById('txtToggleDebtCollectionOptions');
+  const btnToggleEl = document.getElementById('btnToggleDebtCollectionOptions');
+  if (iconBtnEl) iconBtnEl.textContent = isDebtCollectionOptionsExpanded ? '🔼' : '➕';
+  if (txtBtnEl) {
+    txtBtnEl.textContent = isDebtCollectionOptionsExpanded
+      ? 'إخفاء خيارات تحصيل المديونية'
+      : 'إظهار خيارات تحصيل المديونية';
+  }
+  if (btnToggleEl) {
+    btnToggleEl.className = isDebtCollectionOptionsExpanded
+      ? 'text-[11px] px-2.5 py-0.5 rounded-lg bg-teal-800 hover:bg-teal-700 text-amber-300 border border-teal-500 font-extrabold transition flex items-center gap-1 shadow-sm'
+      : 'text-[11px] px-2.5 py-0.5 rounded-lg bg-teal-100 hover:bg-teal-200 text-teal-950 border border-teal-400 font-extrabold transition flex items-center gap-1';
+  }
+
+  if (!isDebtCollectionOptionsExpanded && activeSaleEntryMode === 'debt_only' && switchBackToScaleIfHidden) {
+    setSaleEntryMode('sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
+    return;
+  }
+
+  const isDebtOnly = (activeSaleEntryMode === 'debt_only');
+  const grp1Card = document.getElementById('currentInvoiceCollectionCard');
+  const grp2Card = document.getElementById('currentDebtCollectionCard');
+
+  if (grp1Card) {
+    grp1Card.classList.toggle('hidden', isDebtOnly);
+    if (!isDebtOnly) {
+      grp1Card.classList.toggle('lg:col-span-2', !isDebtCollectionOptionsExpanded);
+      grp1Card.classList.toggle('lg:col-span-1', isDebtCollectionOptionsExpanded);
+    }
+  }
+  if (grp2Card) {
+    const showGrp2 = isDebtOnly || isDebtCollectionOptionsExpanded;
+    grp2Card.classList.toggle('hidden', !showGrp2);
+    grp2Card.className = isDebtOnly
+      ? 'lg:col-span-2 border-2 border-teal-600 bg-teal-50/80 rounded-xl p-3 space-y-2 shadow-sm transition-all'
+      : `${showGrp2 ? '' : 'hidden '}border-2 border-teal-800/20 bg-teal-50/40 rounded-xl p-2.5 space-y-2 transition-all`;
+  }
+}
+window.setDebtCollectionOptionsVisible = setDebtCollectionOptionsVisible;
+
+function switchTransfersSubTabUI(targetSubTab = '') {
+  const chosen = (targetSubTab === 'prev_farms')
+    ? 'prev_farms'
+    : ((targetSubTab === 'transfers') ? 'transfers' : (appState.activeTransfersSubTab === 'prev_farms' ? 'prev_farms' : 'transfers'));
+  appState.activeTransfersSubTab = chosen;
+
+  document.querySelectorAll('.transfers-subtab-btn').forEach(btn => {
+    const k = btn.getAttribute('data-transfers-subtab');
+    btn.classList.toggle('sync-subtab-active', k === chosen);
+  });
+
+  ['transfers', 'prev_farms'].forEach(k => {
+    const pane = document.getElementById(`transfersSubPane-${k}`);
+    if (pane) pane.classList.toggle('hidden', k !== chosen);
+  });
+}
+window.switchTransfersSubTabUI = switchTransfersSubTabUI;
 
 function setSaleEntryMode(mode = 'sale', options = {}) {
   const { clearWeightFields = true, focusMerchantOrDebt = false, showModeToast = false } = options;
@@ -3217,16 +3291,10 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
       : 'grid grid-cols-2 sm:grid-cols-5 gap-2 bg-blue-950 text-white p-2.5 rounded-xl text-center';
   }
 
-  const grp1Card = document.getElementById('currentInvoiceCollectionCard');
-  if (grp1Card) {
-    grp1Card.classList.toggle('hidden', isDebtOnly);
+  if (isDebtOnly && !isDebtCollectionOptionsExpanded) {
+    isDebtCollectionOptionsExpanded = true;
   }
-  const grp2Card = document.getElementById('currentDebtCollectionCard');
-  if (grp2Card) {
-    grp2Card.className = isDebtOnly
-      ? 'lg:col-span-2 border-2 border-teal-600 bg-teal-50/80 rounded-xl p-3 space-y-2 shadow-sm'
-      : 'border-2 border-teal-800/20 bg-teal-50/40 rounded-xl p-2.5 space-y-2';
-  }
+  setDebtCollectionOptionsVisible(isDebtCollectionOptionsExpanded, { switchBackToScaleIfHidden: false });
 
   // 4. Hide "⏳ حفظ مؤقت وزنة 1" & "⚡ باقي الفاتورة آجل" buttons when in Debt-Only Mode
   ['btnSavePendingW1', 'btnInlineSavePendingW1', 'btnStickyAutoCredit'].forEach(btnId => {
@@ -3340,6 +3408,9 @@ function updateLiveFormCalculation() {
   const debtCash = parseNum(document.getElementById('inpDebtCash').value) || 0;
   const debtTr = parseNum(document.getElementById('inpDebtTransfer').value) || 0;
   const deductedDebtNow = debtCash + debtTr;
+  if (deductedDebtNow > 0 && !isDebtCollectionOptionsExpanded) {
+    setDebtCollectionOptionsVisible(true, { switchBackToScaleIfHidden: false });
+  }
 
   const prevDebtEl = document.getElementById('calcPrevMerchantDebt');
   const prevDebtSubEl = document.getElementById('calcPrevMerchantDebtSub');
@@ -3765,7 +3836,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v83-mobile-ui';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v84-desktop-ui';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3796,11 +3867,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v83) without automatic reload loops
+  // Register Offline Service Worker (v84) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV83) {
-      window.__swRegisteredOnceV83 = true;
-      navigator.serviceWorker.register('./sw.js?v=83', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV84) {
+      window.__swRegisteredOnceV84 = true;
+      navigator.serviceWorker.register('./sw.js?v=84', { scope: './' }).catch(() => {});
     }
   }
 
@@ -5596,7 +5667,9 @@ function initFarmSalesApp() {
     if (codeDispEl) codeDispEl.textContent = 'يُحدد تلقائياً';
     const suggestBoxEl = document.getElementById('merchantSuggestBox');
     if (suggestBoxEl) suggestBoxEl.classList.add('hidden');
+    setDebtCollectionOptionsVisible(false, { switchBackToScaleIfHidden: false });
     setSaleEntryMode('sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
+    setDebtCollectionOptionsVisible(false, { switchBackToScaleIfHidden: false });
     setSaleFormActionLabels('حفظ نهائي', false);
     resetPrevFarmsCollapsibleToDefault();
     applyStickySaleDefaults();
@@ -5615,6 +5688,39 @@ function initFarmSalesApp() {
       cancelOrClearCurrentSaleEntry(true);
     });
   }
+
+  const chkShowDebtOptsEl = document.getElementById('chkShowDebtCollectionOptions');
+  if (chkShowDebtOptsEl) {
+    chkShowDebtOptsEl.addEventListener('change', (e) => {
+      const show = Boolean(e.target.checked);
+      setDebtCollectionOptionsVisible(show, { switchBackToScaleIfHidden: true });
+      if (show) {
+        const debtCashInp = document.getElementById('inpDebtCash');
+        if (debtCashInp) setTimeout(() => { try { debtCashInp.focus(); } catch (err) {} }, 50);
+      }
+    });
+  }
+
+  const btnToggleDebtOptsEl = document.getElementById('btnToggleDebtCollectionOptions');
+  if (btnToggleDebtOptsEl) {
+    btnToggleDebtOptsEl.addEventListener('click', () => {
+      const nextState = !isDebtCollectionOptionsExpanded;
+      setDebtCollectionOptionsVisible(nextState, { switchBackToScaleIfHidden: true });
+      if (nextState) {
+        const debtCashInp = document.getElementById('inpDebtCash');
+        if (debtCashInp) setTimeout(() => { try { debtCashInp.focus(); } catch (err) {} }, 50);
+      }
+    });
+  }
+
+  document.querySelectorAll('.transfers-subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetSub = btn.getAttribute('data-transfers-subtab');
+      if (!targetSub) return;
+      switchTransfersSubTabUI(targetSub);
+      saveState(false);
+    });
+  });
 
   const btnModeScaleEl = document.getElementById('btnModeScaleSale');
   if (btnModeScaleEl) {
@@ -6702,6 +6808,8 @@ function initFarmSalesApp() {
       const row = appState.days[appState.currentDay].sales.find(x => x.id === id);
       if (!row) return;
       const compRow = computeSaleRow(row);
+      const hasDebtValuesInRow = Boolean(compRow.isDebtCollectionOnly || (Number(row.debtCash) || 0) > 0 || (Number(row.debtTransfer) || 0) > 0);
+      setDebtCollectionOptionsVisible(hasDebtValuesInRow, { switchBackToScaleIfHidden: false });
       setSaleEntryMode(compRow.isDebtCollectionOnly ? 'debt_only' : 'sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
       document.getElementById('editSaleId').value = row.id;
       document.getElementById('inpMerchantName').value = row.merchant;
@@ -7974,14 +8082,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v83)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v84)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=83',
-    './js/accounting.js?v=83',
-    './js/storage-sync.js?v=83',
-    './js/excel-engine.js?v=83',
-    './js/print-export.js?v=83',
-    './js/ui-controllers.js?v=83'
+    './js/core-state.js?v=84',
+    './js/accounting.js?v=84',
+    './js/storage-sync.js?v=84',
+    './js/excel-engine.js?v=84',
+    './js/print-export.js?v=84',
+    './js/ui-controllers.js?v=84'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8073,7 +8181,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v83)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v84)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8191,14 +8299,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=83');
+        scTpl.setAttribute('src', './excel-template.js?v=84');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=83');
+        lnk.setAttribute('href', './style.css?v=84');
         bundledStyleEl.replaceWith(lnk);
       }
     }

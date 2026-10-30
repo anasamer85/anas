@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v83)
+// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v84)
 // =========================================================================
 
 function loadState() {

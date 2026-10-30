@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=83"></script>
+  <script src="./vendor/vendor-loader.js?v=84"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
@@ -24,7 +24,7 @@
     window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=83" />
+  <link rel="stylesheet" href="./style.css?v=84" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -688,16 +688,25 @@
               <span id="saleFormTitleActionText">تسجيل حركة بيع / تحصيل جديدة</span> (<span id="saleFormDayLabel">يوم 1</span>)
             </h2>
           </div>
-          <!-- Quick Mode Switcher Bar (وضع ميزان وبيع سيارة ⇄ وضع سند تحصيل مديونية فقط بدون ميزان) -->
-          <div id="saleEntryModeToggleBar" class="inline-flex items-center rounded-xl bg-slate-950/65 p-1 border border-white/20 gap-1 shadow-inner">
-            <button type="button" id="btnModeScaleSale" class="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-extrabold text-xs shadow transition flex items-center gap-1" title="الوضع الافتراضي: تسجيل وزنة سيارة وفاتورة بيع وتحميل">
-              <span>🚛</span>
-              <span>حركة ميزان وبيع سيارة</span>
-            </button>
-            <button type="button" id="btnModeDebtCollectionOnly" class="px-2.5 py-1 rounded-lg text-slate-200 hover:bg-white/10 font-extrabold text-xs transition flex items-center gap-1" title="وضع سند تحصيل مديونية فقط (بدون ميزان): يُخفي حقول الأوزان والسعر والإكرامية لتسجيل دفعة سداد نقدية أو تحويل من التاجر مباشرة">
-              <span>💵</span>
-              <span>سند تحصيل مديونية فقط (بدون ميزان)</span>
-            </button>
+
+          <!-- Progressive Disclosure Toggle + Quick Mode Switcher Bar -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <label for="chkShowDebtCollectionOptions" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 border border-amber-300/60 text-xs font-extrabold text-amber-200 cursor-pointer transition select-none" title="إظهار أو إخفاء قسم تحصيل المديونيات السابقة وخيار سند تحصيل المديونية المستقل لتبسيط شاشة الإدخال">
+              <input type="checkbox" id="chkShowDebtCollectionOptions" class="rounded text-teal-500 w-3.5 h-3.5" />
+              <span>💵 إظهار خيارات تحصيل المديونية</span>
+              <span class="ui-tooltip-badge" title="عند التفعيل يظهر قسم سداد المديونيات السابقة وزر سند تحصيل المديونية بدون ميزان" data-tooltip="إظهار قسم تحصيل المديونية السابقة وسند التحصيل المستقل">?</span>
+            </label>
+
+            <div id="saleEntryModeToggleBar" class="hidden items-center rounded-xl bg-slate-950/65 p-1 border border-white/20 gap-1 shadow-inner">
+              <button type="button" id="btnModeScaleSale" class="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-extrabold text-xs shadow transition flex items-center gap-1" title="الوضع الافتراضي: تسجيل وزنة سيارة وفاتورة بيع وتحميل">
+                <span>🚛</span>
+                <span>حركة ميزان وبيع سيارة</span>
+              </button>
+              <button type="button" id="btnModeDebtCollectionOnly" class="px-2.5 py-1 rounded-lg text-slate-200 hover:bg-white/10 font-extrabold text-xs transition flex items-center gap-1" title="وضع سند تحصيل مديونية فقط (بدون ميزان): يُخفي حقول الأوزان والسعر والإكرامية لتسجيل دفعة سداد نقدية أو تحويل من التاجر مباشرة">
+                <span>💵</span>
+                <span>سند تحصيل مديونية فقط (بدون ميزان)</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -716,41 +725,45 @@
             </button>
           </div>
 
-          <!-- Row 1: Merchant AutoComplete + Unified Code + Scale/Voucher No + Car No -->
-          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+          <!-- Row 1 (Visual Group - Identity): Merchant AutoComplete + Unified Code + Scale/Voucher No + Car No -->
+          <div class="form-visual-group-identity grid grid-cols-1 sm:grid-cols-12 gap-2.5">
             <div class="sm:col-span-5 relative">
               <label id="lblMerchantNameField" class="block text-xs font-extrabold text-slate-700 mb-1">
                 اسم التاجر / عهدة السيارة <span class="text-blue-700 font-normal">(اكتب حرفين للإكمال التلقائي)</span>
+                <span class="ui-tooltip-badge" title="اكتب اسم التاجر أو السيارة الفرعية (مثل: كرنك 1) وسيتم ربطها تلقائياً بالكود الموحد للتاجر الأساسي" data-tooltip="يربط السيارات الفرعية (مثل كرنك 1 و 2) بنفس كود التاجر الأساسي تلقائياً">?</span>
               </label>
               <input id="inpMerchantName" type="text" enterkeyhint="next" autocomplete="off" required
                 placeholder="اكتب اسم التاجر أو عهدة السيارة..."
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600" />
               <!-- Instant Custom Auto-Suggest Box (No arrow needed!) -->
               <div id="merchantSuggestBox" class="hidden absolute z-30 w-full mt-1 bg-white border-2 border-blue-700 rounded-xl shadow-xl max-h-52 overflow-y-auto"></div>
             </div>
 
             <div class="sm:col-span-3">
-              <label class="block text-xs font-extrabold text-slate-700 mb-1">كود التاجر الموحد [تلقائي]</label>
+              <label class="block text-xs font-extrabold text-slate-700 mb-1">
+                كود التاجر الموحد [تلقائي]
+                <span class="ui-tooltip-badge" title="يُستنتج تلقائياً من دليل التجار الموحد أو يُنشأ كود جديد للتاجر غير المسجل" data-tooltip="كود ثابت وموحد للتاجر عبر جميع المزارع والدورات">?</span>
+              </label>
               <div id="dispMerchantCode" class="w-full px-3 py-2 text-sm font-extrabold bg-slate-100 text-blue-900 border border-slate-300 rounded-xl text-center">
                 يُحدد تلقائياً
               </div>
             </div>
 
             <div class="sm:col-span-2">
-              <label id="lblScaleOrVoucherNo" class="block text-xs font-extrabold text-slate-700 mb-1">ميزان رقم <span class="text-emerald-700 font-normal">(متسلسل تلقائي)</span></label>
+              <label id="lblScaleOrVoucherNo" class="block text-xs font-extrabold text-slate-700 mb-1" title="رقم مسلسل الميزان (أو رقم السند في وضع تحصيل المديونية)">ميزان رقم <span class="text-emerald-700 font-normal">(متسلسل تلقائي)</span></label>
               <input id="inpScaleNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="0"
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl text-center focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white text-center focus:ring-2 focus:ring-blue-600" />
             </div>
 
             <div id="wrapCarNoField" class="sm:col-span-2">
               <label id="lblCarNoField" class="block text-xs font-extrabold text-slate-700 mb-1">رقم السيارة</label>
               <input id="inpCarNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="0"
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl text-center focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white text-center focus:ring-2 focus:ring-blue-600" />
             </div>
           </div>
 
-          <!-- Row 2: Weights, Price, Tip (يُخفى بالكامل في وضع سند تحصيل مديونية فقط بدون ميزان) -->
-          <div id="saleWeightsAndPriceRow" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <!-- Row 2 (Visual Group - Weights): Weights, Price, Tip (يُخفى بالكامل في وضع سند تحصيل مديونية فقط بدون ميزان) -->
+          <div id="saleWeightsAndPriceRow" class="form-visual-group-weights grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-2.5 rounded-xl">
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">وزنة أولى (فارغ - كجم) <span class="text-[10px] text-blue-700 font-bold">(Enter ⬅️ وزنة 2)</span></label>
               <input id="inpW1" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
@@ -828,17 +841,26 @@
             <!--Inputs Row-->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div>
-                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">عهدة نقدية دفعها التاجر <span class="text-[10px] text-emerald-800 font-bold">(تُوزع للخزنة تلقائياً — Enter ⚡)</span></label>
+                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">
+                  عهدة نقدية دفعها التاجر <span class="text-[10px] text-emerald-800 font-bold">(تُوزع للخزنة تلقائياً — Enter ⚡)</span>
+                  <span class="ui-tooltip-badge" title="المبلغ النقدي المسلم مع السائق؛ يقوم النظام بتوجيهه لسداد المديونية السابقة أولاً ثم فاتورة اليوم" data-tooltip="يُوزع تلقائياً: يسدد المديونية السابقة أولاً ثم فاتورة اليوم النقدية">?</span>
+                </label>
                 <input id="inpCustodyCash" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
                   class="w-full px-2.5 py-1.5 text-sm font-extrabold border-2 border-amber-400 rounded-lg bg-white text-emerald-900 focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
-                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">عهدة تحويل دفعها التاجر <span class="text-[10px] text-blue-800 font-bold">(تُوزع للتحويلات تلقائياً — Enter ⚡)</span></label>
+                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">
+                  عهدة تحويل دفعها التاجر <span class="text-[10px] text-blue-800 font-bold">(تُوزع للتحويلات تلقائياً — Enter ⚡)</span>
+                  <span class="ui-tooltip-badge" title="مبلغ التحويل أو الشيك المرسل كعهدة؛ يوجه لسداد المديونية ثم الفاتورة ولا يدخل صندوق النقدية" data-tooltip="عهدة غير نقدية (بنكي/إنستا/شيك) تُخصم من حساب التاجر ولا تدخل الخزنة">?</span>
+                </label>
                 <input id="inpCustodyTransfer" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
                   class="w-full px-2.5 py-1.5 text-sm font-extrabold border-2 border-amber-400 rounded-lg bg-white text-blue-900 focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
-                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">نوع تحويل العهدة (يُنسخ تلقائياً لنوع التحويل بالأسفل)</label>
+                <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">
+                  نوع تحويل العهدة (يُنسخ تلقائياً لنوع التحويل بالأسفل)
+                  <span class="ui-tooltip-badge" title="حدد وسيلة التحويل (تحويل كاش، بنكي، إنستا باي، شيكات) ليتم نسخها تلقائياً لخانات التحويل" data-tooltip="يُنسخ تلقائياً لنوع تحويل المديونية ونوع تحويل المبيعات">?</span>
+                </label>
                 <select id="selCustodyTransferType" class="w-full px-2 py-1.5 text-xs font-extrabold border-2 border-amber-400 rounded-lg bg-white">
                   <option value="">-- اختر نوع تحويل العهدة --</option>
                   <option value="تحويل كاش">تحويل كاش / محفظة</option>
@@ -870,18 +892,27 @@
             </div>
           </div>
 
-          <!-- Row 3: The 3 Collection Sections (Current Invoice / Current Farm Debt / Collapsible Previous Farms Debt) -->
-          <div id="saleCollectionsRow3Grid" class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <!-- Row 3 (Visual Group - Payments & Progressive Disclosure): The 3 Collection Sections -->
+          <div id="saleCollectionsRow3Grid" class="form-visual-group-payments grid grid-cols-1 lg:grid-cols-2 gap-3">
 
             <!-- Group 1: سداد فاتورة اليوم (المزرعة الحالية - يُخفى في وضع سند تحصيل مديونية فقط) -->
-            <div id="currentInvoiceCollectionCard" class="border-2 border-blue-800/20 bg-blue-50/40 rounded-xl p-2.5 space-y-2">
-              <div class="flex items-center justify-between border-b border-blue-200 pb-1.5">
-                <span class="text-xs font-extrabold text-blue-950">1. سداد فاتورة اليوم (المزرعة الحالية)</span>
-                <button type="button" id="btnAutoFillCredit" class="text-[11px] px-2 py-0.5 rounded bg-blue-700 text-white font-bold hover:bg-blue-800">
-                  باقي الفاتورة آجل ⚡
-                </button>
+            <div id="currentInvoiceCollectionCard" class="lg:col-span-2 border-2 border-blue-800/20 bg-blue-50/40 rounded-xl p-2.5 space-y-2 transition-all">
+              <div class="flex items-center justify-between border-b border-blue-200 pb-1.5 flex-wrap gap-1.5">
+                <span class="text-xs font-extrabold text-blue-950 flex items-center gap-1">
+                  <span>1. سداد فاتورة اليوم (المزرعة الحالية)</span>
+                  <span class="ui-tooltip-badge" title="المبالغ المسددة من قيمة فاتورة الوزنة الحالية (نقدي للخزنة، أو تحويل بنكي، أو متبقي آجل على التاجر)" data-tooltip="توزيع سداد فاتورة اليوم بين النقدي والتحويل والآجل">?</span>
+                </span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <button type="button" id="btnToggleDebtCollectionOptions" class="text-[11px] px-2.5 py-0.5 rounded-lg bg-teal-100 hover:bg-teal-200 text-teal-950 border border-teal-400 font-extrabold transition flex items-center gap-1" title="إظهار أو إخفاء قسم تحصيل المديونيات السابقة وخيار سند تحصيل المديونية فقط">
+                    <span id="iconToggleDebtCollectionOptions">➕</span>
+                    <span id="txtToggleDebtCollectionOptions">إظهار خيارات تحصيل المديونية</span>
+                  </button>
+                  <button type="button" id="btnAutoFillCredit" class="text-[11px] px-2 py-0.5 rounded bg-blue-700 text-white font-bold hover:bg-blue-800" title="حساب المتبقي من قيمة الفاتورة بعد خصم النقدي والتحويل ووضعه في خانة الآجل تلقائياً">
+                    باقي الفاتورة آجل ⚡
+                  </button>
+                </div>
               </div>
-              <div class="grid grid-cols-2 gap-2">
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
                   <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي مبيعات (للخزنة) <span class="text-[10px] text-blue-700 font-extrabold">(Enter ⬅️ آجل ⚡)</span></label>
                   <input id="inpCashSales" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
@@ -893,12 +924,18 @@
                     class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
                 </div>
                 <div>
-                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">تحويل مبيعات (يخصم من التاجر)</label>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">
+                    تحويل مبيعات (يخصم من التاجر)
+                    <span class="ui-tooltip-badge" title="مبلغ محول لسداد فاتورة اليوم؛ يُخصم من مديونية التاجر ولا يدخل الخزنة النقدية" data-tooltip="يُخصم من حساب التاجر ويُدرج في بيان التحويلات (لا يدخل الخزنة)">?</span>
+                  </label>
                   <input id="inpTransferSales" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
                     class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
                 </div>
                 <div>
-                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">نوع تحويل المبيعات</label>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">
+                    نوع تحويل المبيعات
+                    <span class="ui-tooltip-badge" title="اختر نوع التحويل ليتم تبويبه في شيت بيان التحويلات والشيكات" data-tooltip="لتصنيف المبلغ في شيت التحويلات (كاش / بنكي / إنستا / شيكات)">?</span>
+                  </label>
                   <select id="selTransferSalesType" class="w-full px-2 py-1.5 text-xs font-bold border border-amber-400 rounded-lg bg-white">
                     <option value="">-- اختر النوع --</option>
                     <option value="تحويل كاش">تحويل كاش / محفظة</option>
@@ -910,10 +947,13 @@
               </div>
             </div>
 
-            <!-- Group 2: تحصيل مديونيات المزرعة الحالية -->
-            <div id="currentDebtCollectionCard" class="border-2 border-teal-800/20 bg-teal-50/40 rounded-xl p-2.5 space-y-2">
+            <!-- Group 2 (Hidden by default via Progressive Disclosure): تحصيل مديونيات المزرعة الحالية -->
+            <div id="currentDebtCollectionCard" class="hidden border-2 border-teal-800/20 bg-teal-50/40 rounded-xl p-2.5 space-y-2 transition-all">
               <div class="flex items-center justify-between border-b border-teal-200 pb-1.5">
-                <span class="text-xs font-extrabold text-teal-950">2. تحصيل مديونيات المزرعة الحالية</span>
+                <span class="text-xs font-extrabold text-teal-950 flex items-center gap-1">
+                  <span>2. تحصيل مديونيات المزرعة الحالية</span>
+                  <span class="ui-tooltip-badge" title="مبالغ سددها التاجر اليوم من مديونيته المتراكمة في الأيام السابقة بنفس المزرعة الحالية" data-tooltip="يُخصم مباشرة من رصيد مديونية التاجر السابقة في هذه المزرعة">?</span>
+                </span>
                 <span class="text-[10px] font-bold text-teal-800 bg-teal-100 px-1.5 py-0.5 rounded">يخصم من مديونية التاجر</span>
               </div>
               <div class="grid grid-cols-2 gap-2">
@@ -928,7 +968,10 @@
                     class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
                 </div>
                 <div>
-                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">نوع تحويل المديونية</label>
+                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">
+                    نوع تحويل المديونية
+                    <span class="ui-tooltip-badge" title="حدد وسيلة التحويل الخاصة بسداد المديونية السابقة" data-tooltip="يُصنف في بيان التحويلات ويُخصم من مديونية التاجر">?</span>
+                  </label>
                   <select id="selDebtTransferType" class="w-full px-2 py-1.5 text-xs font-bold border border-amber-400 rounded-lg bg-white">
                     <option value="">-- اختر النوع --</option>
                     <option value="تحويل كاش">تحويل كاش / محفظة</option>
@@ -1521,7 +1564,32 @@
     <!-- VIEW 4: TRANSFERS & PREVIOUS FARMS STATEMENTS (بيان التحويلات والسابقة) -->
     <!-- ===================================================================== -->
     <section id="view-transfers" class="hidden space-y-4">
-      <!-- Transfers Statement Card -->
+      <!-- Unified Sub-Tabs Bar for Transfers & Previous Farms Statements (دمج جدولي التحويلات والمزارع السابقة بنظام التبويبات الفرعية) -->
+      <div id="transfersUnifiedHubCard" class="bg-white rounded-2xl p-3 shadow-sm border-2 border-slate-200 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-base">💳</span>
+            <div>
+              <h2 class="text-sm md:text-base font-extrabold text-slate-900">مركز متابعة التحويلات البنكية وتحصيلات المزارع السابقة</h2>
+              <p class="text-[11px] font-bold text-slate-500">اختر التبويب الفرعي للتبديل الفوري بين بيان التحويلات والشيكات أو بيان تحصيلات المواقع السابقة في نفس المساحة:</p>
+            </div>
+          </div>
+
+          <div id="transfersSubNavBar" class="inline-flex items-center rounded-xl bg-slate-100 p-1 border border-slate-300 gap-1.5 flex-wrap">
+            <button type="button" id="btnTransfersSubTabTransfers" data-transfers-subtab="transfers" class="transfers-subtab-btn sync-subtab-btn sync-subtab-active px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-extrabold transition flex items-center gap-1.5">
+              <span>💳</span>
+              <span>بيان التحويلات والشيكات الشامل</span>
+            </button>
+            <button type="button" id="btnTransfersSubTabPrevFarms" data-transfers-subtab="prev_farms" class="transfers-subtab-btn sync-subtab-btn px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-extrabold transition flex items-center gap-1.5">
+              <span>🏦</span>
+              <span>تحصيلات المواقع والمزارع السابقة</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Sub-Pane 1: Transfers Statement Table -->
+        <div id="transfersSubPane-transfers" data-transfers-subpane="transfers">
+          <!-- Transfers Statement Card -->
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
           <div>
@@ -1565,8 +1633,11 @@
           </table>
         </div>
       </div>
+        </div>
 
-      <!-- Previous Farms Statement Card -->
+        <!-- Sub-Pane 2: Previous Farms Collections Table (Hidden by default until clicked) -->
+        <div id="transfersSubPane-prev_farms" data-transfers-subpane="prev_farms" class="hidden">
+          <!-- Previous Farms Statement Card -->
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
           <div>
@@ -1610,9 +1681,10 @@
           </table>
         </div>
       </div>
+        </div>
+      </div>
     </section>
 
-    <!-- ===================================================================== -->
     <!-- VIEW 6: CONTROL, SYNC, EXCEL, DAYS & PERMISSIONS (التحكم والمزامنة)    -->
     <!-- ===================================================================== -->
     <section id="view-sync" class="hidden space-y-4">
@@ -2912,45 +2984,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=83"></script>
-  <script src="./js/core-state.js?v=83"></script>
-  <script src="./js/accounting.js?v=83"></script>
-  <script src="./js/storage-sync.js?v=83"></script>
-  <script src="./js/excel-engine.js?v=83"></script>
-  <script src="./js/print-export.js?v=83"></script>
-  <script src="./js/ui-controllers.js?v=83"></script>
+  <script src="./excel-template.js?v=84"></script>
+  <script src="./js/core-state.js?v=84"></script>
+  <script src="./js/accounting.js?v=84"></script>
+  <script src="./js/storage-sync.js?v=84"></script>
+  <script src="./js/excel-engine.js?v=84"></script>
+  <script src="./js/print-export.js?v=84"></script>
+  <script src="./js/ui-controllers.js?v=84"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v83-mobile-ui';
+      var SW_CACHE_NAME = 'farm-sales-v84-desktop-ui';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=83',
+        './style.css?v=84',
         './excel-template.js',
-        './excel-template.js?v=83',
+        './excel-template.js?v=84',
         './js/core-state.js',
-        './js/core-state.js?v=83',
+        './js/core-state.js?v=84',
         './js/accounting.js',
-        './js/accounting.js?v=83',
+        './js/accounting.js?v=84',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=83',
+        './js/storage-sync.js?v=84',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=83',
+        './js/excel-engine.js?v=84',
         './js/print-export.js',
-        './js/print-export.js?v=83',
+        './js/print-export.js?v=84',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=83',
+        './js/ui-controllers.js?v=84',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=83'
+        './vendor/vendor-loader.js?v=84'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-        if (!window.__swRegisteredOnceV83) {
-          window.__swRegisteredOnceV83 = true;
-          navigator.serviceWorker.register('./sw.js?v=83', { scope: './' }).catch(function () {});
+        if (!window.__swRegisteredOnceV84) {
+          window.__swRegisteredOnceV84 = true;
+          navigator.serviceWorker.register('./sw.js?v=84', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {
