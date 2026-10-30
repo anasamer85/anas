@@ -3375,14 +3375,14 @@ function updateLiveFormCalculation() {
     inpW2El.classList.toggle('bg-rose-50', hasInvalidWeight);
   }
 
-  const netW = (!hasInvalidWeight && w2 >= w1 && w2 > 0) ? (w2 - w1) : 0;
-  const totalWithTip = (netW * price) + tip;
+  const netW = (!hasInvalidWeight && w2 >= w1 && w2 > 0) ? Math.round(w2 - w1) : 0;
+  const totalWithTip = Math.round((netW * price) + tip);
 
   // Invoice collections (not linked to Custody)
-  const cashS = parseNum(document.getElementById('inpCashSales').value) || 0;
-  const trS = parseNum(document.getElementById('inpTransferSales').value) || 0;
-  const credS = parseNum(document.getElementById('inpCreditSales').value) || 0;
-  const diff = (cashS + trS + credS) - totalWithTip;
+  const cashS = Math.round(parseNum(document.getElementById('inpCashSales').value) || 0);
+  const trS = Math.round(parseNum(document.getElementById('inpTransferSales').value) || 0);
+  const credS = Math.round(parseNum(document.getElementById('inpCreditSales').value) || 0);
+  const diff = Math.round((cashS + trS + credS) - totalWithTip);
 
   document.getElementById('calcNetWeight').textContent = `${fmtInt(netW)} كجم`;
   document.getElementById('calcTotalWithTip').textContent = `${fmtDec(totalWithTip)} ج.م`;
@@ -5555,7 +5555,7 @@ function initFarmSalesApp() {
     const netW = hasValidW2 ? (w2 - w1) : 0;
     const price = Math.max(0, parseNum(document.getElementById('inpPrice')?.value) || 0);
     const tip = Math.max(0, parseNum(document.getElementById('inpTip')?.value) || 0);
-    const totalWithTip = hasValidW2 ? Math.round(((netW * price) + tip) * 100) / 100 : 0;
+    const totalWithTip = hasValidW2 ? Math.round((netW * price) + tip) : 0;
 
     const mName = (document.getElementById('inpMerchantName')?.value || '').trim();
     const editId = document.getElementById('editSaleId')?.value || '';
