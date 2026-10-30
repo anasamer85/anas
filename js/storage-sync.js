@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v78)
+// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v79)
 // =========================================================================
 
 function loadState() {
@@ -1431,7 +1431,9 @@ async function performAtomicPreFetchMerge(rawUrl) {
   const preEndpoint = buildCloudEndpointUrl(rawUrl, { _t: Date.now() });
   const preRes = await fetch(preEndpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
   if (!preRes.ok) {
-    throw new Error(`HTTP ${preRes.status}`);
+    const err = new Error(`HTTP ${preRes.status}`);
+    err.status = preRes.status;
+    throw err;
   }
   const preText = await preRes.text();
   if (preText && preText.trim() !== '{}' && preText.trim() !== 'null') {
@@ -1547,7 +1549,15 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       try {
         await performAtomicPreFetchMerge(url);
       } catch (preErr) {
-        if (!silent) showToast('⏳ الشبكة غير مستقرة حالياً — تم تأجيل الرفع التلقائي لحين استقرار الاتصال لمنع الكتابة فوق حركات المندوبين الآخرين.', '🟠');
+        if (preErr.status === 401 || preErr.status === 403) {
+          if (!silent) showToast('❌ فشل الاتصال: الرمز السري لـ Firebase (Secret) غير صحيح أو لا توجد صلاحية!', '❌');
+        } else if (preErr.status === 404) {
+          if (!silent) showToast('❌ فشل الاتصال: مسار قاعدة البيانات غير موجود (تأكد من رابط فايربيز)!', '❌');
+        } else if (preErr.status === 400) {
+          if (!silent) showToast('❌ فشل الاتصال: تنسيق الرابط أو الطلب غير صالح!', '❌');
+        } else {
+          if (!silent) showToast('⏳ تعذر الاتصال بالسحابة (تأكد من جودة الإنترنت أو صحة الرابط) — تم التأجيل لحماية البيانات.', '🟠');
+        }
         return false;
       }
     }
@@ -1738,7 +1748,9 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
 
     const res = await fetch(endpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
     }
     const text = await res.text();
     if (isLiveBackgroundTick && (localMutationEpoch !== pullStartEpoch || isCloudSyncInProgress || Number(appState.pendingChanges) > 0 || (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000)))) {
@@ -1801,7 +1813,13 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
       if (!silent) showToast('⚠️ السحابة فارغة حالياً أو لم يتم رفع تعديلات إليها بعد.', 'ℹ️');
     }
   } catch (err) {
-    if (!silent) showToast('❌ تعذر قراءة بيانات السحابة! تحقق من صحة الرابط وإعدادات الصلاحية أو مفتاح ?auth=.', '⚠️');
+    if (err.status === 401 || err.status === 403) {
+      if (!silent) showToast('❌ فشل الاتصال: الرمز السري لـ Firebase (Secret) غير صحيح!', '❌');
+    } else if (err.status === 404) {
+      if (!silent) showToast('❌ فشل الاتصال: مسار قاعدة البيانات غير موجود!', '❌');
+    } else {
+      if (!silent) showToast('❌ تعذر قراءة بيانات السحابة! تأكد من جودة الإنترنت أو صحة الرابط.', '⚠️');
+    }
   }
   return false;
 }

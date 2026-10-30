@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v78)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v79)
 // =========================================================================
 
 // =========================================================================
@@ -3685,7 +3685,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v78-firebase-final';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v79-auth-fix';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3716,11 +3716,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v78) without automatic reload loops
+  // Register Offline Service Worker (v79) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV78) {
-      window.__swRegisteredOnceV78 = true;
-      navigator.serviceWorker.register('./sw.js?v=78', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV79) {
+      window.__swRegisteredOnceV79 = true;
+      navigator.serviceWorker.register('./sw.js?v=79', { scope: './' }).catch(() => {});
     }
   }
 
@@ -7778,14 +7778,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v78)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v79)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=78',
-    './js/accounting.js?v=78',
-    './js/storage-sync.js?v=78',
-    './js/excel-engine.js?v=78',
-    './js/print-export.js?v=78',
-    './js/ui-controllers.js?v=78'
+    './js/core-state.js?v=79',
+    './js/accounting.js?v=79',
+    './js/storage-sync.js?v=79',
+    './js/excel-engine.js?v=79',
+    './js/print-export.js?v=79',
+    './js/ui-controllers.js?v=79'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -7877,7 +7877,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v78)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v79)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -7995,14 +7995,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=78');
+        scTpl.setAttribute('src', './excel-template.js?v=79');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=78');
+        lnk.setAttribute('href', './style.css?v=79');
         bundledStyleEl.replaceWith(lnk);
       }
     }

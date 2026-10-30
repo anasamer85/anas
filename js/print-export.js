@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 5: ISOLATED PRINTING, SCALE RECEIPTS & PNG/PDF EXPORT (js/print-export.js — v78)
+// MODULE 5: ISOLATED PRINTING, SCALE RECEIPTS & PNG/PDF EXPORT (js/print-export.js — v79)
 // =========================================================================
 
 function ensureMerchantPrintDomElements() {

@@ -1,26 +1,26 @@
-# 🏡 نظام محاضر لجان بيع المزارع والميزان (Offline-First Modular PWA — الإصدار v78 Performance & Enterprise Sync)
+# 🏡 نظام محاضر لجان بيع المزارع والميزان (Offline-First Modular PWA — الإصدار v79 Performance & Enterprise Sync)
 
-تطبيق ويب تقدمي متكامل (**Offline-First Modular PWA**) لإدارة محاضر لجان بيع المزارع وموازين السيارات على مدار **10 أيام** لكل دورة، مع **ربط ثنائي الاتجاه (Two-Way Sync)** مع شيت الإكسيل المكون من **15 شيت بالمعادلات الحية**، ومحرك **المزامنة الجزئية السحابية اللحظية (End-to-End Cloud Delta Sync & GAS LockService)**، وتحسينات الأداء والذاكرة الميدانية (**v78**).
+تطبيق ويب تقدمي متكامل (**Offline-First Modular PWA**) لإدارة محاضر لجان بيع المزارع وموازين السيارات على مدار **10 أيام** لكل دورة، مع **ربط ثنائي الاتجاه (Two-Way Sync)** مع شيت الإكسيل المكون من **15 شيت بالمعادلات الحية**، ومحرك **المزامنة الجزئية السحابية اللحظية (End-to-End Cloud Delta Sync & GAS LockService)**، وتحسينات الأداء والذاكرة الميدانية (**v79**).
 
 ---
 
-## 📁 هيكلة ملفات المشروع المقسمة (`v78 Modular Architecture`)
+## 📁 هيكلة ملفات المشروع المقسمة (`v79 Modular Architecture`)
 1. **`index.html`**: الهيكل الرئيسي للواجهة، بوابة تسجيل الدخول، شاشة الإعداد الأولي، الـ 6 تبويبات رئيسية، الشريط السفلي العائم للميزان، وسكربت تمهيد الأوفلاين (`#pwaOfflineBootstrapScript`) مع تحميل غير حاجب (`defer`) لمكتبة Tailwind.
 2. **`style.css`**: التنسيقات المخصصة، قواعد الطباعة (`@media print` بحجم A4 Landscape)، فئات التثبيت الاختياري للجداول الـ 12، وقواعد وضع شاشة المندوب المبسط (`body.lite-field-mode-active` و `.sticky-lite-banner`).
 3. **`excel-template.js`**: القالب الهيكلي ومحرك بناء وتنسيق شيتات الإكسيل الـ 15 بالمعادلات الحية والألوان والحدود الرسمية.
 4. **`vendor/vendor-loader.js`**: محرك التحميل المحلي الذكي للمكتبات (`XLSX`, `Chart`, `html2canvas`, `jspdf`) + درع منع التحديث اللانهائي (`Infinite Reload Loop Guard`).
-5. **`sw.js`**: عامل الخدمة بإصدار الكاش الجديد (`farm-sales-v78-firebase-final`) المزود بمهلة شبكة زمنية (`3 ثوانٍ`) عبر `Promise.race` و `AbortController` ودالة المطابقة الذكية `matchFromCacheSmart`.
+5. **`sw.js`**: عامل الخدمة بإصدار الكاش الجديد (`farm-sales-v79-auth-fix`) المزود بمهلة شبكة زمنية (`3 ثوانٍ`) عبر `Promise.race` و `AbortController` ودالة المطابقة الذكية `matchFromCacheSmart`.
 6. **الوحدات البرمجية الـ 6 داخل مجلد `./js/`**:
    - `js/core-state.js`: النواة، كائن الحالة العام `appState` (شاملاً `syncOutbox` و `lastDeltaSyncAt` و `stickyLiteBanner`)، تشفير رابط السحابة، ومعايرة التوقيت السحابي المونوتوني.
    - `js/accounting.js`: المحرك المحاسبي الصارم، معادلات الخزينة والترحيل، التوزيع المتدرج للعهدة، وتكويد التجار الموحد مع حماية شاملة ضد أخطاء الفاصلة العائمة عبر `roundMoney2`.
    - `js/storage-sync.js`: التخزين المحلي و IndexedDB، محرك طابور الحركات الجزئية (`enqueueDeltaSyncEvent` و `applyIncomingDeltaEvents`)، وبروتوكول المزامنة السحابية الجزئية (`delta_sync` و `delta_pull`).
    - `js/excel-engine.js`: محرك الربط الثنائي مع الإكسيل (15 شيت) والمفتاح المركب المحصّن (`buildExcelSaleCompositeKey`) والنسخ الاحتياطي الشامل بصيغة JSON.
    - `js/print-export.js`: محرك الطباعة المعزولة، كارتة/بون الميزان (3 نسخ)، وتصدير الصور `PNG` وملفات `PDF`.
-   - `js/ui-controllers.js`: المتحكمات، الرسم الذكي للتبويب النشط، محرك الفلاتر ذو الاستنساخ المؤجل (`Lazy DOM Cloning`)، وضع المندوب المبسط، وكود السحابة المطور (`Google Apps Script v78`).
+   - `js/ui-controllers.js`: المتحكمات، الرسم الذكي للتبويب النشط، محرك الفلاتر ذو الاستنساخ المؤجل (`Lazy DOM Cloning`)، وضع المندوب المبسط، وكود السحابة المطور (`Google Apps Script v79`).
 
 ---
 
-## 🚀 ملخص التحديثات والتحسينات الشاملة في الإصدار `v78`
+## 🚀 ملخص التحديثات والتحسينات الشاملة في الإصدار `v79`
 
 1. **إحكام طابور المزامنة الجزئية (`syncOutbox` للتجار والمستخدمين):**
    - إدراج تعديلات أسماء التجار (`UPSERT_MERCHANT`) وإضافة وتعديل المستخدمين وتحديث الملف الشخصي وكلمة المرور (`UPSERT_USER`) داخل طابور `syncOutbox` قبل الحفظ لضمان رفعها فوراً عبر مسار `delta_sync` وتحديثها لحظياً على جميع الأجهزة.
@@ -33,18 +33,21 @@
    - إضافة خيار **"📌 تثبيت شريط المندوب في أعلى الشاشة أثناء التمرير"** (`#chkStickyLiteBanner` والفئة `.sticky-lite-banner`) مع حفظ تفضيل المندوب تلقائياً في `LocalStorage` (`pref_sticky_lite_banner`).
    - زيادة الهامش السفلي (`padding-bottom: 135px` للموبايل و `150px` للشاشات `<= 400px`) لمنع الشريط السفلي العائم (`#mobileWeighbridgeActionBar`) من تغطية البطاقات السفلية عند ظهور زر توزيع العهدة.
 
-4. **تطوير محرك الأوفلاين ومهلة الشبكة (`3s Network Timeout & Cache v78`):**
-   - ترقية اسم الكاش في `sw.js` و `vendor-loader.js` و `index.html` إلى `farm-sales-v78-firebase-final` لضمان تحميل التحديثات فوراً على هواتف المندوبين، مع حصر `caches.delete` داخل حدث `activate` في `sw.js` فقط.
+4. **تطوير محرك الأوفلاين ومهلة الشبكة (`3s Network Timeout & Cache v79`):**
+   - ترقية اسم الكاش في `sw.js` و `vendor-loader.js` و `index.html` إلى `farm-sales-v79-auth-fix` لضمان تحميل التحديثات فوراً على هواتف المندوبين، مع حصر `caches.delete` داخل حدث `activate` في `sw.js` فقط.
    - إضافة مهلة زمنية قدرها **3 ثوانٍ** (`fetchCoreWithTimeout` عبر `Promise.race`) في `sw.js` لقطع محاولات الشبكة البطيئة في المزارع والتحول الفوري للكاش المحلي.
 
 5. **تحسين الأداء وتقليل استهلاك الذاكرة (`Performance & Lazy DOM Cloning`):**
    - تأجيل استنساخ صفوف الجداول (`cloneNode(true)`) في دالة `applyDomTableExcelEngine` (`domTableRawCache`) ليتم تنفيذه **فقط** عند تفعيل أو استخدام الفلتر/الفرز فعلياً (`captureDomTableRawRows`)، مما يوفر الذاكرة ويسرّع الرسم اليومي على الهواتف الاقتصادية.
    - تحديث دوال النسخ للحافظة (`copyTextToClipboardReliable`) لتعتمد على `navigator.clipboard.writeText` أولاً مع بديل احتياطي `document.execCommand('copy')`، وإضافة السمة `defer` لسكربت Tailwind CDN، وتنظيف الأكواد والمتغيرات غير المستخدمة.
 
-6. **تحديثات الإصدار `v78` (`farm-sales-v78-firebase-final`):**
+6. **تحديثات الإصدار `v79` (`farm-sales-v79-auth-fix`):**
    - **إصلاح ظهور شريط المندوب في صفحة الدخول:** إزالة الكلاس `lite-field-mode-active` وإخفاء `#liteFieldModeActiveBanner` (`style.display = 'none'`) فور تسجيل الخروج اليدوي أو التلقائي (`Session Timeout`) أو عند عدم تسجيل الدخول.
    - **جعل وضع المندوب المبسط هو الوضع الافتراضي للموبايل:** تفعيل وضع المندوب المبسط تلقائياً وإظهار شريط المندوب فور تسجيل الدخول من الهواتف المحمولة (`window.innerWidth <= 768`) دون الحاجة لتفعيله يدوياً في كل جلسة.
 
-7. **تحديثات الإصدار `v78` (`farm-sales-v78-firebase-final` — الانتقال الكامل والمؤمّن إلى Firebase Realtime Database):**
+7. **تحديثات الإصدار `v79` (`farm-sales-v79-auth-fix` — الانتقال الكامل والمؤمّن إلى Firebase Realtime Database):**
    - تم الانتقال بالكامل إلى Firebase Realtime Database (REST API). تم تأمين طلبات PATCH عبر آلية الجلب والدمج المسبق الذري (Atomic Pre-Fetch Merge) لمنع تضارب المصفوفات، وتم تأمين الواجهة بإخفاء الرمز السري عن المندوبين.
    - تمت إزالة زر نسخ كود Google Apps Script القديم (`#btnCopyCloudScriptCode`)، وإنشاء حقلين مخصصين لمدير الموقع فقط (`firebaseUrlInput` و `firebaseSecretInput` من نوع `password`) داخل قسم `#adminFirebaseSettingsSection` مع حفظهما في `LocalStorage` وتشفيرهما داخل خزينة الدخول (`v70_vault`).
+
+8. **تحديثات الإصدار `v79` (`farm-sales-v79-auth-fix`):**
+   - **تحسين رسائل أخطاء الاتصال:** تم تعديل محرك المزامنة لالتقاط أخطاء المصادقة الخاصة بـ Firebase (مثل خطأ 401 عند إدخال رمز سري خاطئ أو 404 لرابط غير صحيح) وإظهار رسالة واضحة للمدير بدلاً من إظهار رسالة (الشبكة غير مستقرة) العشوائية.
