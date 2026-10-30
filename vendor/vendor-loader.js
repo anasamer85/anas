@@ -1,6 +1,6 @@
-// Local Vendor Loader + Service Worker Infinite-Reload Loop Guard (v84 Modular Architecture)
+// Local Vendor Loader + Service Worker Infinite-Reload Loop Guard (v85 Modular Architecture)
 (function () {
-  var VENDOR_CACHE_NAME = 'farm-sales-v84-desktop-ui';
+  var VENDOR_CACHE_NAME = 'farm-sales-v85-final-polish';
   var UNIFIED_SW_URL = './sw.js?v=73';
 
   // 1. درع الحماية ضد التحديث المستمر للصفحة (Infinite Reload Loop Guard)
@@ -9,7 +9,7 @@
     var registrationPromise = null;
     navigator.serviceWorker.register = function (scriptURL, options) {
       if (registrationPromise) return registrationPromise;
-      window.__swRegisteredOnceV84 = true;
+      window.__swRegisteredOnceV85 = true;
       registrationPromise = origRegister(UNIFIED_SW_URL, options || { scope: './' }).catch(function () {});
       return registrationPromise;
     };
