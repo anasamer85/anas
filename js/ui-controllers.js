@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v77)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v78)
 // =========================================================================
 
 // =========================================================================
@@ -1883,13 +1883,52 @@ function buildMerchantWhatsappStatementText(merchantCode) {
   return lines.join('\n');
 }
 
-function renderExpensesStatementView() {
+function syncFirebaseAdminInputsUI() {
+  const isAdmin = hasPermission('admin');
+  const adminFbSection = document.getElementById('adminFirebaseSettingsSection');
+  const fbUrlInp = document.getElementById('firebaseUrlInput');
+  const fbSecInp = document.getElementById('firebaseSecretInput');
   const inpW = document.getElementById('inpCloudWebhookUrl');
-  if (inpW && document.activeElement !== inpW) {
-    const resolvedUrl = (appState.webhookUrl || getEmbeddedWebhookUrl() || inpW.value || '').trim();
-    if (resolvedUrl && !appState.webhookUrl) appState.webhookUrl = resolvedUrl;
-    inpW.value = resolvedUrl;
+  const btnSaveWh = document.getElementById('btnSaveWebhook');
+
+  // أمان الواجهة (UI Security): إخفاء حقول رابط Firebase والرمز السري تماماً عن غير المديرين
+  if (adminFbSection) {
+    adminFbSection.classList.toggle('hidden', !isAdmin);
+    adminFbSection.style.display = isAdmin ? '' : 'none';
   }
+  [fbUrlInp, fbSecInp, btnSaveWh].forEach(el => {
+    if (el) {
+      el.disabled = !isAdmin;
+      el.classList.toggle('hidden', !isAdmin);
+    }
+  });
+
+  if (!isAdmin) {
+    if (fbUrlInp) fbUrlInp.value = '';
+    if (fbSecInp) fbSecInp.value = '';
+    if (inpW) inpW.value = '';
+    return;
+  }
+
+  const resolvedUrl = (appState.webhookUrl || getEmbeddedWebhookUrl() || (inpW ? inpW.value : '') || '').trim();
+  if (resolvedUrl && !appState.webhookUrl) appState.webhookUrl = resolvedUrl;
+  const splitParts = splitFirebaseUrlAndSecret(resolvedUrl);
+  const effectiveFbUrl = splitParts.firebaseUrl || appState.firebaseUrl || '';
+  const effectiveFbSecret = splitParts.firebaseSecret || appState.firebaseSecret || '';
+
+  if (fbUrlInp && document.activeElement !== fbUrlInp) {
+    fbUrlInp.value = effectiveFbUrl;
+  }
+  if (fbSecInp && document.activeElement !== fbSecInp) {
+    fbSecInp.value = effectiveFbSecret;
+  }
+  if (inpW && document.activeElement !== inpW) {
+    inpW.value = composeFirebaseWebhookUrl(effectiveFbUrl, effectiveFbSecret) || resolvedUrl;
+  }
+}
+
+function renderExpensesStatementView() {
+  syncFirebaseAdminInputsUI();
 
   const catMatrix = {};
   EXPENSE_CATEGORIES.forEach(c => {
@@ -2116,10 +2155,11 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     const b = document.getElementById(bid);
     if (b) b.classList.toggle('hidden', !hasPermission('sales'));
   });
-  ['btnAddNewCloudFarm', 'inpNewCloudFarmName', 'btnResetDemoData', 'btnNewCleanCycle', 'btnSaveWebhook', 'inpCloudWebhookUrl', 'btnLinkLiveExcel'].forEach(bid => {
+  ['btnAddNewCloudFarm', 'inpNewCloudFarmName', 'btnResetDemoData', 'btnNewCleanCycle', 'btnLinkLiveExcel'].forEach(bid => {
     const b = document.getElementById(bid);
     if (b) b.classList.toggle('hidden', !(hasPermission('farms') || showTwoWay || showQuickCtrl));
   });
+  syncFirebaseAdminInputsUI();
   const lblImp = document.querySelector('label[for="fileImportXlsx"]');
   if (lblImp) lblImp.classList.toggle('hidden', !(hasPermission('farms') || showQuickCtrl));
 
@@ -3645,7 +3685,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v77-mobile-default';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v78-firebase-final';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3676,11 +3716,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v77) without automatic reload loops
+  // Register Offline Service Worker (v78) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV77) {
-      window.__swRegisteredOnceV77 = true;
-      navigator.serviceWorker.register('./sw.js?v=77', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV78) {
+      window.__swRegisteredOnceV78 = true;
+      navigator.serviceWorker.register('./sw.js?v=78', { scope: './' }).catch(() => {});
     }
   }
 
@@ -3836,11 +3876,16 @@ function initFarmSalesApp() {
     window.EMBEDDED_CLOUD_WEBHOOK_URL = cleanUrl;
     const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
     if (liveMeta) liveMeta.setAttribute('content', cleanUrl);
-    const syncInpEl = document.getElementById('inpCloudWebhookUrl');
-    if (syncInpEl) {
-      syncInpEl.value = cleanUrl;
-      syncInpEl.setAttribute('value', cleanUrl);
-    }
+    const parts = splitFirebaseUrlAndSecret(cleanUrl);
+    appState.firebaseUrl = parts.firebaseUrl || cleanUrl;
+    if (parts.firebaseSecret) appState.firebaseSecret = parts.firebaseSecret;
+    try {
+      localStorage.setItem(STORAGE_KEY + '_firebase_url', String(appState.firebaseUrl || ''));
+      localStorage.setItem('firebase_url', String(appState.firebaseUrl || ''));
+      localStorage.setItem(STORAGE_KEY + '_firebase_secret', String(appState.firebaseSecret || ''));
+      localStorage.setItem('firebase_secret', String(appState.firebaseSecret || ''));
+    } catch (e) {}
+    syncFirebaseAdminInputsUI();
     const forceInpEl = document.getElementById('inpForceCloudWebhookUrl');
     if (forceInpEl && forceInpEl.value !== cleanUrl) {
       forceInpEl.value = cleanUrl;
@@ -4526,191 +4571,6 @@ function initFarmSalesApp() {
   document.getElementById('btnPushCloudNow').addEventListener('click', () => pushDatabaseToCloud(false, true));
   document.getElementById('btnPullCloudNow').addEventListener('click', () => pullDatabaseFromCloud(false, true));
 
-  // Copy Ready-Made Google Apps Script Cloud Database Code (v77: End-to-End Cloud Delta Sync & GAS LockService)
-  document.getElementById('btnCopyCloudScriptCode').addEventListener('click', () => {
-    const scriptCode = [
-      "// كود قاعدة البيانات السحابية المطور (الإصدار v77 — يدعم Delta Sync اللحظي + LockService الذري + الأحجام الكبيرة)",
-      "// 1. افتح script.google.com وامسح الكود القديم بالكامل والصق هذا الكود ثم اضغط حفظ (Save 💾)",
-      "// 2. اضغط Deploy -> Manage deployments -> Edit (أيقونة القلم ✏️) -> اختر Version: New version -> Deploy",
-      "//    (أو Deploy -> New deployment -> Web app -> Execute as: Me -> Who has access: Anyone)",
-      "function readFullDbString_(store) {",
-      "  var count = Number(store.getProperty('DB_CHUNK_COUNT') || 0);",
-      "  var out = '';",
-      "  if (count > 0) {",
-      "    for (var i = 0; i < count; i++) {",
-      "      out += (store.getProperty('DB_CHUNK_' + i) || '');",
-      "    }",
-      "  } else {",
-      "    out = store.getProperty('FARM_CLOUD_DB') || '{}';",
-      "  }",
-      "  return out || '{}';",
-      "}",
-      "function readDeltaLog_(store) {",
-      "  var count = Number(store.getProperty('DELTA_LOG_COUNT') || 0);",
-      "  var raw = '';",
-      "  if (count > 0) {",
-      "    for (var i = 0; i < count; i++) {",
-      "      raw += (store.getProperty('DELTA_LOG_' + i) || '');",
-      "    }",
-      "  }",
-      "  if (!raw) return [];",
-      "  try { var arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; } catch (e) { return []; }",
-      "}",
-      "function writeFullDbAndDeltaLog_(store, dbStr, deltaLogArr) {",
-      "  var chunkSize = 2500;",
-      "  var dbChunks = Math.ceil(dbStr.length / chunkSize);",
-      "  var props = { 'DB_CHUNK_COUNT': String(dbChunks) };",
-      "  for (var i = 0; i < dbChunks; i++) {",
-      "    props['DB_CHUNK_' + i] = dbStr.slice(i * chunkSize, (i + 1) * chunkSize);",
-      "  }",
-      "  var trimmedLog = Array.isArray(deltaLogArr) ? deltaLogArr.slice(-300) : [];",
-      "  var logStr = JSON.stringify(trimmedLog);",
-      "  var logChunks = Math.ceil(logStr.length / chunkSize);",
-      "  props['DELTA_LOG_COUNT'] = String(logChunks);",
-      "  for (var j = 0; j < logChunks; j++) {",
-      "    props['DELTA_LOG_' + j] = logStr.slice(j * chunkSize, (j + 1) * chunkSize);",
-      "  }",
-      "  store.deleteAllProperties();",
-      "  store.setProperties(props, false);",
-      "  return dbChunks;",
-      "}",
-      "function applyDeltaEventsOnServerState_(db, events) {",
-      "  if (!db || typeof db !== 'object') db = {};",
-      "  if (!db.days || typeof db.days !== 'object') db.days = {};",
-      "  if (!Array.isArray(db.merchants)) db.merchants = [];",
-      "  if (!Array.isArray(db.users)) db.users = [];",
-      "  if (!db.deletedIds || typeof db.deletedIds !== 'object') {",
-      "    db.deletedIds = { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] };",
-      "  }",
-      "  if (!db.deletedTimestamps || typeof db.deletedTimestamps !== 'object') {",
-      "    db.deletedTimestamps = { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} };",
-      "  }",
-      "  for (var i = 0; i < events.length; i++) {",
-      "    var ev = events[i];",
-      "    if (!ev || !ev.action) continue;",
-      "    var p = ev.payload || {};",
-      "    var evTs = Number(ev.ts) || Date.now();",
-      "    var dNum = String(Number(p.dayNum) || 1);",
-      "    var targetFarm = String(p.farmName || db.farmName || '').trim();",
-      "    var isSameFarm = (!targetFarm || !db.farmName || targetFarm === String(db.farmName).trim());",
-      "    var daysRef = isSameFarm ? db.days : ((db.farmsArchive && db.farmsArchive[targetFarm] && db.farmsArchive[targetFarm].days) ? db.farmsArchive[targetFarm].days : db.days);",
-      "    if (!daysRef[dNum]) daysRef[dNum] = { dayNumber: Number(dNum), dateLabel: 'اليوم ' + dNum, sales: [], pendingSales: [], expenses: [], deliveredCash: 0, carriedForwardCash: 0 };",
-      "    if (ev.action === 'UPSERT_SALE' || ev.action === 'UPSERT_PENDING' || ev.action === 'UPSERT_EXPENSE') {",
-      "      var cat = ev.action === 'UPSERT_SALE' ? 'sales' : (ev.action === 'UPSERT_PENDING' ? 'pendingSales' : 'expenses');",
-      "      var rec = p.record;",
-      "      if (!rec || !rec.id) continue;",
-      "      var rid = String(rec.id);",
-      "      var arr = Array.isArray(daysRef[dNum][cat]) ? daysRef[dNum][cat] : [];",
-      "      var idx = -1;",
-      "      for (var k = 0; k < arr.length; k++) { if (arr[k] && String(arr[k].id) === rid) { idx = k; break; } }",
-      "      if (idx === -1) { arr.push(rec); } else {",
-      "        var oldTs = Number(arr[idx].updatedAt || arr[idx].createdAt || 0);",
-      "        var newTs = Number(rec.updatedAt || rec.createdAt || evTs);",
-      "        if (newTs >= oldTs) arr[idx] = rec;",
-      "      }",
-      "      daysRef[dNum][cat] = arr;",
-      "      if (ev.action === 'UPSERT_SALE' && Array.isArray(daysRef[dNum].pendingSales)) {",
-      "        daysRef[dNum].pendingSales = daysRef[dNum].pendingSales.filter(function(x){ return x && String(x.id) !== rid; });",
-      "      }",
-      "    } else if (ev.action === 'DELETE_SALE' || ev.action === 'DELETE_PENDING' || ev.action === 'DELETE_EXPENSE') {",
-      "      var dCat = ev.action === 'DELETE_SALE' ? 'sales' : (ev.action === 'DELETE_PENDING' ? 'pendingSales' : 'expenses');",
-      "      var delId = String(p.id || '');",
-      "      if (!delId) continue;",
-      "      if (!Array.isArray(db.deletedIds[dCat])) db.deletedIds[dCat] = [];",
-      "      if (db.deletedIds[dCat].indexOf(delId) === -1) db.deletedIds[dCat].push(delId);",
-      "      if (!db.deletedTimestamps[dCat]) db.deletedTimestamps[dCat] = {};",
-      "      db.deletedTimestamps[dCat][delId] = evTs;",
-      "      for (var d = 1; d <= 10; d++) {",
-      "        var ds = String(d);",
-      "        if (daysRef[ds] && Array.isArray(daysRef[ds][dCat])) {",
-      "          daysRef[ds][dCat] = daysRef[ds][dCat].filter(function(x){ return x && String(x.id) !== delId; });",
-      "        }",
-      "      }",
-      "    } else if (ev.action === 'UPDATE_DAY_META') {",
-      "      var dayObj = daysRef[dNum];",
-      "      if (p.dateLabel !== undefined) { dayObj.dateLabel = p.dateLabel; dayObj.labelUpdatedAt = p.labelUpdatedAt || evTs; }",
-      "      if (p.deliveredCash !== undefined) { dayObj.deliveredCash = Number(p.deliveredCash) || 0; dayObj.deliveredCashUpdatedAt = p.deliveredCashUpdatedAt || evTs; }",
-      "      if (p.carriedForwardCash !== undefined) { dayObj.carriedForwardCash = Number(p.carriedForwardCash) || 0; dayObj.carriedForwardCashUpdatedAt = p.carriedForwardCashUpdatedAt || evTs; }",
-      "      if (p.isLocked !== undefined) { dayObj.isLocked = Boolean(p.isLocked); dayObj.lockedBy = p.lockedBy || ''; dayObj.lockedAtTxt = p.lockedAtTxt || ''; dayObj.lockUpdatedAt = p.lockUpdatedAt || evTs; }",
-      "    } else if (ev.action === 'UPSERT_MERCHANT' && p.merchant && p.merchant.code) {",
-      "      var mc = Number(p.merchant.code);",
-      "      var mIdx = -1;",
-      "      for (var m = 0; m < db.merchants.length; m++) { if (db.merchants[m] && Number(db.merchants[m].code) === mc) { mIdx = m; break; } }",
-      "      if (mIdx === -1) db.merchants.push(p.merchant); else db.merchants[mIdx] = p.merchant;",
-      "    } else if (ev.action === 'DELETE_MERCHANT' && p.code) {",
-      "      var delCode = Number(p.code);",
-      "      if (!Array.isArray(db.deletedIds.merchants)) db.deletedIds.merchants = [];",
-      "      if (db.deletedIds.merchants.indexOf(delCode) === -1) db.deletedIds.merchants.push(delCode);",
-      "      db.merchants = db.merchants.filter(function(x){ return x && Number(x.code) !== delCode; });",
-      "    } else if (ev.action === 'UPSERT_USER' && p.user && p.user.id) {",
-      "      var uid = String(p.user.id);",
-      "      var uIdx = -1;",
-      "      for (var u = 0; u < db.users.length; u++) { if (db.users[u] && String(db.users[u].id) === uid) { uIdx = u; break; } }",
-      "      if (uIdx === -1) db.users.push(p.user); else db.users[uIdx] = p.user;",
-      "    } else if (ev.action === 'DELETE_USER' && p.id) {",
-      "      var delUid = String(p.id);",
-      "      if (!Array.isArray(db.deletedIds.users)) db.deletedIds.users = [];",
-      "      if (db.deletedIds.users.indexOf(delUid) === -1) db.deletedIds.users.push(delUid);",
-      "      db.users = db.users.filter(function(x){ return x && String(x.id) !== delUid; });",
-      "    }",
-      "  }",
-      "  db.updatedAt = new Date().toISOString();",
-      "  return db;",
-      "}",
-      "function doGet(e) {",
-      "  var store = PropertiesService.getScriptProperties();",
-      "  var mode = (e && e.parameter && e.parameter.mode) ? String(e.parameter.mode) : '';",
-      "  if (mode === 'delta_pull') {",
-      "    var since = Number((e && e.parameter && e.parameter.since) || 0);",
-      "    var logArr = readDeltaLog_(store);",
-      "    var news = logArr.filter(function(ev){ return ev && Number(ev.ts) > since; });",
-      "    return ContentService.createTextOutput(JSON.stringify({ status: 'ok', mode: 'delta_pull', serverTs: Date.now(), deltaEvents: news })).setMimeType(ContentService.MimeType.JSON);",
-      "  }",
-      "  var out = readFullDbString_(store);",
-      "  return ContentService.createTextOutput(out || '{}').setMimeType(ContentService.MimeType.JSON);",
-      "}",
-      "function doPost(e) {",
-      "  var lock = LockService.getScriptLock();",
-      "  try { lock.waitLock(15000); } catch (lockErr) { lock.tryLock(15000); }",
-      "  try {",
-      "    var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';",
-      "    var store = PropertiesService.getScriptProperties();",
-      "    var parsed = {};",
-      "    try { parsed = JSON.parse(raw); } catch (pe) { parsed = {}; }",
-      "    var logArr = readDeltaLog_(store);",
-      "    var nowServerTs = Date.now();",
-      "    if (parsed && parsed.mode === 'delta_sync' && Array.isArray(parsed.deltaEvents)) {",
-      "      var curDbStr = readFullDbString_(store);",
-      "      var curDb = {};",
-      "      try { curDb = JSON.parse(curDbStr); } catch (de) { curDb = {}; }",
-      "      var sinceClient = Number(parsed.since || 0);",
-      "      var incomingForClient = logArr.filter(function(ev){ return ev && Number(ev.ts) > sinceClient; });",
-      "      var stampedEvents = parsed.deltaEvents.map(function(ev, idx){",
-      "        ev.ts = Math.max(Number(ev.ts) || 0, nowServerTs + idx);",
-      "        return ev;",
-      "      });",
-      "      curDb = applyDeltaEventsOnServerState_(curDb, stampedEvents);",
-      "      var mergedLog = logArr.concat(stampedEvents).slice(-300);",
-      "      var updatedDbStr = JSON.stringify(curDb);",
-      "      var chunks = writeFullDbAndDeltaLog_(store, updatedDbStr, mergedLog);",
-      "      return ContentService.createTextOutput(JSON.stringify({ status: 'ok', mode: 'delta_sync', serverTs: nowServerTs + stampedEvents.length, incomingDeltaEvents: incomingForClient, chunks: chunks })).setMimeType(ContentService.MimeType.JSON);",
-      "    }",
-      "    if (parsed && Array.isArray(parsed.deltaEvents) && parsed.deltaEvents.length > 0) {",
-      "      var extraStamped = parsed.deltaEvents.map(function(ev, idx){ ev.ts = Math.max(Number(ev.ts) || 0, nowServerTs + idx); return ev; });",
-      "      logArr = logArr.concat(extraStamped).slice(-300);",
-      "      delete parsed.deltaEvents;",
-      "      raw = JSON.stringify(parsed);",
-      "    }",
-      "    var totalChunks = writeFullDbAndDeltaLog_(store, raw, logArr);",
-      "    return ContentService.createTextOutput(JSON.stringify({ status: 'ok', serverTs: nowServerTs, chunks: totalChunks, length: raw.length })).setMimeType(ContentService.MimeType.JSON);",
-      "  } finally {",
-      "    try { lock.releaseLock(); } catch (re) {}",
-      "  }",
-      "}"
-    ].join('\n');
-    copyTextToClipboardReliable(scriptCode);
-    showToast('تم نسخ كود السحابة المطور (v77 Delta Sync + LockService)! حدثه في script.google.com واختر (New version) عند النشر.', '📋');
-  });
   window.addEventListener('offline', () => {
     updateConnectionAndSyncUI();
     showToast('انقطع الإنترنت — يعمل البرنامج الآن في وضع الأوفلاين ويحفظ كل حركة على المتصفح.', '🟠');
@@ -7841,32 +7701,70 @@ function initFarmSalesApp() {
     showToast('⚠️ تم الحفظ على هذا المتصفح فقط — الصق رابط السحابة في تبويب (⚙️ التحكم والمزامنة) لمشاركتها عبر المتصفحات!', '🔄');
   });
 
-  // Save Webhook URL & Smart Sync (Pulls from cloud first if this browser has no local edits, preventing accidental overwrite!)
+  // Save Firebase URL & Secret (Admin Only) & Smart Sync
+  const fbUrlInpEl = document.getElementById('firebaseUrlInput');
+  const fbSecretInpEl = document.getElementById('firebaseSecretInput');
   const inpCloudWebhookEl = document.getElementById('inpCloudWebhookUrl');
-  if (inpCloudWebhookEl) {
-    inpCloudWebhookEl.addEventListener('input', () => {
-      const v = inpCloudWebhookEl.value.trim();
-      if (v.startsWith('http')) {
-        appState.webhookUrl = v;
-        try { localStorage.setItem(STORAGE_KEY + '_webhook_url', v); } catch (e) {}
-      }
-    });
+
+  const syncFirebaseInputsToState = () => {
+    if (!hasPermission('admin')) return '';
+    const rawFbUrl = (fbUrlInpEl ? fbUrlInpEl.value : '').trim();
+    const rawFbSecret = (fbSecretInpEl ? fbSecretInpEl.value : '').trim();
+    // إذا ألصق المدير رابطاً كاملاً يحتوي على ?auth= في خانة الرابط، نفصل الرمز السري تلقائياً
+    const parsedParts = splitFirebaseUrlAndSecret(rawFbUrl);
+    const cleanBaseUrl = parsedParts.firebaseUrl || rawFbUrl;
+    const effectiveSecret = rawFbSecret || parsedParts.firebaseSecret || '';
+    if (parsedParts.firebaseSecret && fbSecretInpEl && !rawFbSecret) {
+      fbSecretInpEl.value = parsedParts.firebaseSecret;
+    }
+    if (parsedParts.firebaseUrl && fbUrlInpEl && rawFbUrl.includes('auth=')) {
+      fbUrlInpEl.value = parsedParts.firebaseUrl;
+    }
+    appState.firebaseUrl = cleanBaseUrl;
+    appState.firebaseSecret = effectiveSecret;
+    const combinedUrl = composeFirebaseWebhookUrl(cleanBaseUrl, effectiveSecret);
+    appState.webhookUrl = combinedUrl;
+    if (inpCloudWebhookEl) {
+      inpCloudWebhookEl.value = combinedUrl;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY + '_firebase_url', cleanBaseUrl);
+      localStorage.setItem('firebase_url', cleanBaseUrl);
+      localStorage.setItem(STORAGE_KEY + '_firebase_secret', effectiveSecret);
+      localStorage.setItem('firebase_secret', effectiveSecret);
+      localStorage.setItem(STORAGE_KEY + '_webhook_url', combinedUrl);
+    } catch (e) {}
+    return combinedUrl;
+  };
+
+  if (fbUrlInpEl) {
+    fbUrlInpEl.addEventListener('input', syncFirebaseInputsToState);
+  }
+  if (fbSecretInpEl) {
+    fbSecretInpEl.addEventListener('input', syncFirebaseInputsToState);
   }
 
   document.getElementById('btnSaveWebhook').addEventListener('click', async () => {
-    const enteredUrl = document.getElementById('inpCloudWebhookUrl').value.trim();
+    if (!hasPermission('admin')) {
+      showToast('🔒 عفواً، تعديل إعدادات رابط Firebase والرمز السري متاح لمدير الموقع فقط!', '🔒');
+      return;
+    }
     const hadMeaningfulLocalEdits = hasMeaningfulLocalData();
-    appState.webhookUrl = enteredUrl;
+    const enteredUrl = syncFirebaseInputsToState();
     if (enteredUrl) {
       window.EMBEDDED_CLOUD_WEBHOOK_URL = enteredUrl;
       const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
       if (liveMeta) liveMeta.setAttribute('content', enteredUrl);
-      const inpEl = document.getElementById('inpCloudWebhookUrl');
-      if (inpEl) inpEl.setAttribute('value', enteredUrl);
+      if (inpCloudWebhookEl) inpCloudWebhookEl.setAttribute('value', enteredUrl);
+    } else {
+      window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
+      const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
+      if (liveMeta) liveMeta.setAttribute('content', '');
     }
     saveState(false);
     startLiveRealtimeSyncEngine();
     if (enteredUrl) {
+      showToast('🔐 تم حفظ وتشفير رابط Firebase والرمز السري بنجاح!', '✅');
       if (!hadMeaningfulLocalEdits) {
         const pulled = await pullDatabaseFromCloud(false, true);
         if (!pulled) {
@@ -7876,18 +7774,18 @@ function initFarmSalesApp() {
         await pushDatabaseToCloud(false, true);
       }
     } else {
-      showToast('تم مسح رابط المزامنة السحابية');
+      showToast('تم مسح إعدادات رابط Firebase والرمز السري');
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v77)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v78)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=77',
-    './js/accounting.js?v=77',
-    './js/storage-sync.js?v=77',
-    './js/excel-engine.js?v=77',
-    './js/print-export.js?v=77',
-    './js/ui-controllers.js?v=77'
+    './js/core-state.js?v=78',
+    './js/accounting.js?v=78',
+    './js/storage-sync.js?v=78',
+    './js/excel-engine.js?v=78',
+    './js/print-export.js?v=78',
+    './js/ui-controllers.js?v=78'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -7979,7 +7877,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v77)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v78)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8097,14 +7995,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=77');
+        scTpl.setAttribute('src', './excel-template.js?v=78');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=77');
+        lnk.setAttribute('href', './style.css?v=78');
         bundledStyleEl.replaceWith(lnk);
       }
     }
@@ -8150,10 +8048,13 @@ function initFarmSalesApp() {
     }
     cfgScript.textContent = `\n    // خزينة رابط المزامنة السحابية المشفرة والمربوطة بتسجيل الدخول (تُفك تلقائياً عند إدخال اسم المستخدم وكلمة المرور)\n    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';\n    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = ${vaultJson};\n    window.EMBEDDED_DEFAULT_FARM_NAME = '';\n  `;
 
-    const cloneInp = cloneDoc.querySelector('#inpCloudWebhookUrl');
-    if (cloneInp) {
-      cloneInp.setAttribute('value', '');
-    }
+    ['#inpCloudWebhookUrl', '#firebaseUrlInput', '#firebaseSecretInput'].forEach(sel => {
+      const el = cloneDoc.querySelector(sel);
+      if (el) {
+        el.setAttribute('value', '');
+        el.value = '';
+      }
+    });
     const cloneLoginVaultBadge = cloneDoc.querySelector('#loginEncryptedVaultBadge');
     if (cloneLoginVaultBadge) {
       cloneLoginVaultBadge.classList.toggle('hidden', vaultTokens.length === 0);

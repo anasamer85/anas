@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v77)
+// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v78)
 // =========================================================================
 
 function loadState() {
@@ -34,11 +34,32 @@ function loadState() {
   if (embeddedUrl) {
     appState.webhookUrl = embeddedUrl;
   }
+  try {
+    const savedFbUrl = localStorage.getItem(STORAGE_KEY + '_firebase_url') || localStorage.getItem('firebase_url') || '';
+    const savedFbSecret = localStorage.getItem(STORAGE_KEY + '_firebase_secret') || localStorage.getItem('firebase_secret') || '';
+    if (savedFbUrl && savedFbUrl.trim()) {
+      appState.firebaseUrl = savedFbUrl.trim();
+    }
+    if (savedFbSecret && savedFbSecret.trim()) {
+      appState.firebaseSecret = savedFbSecret.trim();
+    }
+    if (!appState.webhookUrl && appState.firebaseUrl) {
+      appState.webhookUrl = composeFirebaseWebhookUrl(appState.firebaseUrl, appState.firebaseSecret);
+    }
+  } catch (e) {}
   if (!appState.webhookUrl) {
     try {
       const savedUrl = localStorage.getItem(STORAGE_KEY + '_webhook_url');
       if (savedUrl && savedUrl.trim()) appState.webhookUrl = savedUrl.trim();
     } catch (e) {}
+  }
+  if (appState.webhookUrl) {
+    const parts = splitFirebaseUrlAndSecret(appState.webhookUrl);
+    if (parts.firebaseUrl && !appState.firebaseUrl) appState.firebaseUrl = parts.firebaseUrl;
+    if (parts.firebaseSecret && !appState.firebaseSecret) appState.firebaseSecret = parts.firebaseSecret;
+    if (appState.firebaseUrl && appState.firebaseSecret && !appState.webhookUrl.includes('auth=')) {
+      appState.webhookUrl = composeFirebaseWebhookUrl(appState.firebaseUrl, appState.firebaseSecret);
+    }
   }
   if (!appState.webhookUrl) {
     for (const legKey of LEGACY_STORAGE_KEYS) {
@@ -1361,6 +1382,12 @@ function buildCloudEndpointUrl(rawUrl, extraQueryParams = {}) {
         }
       }
       parsedUrl.pathname = path.startsWith('/') ? path : ('/' + path);
+      if (!parsedUrl.searchParams.get('auth')) {
+        const fallbackSecret = String((appState && appState.firebaseSecret) || '').trim();
+        if (fallbackSecret) {
+          parsedUrl.searchParams.set('auth', fallbackSecret);
+        }
+      }
     }
     if (extraQueryParams && typeof extraQueryParams === 'object') {
       Object.keys(extraQueryParams).forEach(k => {
@@ -2006,6 +2033,14 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
     localStorage.setItem(STORAGE_KEY + '_sticky_lite_banner', appState.stickyLiteBanner !== false ? '1' : '0');
     if (appState.webhookUrl) {
       localStorage.setItem(STORAGE_KEY + '_webhook_url', appState.webhookUrl);
+    }
+    if (appState.firebaseUrl !== undefined) {
+      localStorage.setItem(STORAGE_KEY + '_firebase_url', String(appState.firebaseUrl || ''));
+      localStorage.setItem('firebase_url', String(appState.firebaseUrl || ''));
+    }
+    if (appState.firebaseSecret !== undefined) {
+      localStorage.setItem(STORAGE_KEY + '_firebase_secret', String(appState.firebaseSecret || ''));
+      localStorage.setItem('firebase_secret', String(appState.firebaseSecret || ''));
     }
   } catch (e) {
     // Ignore storage error in restricted iframe

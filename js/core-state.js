@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v77)
+// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v78)
 // =========================================================================
 
 // =========================================================================
@@ -238,6 +238,47 @@ function updateEncryptedWebhookVaultUI() {
   }
 }
 
+
+function splitFirebaseUrlAndSecret(rawFullUrl) {
+  const clean = String(rawFullUrl || '').trim();
+  if (!clean) return { firebaseUrl: '', firebaseSecret: '' };
+  try {
+    const u = new URL(clean);
+    const secret = u.searchParams.get('auth') || '';
+    u.searchParams.delete('auth');
+    u.searchParams.delete('_t');
+    let cleanPath = (u.pathname || '/').replace(/\/abouzekry_cloud_db(?:\.json)?$/i, '');
+    if (!cleanPath || cleanPath === '/') cleanPath = '';
+    const baseFbUrl = `${u.origin}${cleanPath}`;
+    return { firebaseUrl: baseFbUrl, firebaseSecret: secret };
+  } catch (e) {
+    const qIdx = clean.indexOf('?');
+    if (qIdx === -1) return { firebaseUrl: clean, firebaseSecret: '' };
+    const basePart = clean.slice(0, qIdx).replace(/\/abouzekry_cloud_db(?:\.json)?$/i, '');
+    const params = new URLSearchParams(clean.slice(qIdx + 1));
+    return { firebaseUrl: basePart, firebaseSecret: params.get('auth') || '' };
+  }
+}
+
+function composeFirebaseWebhookUrl(fbUrlInput, fbSecretInput) {
+  const cleanUrl = String(fbUrlInput || '').trim();
+  const cleanSecret = String(fbSecretInput || '').trim();
+  if (!cleanUrl) return '';
+  try {
+    const u = new URL(cleanUrl);
+    if (cleanSecret) {
+      u.searchParams.set('auth', cleanSecret);
+    }
+    return u.toString();
+  } catch (e) {
+    if (cleanSecret && !cleanUrl.includes('auth=')) {
+      const sep = cleanUrl.includes('?') ? '&' : '?';
+      return `${cleanUrl}${sep}auth=${encodeURIComponent(cleanSecret)}`;
+    }
+    return cleanUrl;
+  }
+}
+
 function getEmbeddedWebhookUrl() {
   try {
     if (typeof window !== 'undefined' && window.EMBEDDED_CLOUD_WEBHOOK_URL && String(window.EMBEDDED_CLOUD_WEBHOOK_URL).trim()) {
@@ -385,6 +426,8 @@ function getDefaultState(customFarmName = '') {
     deletedIds: { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] },
     deletedTimestamps: { sales: {}, pendingSales: {}, expenses: {}, merchants: {}, users: {}, farms: {} },
     webhookUrl: getEmbeddedWebhookUrl() || '',
+    firebaseUrl: '',
+    firebaseSecret: '',
     updatedAt: '',
     farmResetAt: 0,
     factoryZeroWipeAt: 0,
