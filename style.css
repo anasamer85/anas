@@ -2142,6 +2142,75 @@ body.lite-field-mode-active #btnInlineSavePendingW1 {
   }
 }
 
+/* معالجة التكدس في الشريط السفلي العائم للشاشات الصغيرة جداً (max-width: 360px):
+   تخطيط شبكي (display: grid) + إخفاء النصوص من الأزرار والمؤشرات والاكتفاء بالأيقونات التعبيرية والأرقام المالية فقط */
+@media screen and (max-width: 360px) {
+  #mobileWeighbridgeActionBar,
+  .mobile-weighbridge-sticky-bar {
+    padding: 5px 6px !important;
+    left: 4px !important;
+    right: 4px !important;
+    border-radius: 12px !important;
+  }
+  #mobileWeighbridgeActionBar .sticky-bar-main-wrap {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 5px !important;
+  }
+  #mobileWeighbridgeActionBar .sticky-bar-kpis-group {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)) !important;
+    gap: 4px !important;
+    width: 100% !important;
+  }
+  #mobileWeighbridgeActionBar .sticky-bar-kpis-group > span,
+  #mobileWeighbridgeActionBar .sticky-bar-kpis-group > button {
+    justify-content: center !important;
+    padding: 3px 4px !important;
+    font-size: 10.5px !important;
+    white-space: nowrap !important;
+  }
+  #mobileWeighbridgeActionBar .sticky-bar-label-txt {
+    display: none !important;
+  }
+  #mobileWeighbridgeActionBar .sticky-bar-actions-group {
+    display: grid !important;
+    grid-template-columns: auto 1fr 1fr !important;
+    gap: 4px !important;
+    width: 100% !important;
+  }
+  #mobileWeighbridgeActionBar #btnCancelEditSale {
+    padding: 6px 9px !important;
+    min-height: 38px !important;
+  }
+  #mobileWeighbridgeActionBar #btnSavePendingW1,
+  #mobileWeighbridgeActionBar #btnSaveSale {
+    padding: 6px 6px !important;
+    font-size: 11px !important;
+    min-height: 38px !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* تنسيق زري التنقل العائمين (Scroll-to-Top / Scroll-to-Bottom) في وضع المندوب عند تجاوز البطاقات 15 بطاقة */
+#liteScrollNavFloatingBtns {
+  bottom: 124px;
+  left: 10px;
+  z-index: 44;
+}
+body.floating-bar-hidden #liteScrollNavFloatingBtns {
+  bottom: 24px;
+}
+body:not(.lite-field-mode-active) #liteScrollNavFloatingBtns,
+#liteScrollNavFloatingBtns.hidden {
+  display: none !important;
+}
+@media print {
+  #liteScrollNavFloatingBtns {
+    display: none !important;
+  }
+}
+
 .lite-pending-card {
   min-width: 225px;
   max-width: 260px;

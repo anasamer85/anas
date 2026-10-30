@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=82"></script>
+  <script src="./vendor/vendor-loader.js?v=83"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
@@ -24,7 +24,7 @@
     window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=82" />
+  <link rel="stylesheet" href="./style.css?v=83" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -1027,37 +1027,37 @@
 
           <!-- Weighbridge Floating Action Bar for Phone & Computer (شريط إجراءات سفلي عائم للهاتف والكمبيوتر داخل نموذج البيع) -->
           <div id="mobileWeighbridgeActionBar" class="mobile-weighbridge-sticky-bar rounded-2xl border-2 border-amber-400 bg-slate-900/95 text-white p-2 md:px-4 md:py-2.5 shadow-2xl">
-            <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="sticky-bar-main-wrap flex flex-wrap items-center justify-between gap-2">
               <!-- Live Net Weight, Total Invoice & Auto Remaining Credit -->
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 border border-white/15 text-[10px] md:text-xs font-bold">
-                  <span>⚖️ الصافي:</span>
+              <div class="sticky-bar-kpis-group flex items-center gap-1.5 flex-wrap">
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 border border-white/15 text-[10px] md:text-xs font-bold" title="الوزن الصافي">
+                  <span>⚖️</span><span class="sticky-bar-label-txt">الصافي:</span>
                   <strong id="stickyBarNetWeight" class="text-amber-300 font-extrabold text-xs md:text-sm">0 كجم</strong>
                 </span>
-                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-[10px] md:text-xs font-bold">
-                  <span>💰 صافي الفاتورة:</span>
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-[10px] md:text-xs font-bold" title="صافي الفاتورة بالإكرامية">
+                  <span>💰</span><span class="sticky-bar-label-txt">صافي الفاتورة:</span>
                   <strong id="stickyBarTotalInvoice" class="text-emerald-300 font-extrabold text-xs md:text-sm">0 ج.م</strong>
                 </span>
                 <button type="button" id="btnStickyAutoCredit" class="px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-[10px] md:text-xs font-extrabold border border-blue-400/50 transition flex items-center gap-1" title="حساب باقي الفاتورة آجل تلقائياً والانتقال لحقل الآجل">
-                  <span>⚡ باقي الفاتورة آجل:</span>
+                  <span>⚡</span><span class="sticky-bar-label-txt">باقي الفاتورة آجل:</span>
                   <strong id="stickyBarRemCredit" class="text-amber-200">0 ج.م</strong>
                 </button>
                 <button type="button" id="btnStickyDistributeCustody" class="hidden px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] md:text-xs font-extrabold border border-amber-300 transition items-center gap-1" title="توزيع العهدة تلقائياً على المديونية السابقة ثم فاتورة اليوم">
-                  <span>💼 توزيع العهدة ⚡</span>
+                  <span>💼</span><span class="sticky-bar-label-txt">توزيع العهدة</span><span>⚡</span>
                 </button>
               </div>
 
               <!-- Pinned Action Buttons (✕ إلغاء الإدخال + ⏳ حفظ مؤقت وزنة 1 + 💾 حفظ نهائي) -->
-              <div class="flex items-center gap-1.5 md:gap-2 flex-1 sm:flex-initial justify-end w-full sm:w-auto">
+              <div class="sticky-bar-actions-group flex items-center gap-1.5 md:gap-2 flex-1 sm:flex-initial justify-end w-full sm:w-auto">
                 <button type="button" id="btnCancelEditSale" class="px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-300/60 font-extrabold text-xs md:text-sm shadow transition flex items-center justify-center gap-1 shrink-0" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
                   <span>✕</span>
-                  <span id="btnCancelEditSaleText">إلغاء الإدخال</span>
+                  <span id="btnCancelEditSaleText" class="sticky-bar-label-txt">إلغاء الإدخال</span>
                 </button>
-                <button type="button" id="btnSavePendingW1" class="flex-1 sm:flex-initial px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1">
+                <button type="button" id="btnSavePendingW1" class="flex-1 sm:flex-initial px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1" title="حفظ مؤقت للوزنة الأولى">
                   <span>⏳</span>
-                  <span>حفظ مؤقت وزنة 1</span>
+                  <span>حفظ مؤقت <span class="sticky-bar-label-txt">وزنة 1</span></span>
                 </button>
-                <button type="submit" id="btnSaveSale" class="flex-1 sm:flex-initial px-3 md:px-6 py-1.5 md:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs md:text-sm shadow-lg border border-emerald-300/50 transition flex items-center justify-center gap-1.5">
+                <button type="submit" id="btnSaveSale" class="flex-1 sm:flex-initial px-3 md:px-6 py-1.5 md:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs md:text-sm shadow-lg border border-emerald-300/50 transition flex items-center justify-center gap-1.5" title="حفظ نهائي للحركة">
                   <span>💾</span>
                   <span id="btnSaveSaleText">حفظ نهائي</span>
                 </button>
@@ -1123,6 +1123,16 @@
 
         <!-- عرض البطاقات المدمجة للمندوب على الموبايل (يظهر في وضع شاشة المندوب المبسط بدون تمرير أفقي) -->
         <div id="liteSalesCardsContainer" class="hidden p-3 space-y-2.5 bg-slate-100/80"></div>
+
+        <!-- زرا التنقل العائمان السريعان (Scroll-to-Top & Scroll-to-Bottom) في وضع المندوب عند تجاوز بطاقات المبيعات 15 بطاقة -->
+        <div id="liteScrollNavFloatingBtns" class="hidden fixed left-2.5 z-40 flex flex-col gap-1.5">
+          <button type="button" id="btnLiteScrollToTop" class="w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 text-amber-300 border-2 border-amber-400 shadow-lg flex items-center justify-center text-xs font-extrabold transition active:scale-95" title="التمرير السريع لأعلى الصفحة">
+            ⬆️
+          </button>
+          <button type="button" id="btnLiteScrollToBottom" class="w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 text-teal-300 border-2 border-teal-400 shadow-lg flex items-center justify-center text-xs font-extrabold transition active:scale-95" title="التمرير السريع لأسفل بطاقات المبيعات">
+            ⬇️
+          </button>
+        </div>
 
         <!-- الجدول الكامل للمحاسب والكمبيوتر -->
         <div id="dailySalesTableScrollWrapper" class="table-scroll-wrapper w-full overflow-x-auto custom-scrollbar">
@@ -2902,45 +2912,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=82"></script>
-  <script src="./js/core-state.js?v=82"></script>
-  <script src="./js/accounting.js?v=82"></script>
-  <script src="./js/storage-sync.js?v=82"></script>
-  <script src="./js/excel-engine.js?v=82"></script>
-  <script src="./js/print-export.js?v=82"></script>
-  <script src="./js/ui-controllers.js?v=82"></script>
+  <script src="./excel-template.js?v=83"></script>
+  <script src="./js/core-state.js?v=83"></script>
+  <script src="./js/accounting.js?v=83"></script>
+  <script src="./js/storage-sync.js?v=83"></script>
+  <script src="./js/excel-engine.js?v=83"></script>
+  <script src="./js/print-export.js?v=83"></script>
+  <script src="./js/ui-controllers.js?v=83"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v82-final-dashboard';
+      var SW_CACHE_NAME = 'farm-sales-v83-mobile-ui';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=82',
+        './style.css?v=83',
         './excel-template.js',
-        './excel-template.js?v=82',
+        './excel-template.js?v=83',
         './js/core-state.js',
-        './js/core-state.js?v=82',
+        './js/core-state.js?v=83',
         './js/accounting.js',
-        './js/accounting.js?v=82',
+        './js/accounting.js?v=83',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=82',
+        './js/storage-sync.js?v=83',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=82',
+        './js/excel-engine.js?v=83',
         './js/print-export.js',
-        './js/print-export.js?v=82',
+        './js/print-export.js?v=83',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=82',
+        './js/ui-controllers.js?v=83',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=82'
+        './vendor/vendor-loader.js?v=83'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-        if (!window.__swRegisteredOnceV82) {
-          window.__swRegisteredOnceV82 = true;
-          navigator.serviceWorker.register('./sw.js?v=82', { scope: './' }).catch(function () {});
+        if (!window.__swRegisteredOnceV83) {
+          window.__swRegisteredOnceV83 = true;
+          navigator.serviceWorker.register('./sw.js?v=83', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {

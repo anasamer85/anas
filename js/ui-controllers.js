@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v82)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v83)
 // =========================================================================
 
 // =========================================================================
@@ -2173,7 +2173,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v82):
+  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v83):
   //    - Admin sees all 5 sub-tabs.
   //    - Regular delegate sees only (🗂️ المزارع والإكسيل if permitted) and (🎨 تفضيلات الواجهة), while the 3 Admin sub-tabs (🔐 المستخدمون والصلاحيات, ☁️ الربط السحابي, 🕵️ الرقابة والنسخ) are completely hidden.
   const uPerms = (activeUser && activeUser.perms) || {};
@@ -2631,6 +2631,10 @@ function updateLiteFieldModeUI() {
     bannerEl.classList.toggle('hidden', !active);
     bannerEl.style.display = active ? 'flex' : 'none';
   }
+  if (!active) {
+    const scrollNavBtnsEl = document.getElementById('liteScrollNavFloatingBtns');
+    if (scrollNavBtnsEl) scrollNavBtnsEl.classList.add('hidden');
+  }
   const fNameEl = document.getElementById('liteBannerFarmName');
   if (fNameEl) fNameEl.textContent = appState.farmName || 'مزرعة جديدة';
 
@@ -2787,9 +2791,11 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
   }
 
   // 2. العنصر الثالث: سجل حركات البيع المسجلة اليوم بنظام بطاقات الموبايل (Mobile Sale Cards)
+  const scrollNavBtnsEl = document.getElementById('liteScrollNavFloatingBtns');
   if (!salesCardsBox) return;
   if (!active) {
     salesCardsBox.classList.add('hidden');
+    if (scrollNavBtnsEl) scrollNavBtnsEl.classList.add('hidden');
     return;
   }
   salesCardsBox.classList.remove('hidden');
@@ -2805,6 +2811,12 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
         String(r.notes || '').toLowerCase().includes(q)
       )
     : allRows;
+
+  // إظهار زري التنقل العائمين (Scroll-to-Top / Scroll-to-Bottom) فقط في وضع المندوب إذا تجاوز عدد بطاقات المبيعات لليوم الحالي 15 بطاقة
+  if (scrollNavBtnsEl) {
+    const showScrollBtns = Boolean(active && filteredRows.length > 15);
+    scrollNavBtnsEl.classList.toggle('hidden', !showScrollBtns);
+  }
 
   if (filteredRows.length === 0) {
     salesCardsBox.innerHTML = `
@@ -3753,7 +3765,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v82-final-dashboard';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v83-mobile-ui';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3784,11 +3796,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v82) without automatic reload loops
+  // Register Offline Service Worker (v83) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV82) {
-      window.__swRegisteredOnceV82 = true;
-      navigator.serviceWorker.register('./sw.js?v=82', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV83) {
+      window.__swRegisteredOnceV83 = true;
+      navigator.serviceWorker.register('./sw.js?v=83', { scope: './' }).catch(() => {});
     }
   }
 
@@ -5954,6 +5966,26 @@ function initFarmSalesApp() {
     });
   }
 
+  // أزرار التمرير السلس (Scroll-to-Top / Scroll-to-Bottom) لبطاقات المبيعات الطويلة (> 15 بطاقة) في وضع المندوب
+  const btnLiteTop = document.getElementById('btnLiteScrollToTop');
+  if (btnLiteTop) {
+    btnLiteTop.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+  const btnLiteBottom = document.getElementById('btnLiteScrollToBottom');
+  if (btnLiteBottom) {
+    btnLiteBottom.addEventListener('click', () => {
+      const cardsBox = document.getElementById('liteSalesCardsContainer');
+      const lastCard = cardsBox ? cardsBox.lastElementChild : null;
+      if (lastCard) {
+        lastCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      } else {
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+      }
+    });
+  }
+
   // تفعيل التنقل السريع بزر Enter بين حقول الميزان والبيع (وزنة 1 ⬅️ وزنة 2 ⬅️ نقدي مبيعات ⬅️ باقي الفاتورة آجل)
   function focusAndSelectField(fieldId) {
     const el = document.getElementById(fieldId);
@@ -7942,14 +7974,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v82)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v83)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=82',
-    './js/accounting.js?v=82',
-    './js/storage-sync.js?v=82',
-    './js/excel-engine.js?v=82',
-    './js/print-export.js?v=82',
-    './js/ui-controllers.js?v=82'
+    './js/core-state.js?v=83',
+    './js/accounting.js?v=83',
+    './js/storage-sync.js?v=83',
+    './js/excel-engine.js?v=83',
+    './js/print-export.js?v=83',
+    './js/ui-controllers.js?v=83'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8041,7 +8073,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v82)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v83)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8159,14 +8191,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=82');
+        scTpl.setAttribute('src', './excel-template.js?v=83');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=82');
+        lnk.setAttribute('href', './style.css?v=83');
         bundledStyleEl.replaceWith(lnk);
       }
     }
