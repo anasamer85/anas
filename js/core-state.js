@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v79)
+// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v81)
 // =========================================================================
 
 // =========================================================================
@@ -413,6 +413,7 @@ function getDefaultState(customFarmName = '') {
     currentDay: 1,
     visibleDays: [1],
     activeTab: 'daily',
+    activeSyncSubTab: 'farms_excel',
     merchantsViewFilter: 'all',
     transfersViewFilter: 'all',
     prevFarmsViewFilter: 'all',

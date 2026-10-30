@@ -1594,6 +1594,24 @@ body {
       font-weight: 800 !important;
       box-shadow: 0 2px 8px rgba(255, 192, 0, 0.35);
     }
+    .sync-subtab-btn {
+      background-color: #f8fafc;
+      color: #334155;
+      border: 2px solid #e2e8f0;
+      font-weight: 800;
+      transition: all 0.15s ease;
+    }
+    .sync-subtab-btn:hover {
+      background-color: #eff6ff;
+      color: #1e3a8a;
+      border-color: #93c5fd;
+    }
+    .sync-subtab-active {
+      background: linear-gradient(135deg, #1b365d 0%, #2c5e8a 100%) !important;
+      color: #ffc000 !important;
+      border-color: #ffc000 !important;
+      box-shadow: 0 4px 12px rgba(27, 54, 93, 0.28) !important;
+    }
     .day-pill-active {
       background-color: #1b365d !important;
       color: #ffffff !important;

@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v79)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v81)
 // =========================================================================
 
 // =========================================================================
@@ -2015,6 +2015,68 @@ function getInactivityLimitMs() {
   return mins > 0 ? mins * 60 * 1000 : 0;
 }
 
+function getAvailableSyncSubTabsForCurrentUser() {
+  const activeUser = getActiveUser();
+  const isAdm = Boolean(activeUser && activeUser.perms && activeUser.perms.admin);
+  const isVis = activeUser && activeUser.id === 'visitor' && !isAdm;
+  const uPerms = (activeUser && activeUser.perms) || {};
+  const showQuickCtrl = isAdm || (!isVis && Boolean(uPerms.showSyncExcel));
+  const showCloudHub = isAdm || (!isVis && Boolean(uPerms.showSyncCloud));
+  const canSeeFarmsExcelTab = Boolean(isAdm || showQuickCtrl || showCloudHub);
+
+  const allowed = [];
+  if (canSeeFarmsExcelTab) allowed.push('farms_excel');
+  if (!isVis) allowed.push('ui_prefs');
+  if (isAdm) {
+    allowed.push('users_perms', 'cloud_link', 'audit_backup');
+  }
+  return {
+    allowed,
+    isAdm,
+    isVis,
+    showQuickCtrl,
+    showCloudHub,
+    canSeeFarmsExcelTab,
+    defaultSubTab: isAdm ? 'farms_excel' : (canSeeFarmsExcelTab ? 'farms_excel' : 'ui_prefs')
+  };
+}
+
+function switchSyncSubTabUI(targetSubTab = '') {
+  const info = getAvailableSyncSubTabsForCurrentUser();
+  const allSubTabs = ['farms_excel', 'ui_prefs', 'users_perms', 'cloud_link', 'audit_backup'];
+
+  // Toggle visibility of sub-tab buttons in #syncSubNavBar
+  const btnFarmsExcel = document.getElementById('btnSyncSubTabFarmsExcel');
+  if (btnFarmsExcel) btnFarmsExcel.classList.toggle('hidden', !info.canSeeFarmsExcelTab);
+
+  const btnUiPrefs = document.getElementById('btnSyncSubTabUiPrefs');
+  if (btnUiPrefs) btnUiPrefs.classList.toggle('hidden', info.isVis);
+
+  ['btnSyncSubTabUsersPerms', 'btnSyncSubTabCloudLink', 'btnSyncSubTabAuditBackup'].forEach(btnId => {
+    const el = document.getElementById(btnId);
+    if (el) el.classList.toggle('hidden', !info.isAdm);
+  });
+
+  let chosen = String(targetSubTab || appState.activeSyncSubTab || '').trim();
+  if (!chosen || !info.allowed.includes(chosen)) {
+    chosen = info.defaultSubTab;
+  }
+  appState.activeSyncSubTab = chosen;
+
+  document.querySelectorAll('.sync-subtab-btn').forEach(btn => {
+    const k = btn.getAttribute('data-sync-subtab');
+    btn.classList.toggle('sync-subtab-active', k === chosen);
+  });
+
+  allSubTabs.forEach(k => {
+    const pane = document.getElementById(`syncSubView-${k}`);
+    if (pane) {
+      pane.classList.toggle('hidden', k !== chosen || !info.allowed.includes(k));
+    }
+  });
+}
+window.switchSyncSubTabUI = switchSyncSubTabUI;
+
 function renderUsersAndPermissionsUI(renderTable = true) {
   appState.users = (appState.users || []).filter(u => u && u.id !== 'visitor');
   const users = appState.users;
@@ -2094,6 +2156,8 @@ function renderUsersAndPermissionsUI(renderTable = true) {
   if (btnHdrPerm) btnHdrPerm.classList.toggle('hidden', !isAdm);
   const btnDdPerm = document.getElementById('btnDropdownPermissions');
   if (btnDdPerm) btnDdPerm.classList.toggle('hidden', !isAdm);
+  const btnDdJson = document.getElementById('btnDropdownJsonBackup');
+  if (btnDdJson) btnDdJson.classList.toggle('hidden', !isAdm);
   const btnDdProf = document.getElementById('btnOpenMyProfile');
   if (btnDdProf) btnDdProf.classList.toggle('hidden', isVis);
 
@@ -2112,14 +2176,15 @@ function renderUsersAndPermissionsUI(renderTable = true) {
   // 2. Inside #view-sync:
   //    - Admin sees everything.
   //    - Regular user sees their own account (#myProfileCardSection) + only sections explicitly permitted by Admin.
-  //    - Users management (#usersPermissionsModal) is strictly for Admin only.
+  //    - Users management (#usersPermissionsModal) and Full JSON Backup & Audit (#fullJsonBackupAndAuditCard) are strictly for Admin only.
+  //    - Each permission is completely independent (showCloudHub depends strictly on uPerms.showSyncCloud, not uPerms.farms).
   const uPerms = (activeUser && activeUser.perms) || {};
   const showQuickCtrl = isAdm || (!isVis && Boolean(uPerms.showSyncExcel));
-  const showCloudHub = isAdm || (!isVis && Boolean(uPerms.showSyncCloud || uPerms.farms));
+  const showCloudHub = isAdm || (!isVis && Boolean(uPerms.showSyncCloud));
   const showTwoWay = isAdm || (!isVis && Boolean(uPerms.showSyncWebhook));
 
   const cardQuick = document.getElementById('syncQuickControlCard');
-  if (cardQuick) cardQuick.classList.toggle('hidden', isVis);
+  if (cardQuick) cardQuick.classList.toggle('hidden', !showQuickCtrl);
   const excelHdrRow = document.getElementById('syncQuickExcelHeaderRow');
   if (excelHdrRow) excelHdrRow.classList.toggle('hidden', !showQuickCtrl);
   const dayMgmtSec = document.getElementById('syncDayMgmtSection');
@@ -2127,11 +2192,12 @@ function renderUsersAndPermissionsUI(renderTable = true) {
   const cardCloud = document.getElementById('syncCloudDbHubCard');
   if (cardCloud) cardCloud.classList.toggle('hidden', !showCloudHub);
   const cardBackupAudit = document.getElementById('fullJsonBackupAndAuditCard');
-  if (cardBackupAudit) cardBackupAudit.classList.toggle('hidden', isVis);
+  if (cardBackupAudit) cardBackupAudit.classList.toggle('hidden', !isAdm);
   const cardTwoWay = document.getElementById('syncTwoWayExcelCard');
-  if (cardTwoWay) cardTwoWay.classList.toggle('hidden', !showTwoWay);
+  if (cardTwoWay) cardTwoWay.classList.toggle('hidden', !isAdm);
   const usersModalCard = document.getElementById('usersPermissionsModal');
   if (usersModalCard) usersModalCard.classList.toggle('hidden', !isAdm);
+  switchSyncSubTabUI(appState.activeSyncSubTab);
 
   // Toggle Forms based on granular permissions & active day lock status
   const curDayLocked = isDayLocked(appState.currentDay);
@@ -2155,10 +2221,18 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     const b = document.getElementById(bid);
     if (b) b.classList.toggle('hidden', !hasPermission('sales'));
   });
-  ['btnAddNewCloudFarm', 'inpNewCloudFarmName', 'btnResetDemoData', 'btnNewCleanCycle', 'btnLinkLiveExcel'].forEach(bid => {
+  ['btnAddNewCloudFarm', 'inpNewCloudFarmName', 'btnNewCleanCycle', 'btnLinkLiveExcel'].forEach(bid => {
     const b = document.getElementById(bid);
-    if (b) b.classList.toggle('hidden', !(hasPermission('farms') || showTwoWay || showQuickCtrl));
+    if (b) b.classList.toggle('hidden', !(hasPermission('farms') || showQuickCtrl));
   });
+  const btnResetDemoEl = document.getElementById('btnResetDemoData');
+  if (btnResetDemoEl) {
+    btnResetDemoEl.classList.toggle('hidden', !isAdm);
+  }
+  const smartResetInlineEl = document.getElementById('smartResetInlineBox');
+  if (smartResetInlineEl && !isAdm) {
+    smartResetInlineEl.classList.add('hidden');
+  }
   syncFirebaseAdminInputsUI();
   const lblImp = document.querySelector('label[for="fileImportXlsx"]');
   if (lblImp) lblImp.classList.toggle('hidden', !(hasPermission('farms') || showQuickCtrl));
@@ -3685,7 +3759,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v79-auth-fix';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v81-sub-tabs';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3716,11 +3790,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v79) without automatic reload loops
+  // Register Offline Service Worker (v81) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV79) {
-      window.__swRegisteredOnceV79 = true;
-      navigator.serviceWorker.register('./sw.js?v=79', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV81) {
+      window.__swRegisteredOnceV81 = true;
+      navigator.serviceWorker.register('./sw.js?v=81', { scope: './' }).catch(() => {});
     }
   }
 
@@ -4020,6 +4094,7 @@ function initFarmSalesApp() {
         applyCloudWebhookUrlFromStartScreen(activeWebhookForLogin);
       }
       appState.activeUserId = 'admin';
+      appState.activeSyncSubTab = 'farms_excel';
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
@@ -4057,6 +4132,7 @@ function initFarmSalesApp() {
         applyCloudWebhookUrlFromStartScreen(activeWebhookForLogin);
       }
       appState.activeUserId = matchedUser.id;
+      appState.activeSyncSubTab = (matchedUser.perms && (matchedUser.perms.admin || matchedUser.perms.showSyncExcel || matchedUser.perms.showSyncCloud)) ? 'farms_excel' : 'ui_prefs';
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
@@ -4357,8 +4433,10 @@ function initFarmSalesApp() {
   document.getElementById('btnOpenMyProfile').addEventListener('click', (e) => {
     e.preventDefault();
     if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
+    appState.activeSyncSubTab = 'ui_prefs';
     const syncTabBtn = document.querySelector('[data-nav="sync"]');
     if (syncTabBtn) syncTabBtn.click();
+    switchSyncSubTabUI('ui_prefs');
     setTimeout(() => {
       const profSec = document.getElementById('myProfileCardSection');
       if (profSec) profSec.scrollIntoView({ behavior: 'smooth' });
@@ -4413,8 +4491,10 @@ function initFarmSalesApp() {
 
   document.getElementById('btnOpenUsersModal').addEventListener('click', (e) => {
     e.preventDefault();
+    appState.activeSyncSubTab = 'users_perms';
     const syncTabBtn = document.querySelector('[data-nav="sync"]');
     if (syncTabBtn) syncTabBtn.click();
+    switchSyncSubTabUI('users_perms');
     setTimeout(() => {
       const permSec = document.getElementById('usersPermissionsModal');
       if (permSec) permSec.scrollIntoView({ behavior: 'smooth' });
@@ -4425,6 +4505,59 @@ function initFarmSalesApp() {
     document.getElementById('usersPermissionsModal').classList.add('hidden');
   });
 
+  const SUB_PERM_CHECKBOX_IDS = [
+    'chkPermSales',
+    'chkPermExpenses',
+    'chkPermMerchants',
+    'chkPermFarms',
+    'chkPermShowSyncExcel',
+    'chkPermShowSyncCloud',
+    'chkPermShowSyncWebhook'
+  ];
+  let savedSubPermsBeforeAdminCheck = null;
+
+  function syncAdminPermCheckboxInteractiveState(isAdminChecked, restoreSavedOnUncheck = false) {
+    const chkAdminEl = document.getElementById('chkPermAdmin');
+    if (chkAdminEl) chkAdminEl.checked = Boolean(isAdminChecked);
+
+    if (isAdminChecked) {
+      if (!savedSubPermsBeforeAdminCheck) {
+        savedSubPermsBeforeAdminCheck = {};
+        SUB_PERM_CHECKBOX_IDS.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) savedSubPermsBeforeAdminCheck[id] = Boolean(el.checked);
+        });
+      }
+      SUB_PERM_CHECKBOX_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.checked = true;
+          el.disabled = true;
+          if (el.parentElement) el.parentElement.classList.add('opacity-60');
+        }
+      });
+    } else {
+      SUB_PERM_CHECKBOX_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.disabled = false;
+          if (el.parentElement) el.parentElement.classList.remove('opacity-60');
+          if (restoreSavedOnUncheck && savedSubPermsBeforeAdminCheck && savedSubPermsBeforeAdminCheck[id] !== undefined) {
+            el.checked = Boolean(savedSubPermsBeforeAdminCheck[id]);
+          }
+        }
+      });
+      savedSubPermsBeforeAdminCheck = null;
+    }
+  }
+
+  const chkPermAdminEl = document.getElementById('chkPermAdmin');
+  if (chkPermAdminEl) {
+    chkPermAdminEl.addEventListener('change', (e) => {
+      syncAdminPermCheckboxInteractiveState(Boolean(e.target.checked), true);
+    });
+  }
+
   document.getElementById('btnCancelUserEdit').addEventListener('click', () => {
     document.getElementById('editUserIdInput').value = '';
     document.getElementById('inpNewUserFullName').value = '';
@@ -4432,6 +4565,15 @@ function initFarmSalesApp() {
     document.getElementById('inpNewUserPassword').value = '1234';
     document.getElementById('inpNewUserPhone').value = '';
     document.getElementById('inpNewUserJobTitle').value = '';
+    savedSubPermsBeforeAdminCheck = null;
+    syncAdminPermCheckboxInteractiveState(false, false);
+    document.getElementById('chkPermSales').checked = true;
+    document.getElementById('chkPermExpenses').checked = true;
+    document.getElementById('chkPermMerchants').checked = false;
+    document.getElementById('chkPermFarms').checked = false;
+    document.getElementById('chkPermShowSyncExcel').checked = false;
+    document.getElementById('chkPermShowSyncCloud').checked = false;
+    if (document.getElementById('chkPermLiteFieldMode')) document.getElementById('chkPermLiteFieldMode').checked = false;
     document.getElementById('btnSaveUserSubmit').textContent = '➕ حفظ المستخدم';
     document.getElementById('btnCancelUserEdit').classList.add('hidden');
   });
@@ -4507,6 +4649,8 @@ function initFarmSalesApp() {
     document.getElementById('inpNewUserPassword').value = '1234';
     document.getElementById('inpNewUserPhone').value = '';
     document.getElementById('inpNewUserJobTitle').value = '';
+    savedSubPermsBeforeAdminCheck = null;
+    syncAdminPermCheckboxInteractiveState(false, false);
     saveState(true);
     renderAll();
   });
@@ -4542,6 +4686,8 @@ function initFarmSalesApp() {
       document.getElementById('chkPermShowSyncExcel').checked = Boolean(uObj.perms.showSyncExcel);
       document.getElementById('chkPermShowSyncCloud').checked = Boolean(uObj.perms.showSyncCloud);
       document.getElementById('chkPermShowSyncWebhook').checked = Boolean(uObj.perms.showSyncWebhook);
+      savedSubPermsBeforeAdminCheck = null;
+      syncAdminPermCheckboxInteractiveState(Boolean(uObj.perms.admin), false);
       document.getElementById('btnSaveUserSubmit').textContent = `💾 حفظ تعديلات (${uObj.name})`;
       document.getElementById('btnCancelUserEdit').classList.remove('hidden');
       document.getElementById('inpNewUserFullName').focus();
@@ -4595,6 +4741,31 @@ function initFarmSalesApp() {
       saveState(false);
       renderAll();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  // Sub-Navigation Tabs inside #view-sync (التبويبات الفرعية الـ 5 داخل التحكم والمزامنة)
+  document.querySelectorAll('.sync-subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetSub = btn.getAttribute('data-sync-subtab');
+      if (!targetSub) return;
+      switchSyncSubTabUI(targetSub);
+      saveState(false);
+      if (targetSub === 'farms_excel') {
+        if (typeof window.refreshDayManagementBoxesUI === 'function') window.refreshDayManagementBoxesUI();
+        renderCloudDatabaseHub();
+      } else if (targetSub === 'users_perms') {
+        renderUsersAndPermissionsUI(true);
+      } else if (targetSub === 'audit_backup') {
+        renderBackupAndAuditCenterUI();
+      } else if (targetSub === 'ui_prefs') {
+        updateFloatingActionBarVisibilityUI();
+        updateStickyTablesOptionsUI();
+        updateAuditMetadataVisibilityUI();
+        updateLiteFieldModeUI();
+      } else if (targetSub === 'cloud_link') {
+        syncFirebaseAdminInputsUI();
+      }
     });
   });
 
@@ -5560,8 +5731,10 @@ function initFarmSalesApp() {
       if (isLiteFieldModeEffective()) {
         setLiteFieldMode(false, false);
       }
+      appState.activeSyncSubTab = 'ui_prefs';
       const syncTabBtn = document.querySelector('[data-nav="sync"]');
       if (syncTabBtn) syncTabBtn.click();
+      switchSyncSubTabUI('ui_prefs');
       setTimeout(() => {
         const box = document.getElementById('stickyTablesControlBox');
         if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -7632,8 +7805,10 @@ function initFarmSalesApp() {
     btnDdJsonEl.addEventListener('click', () => {
       const dd = document.getElementById('headerUserDropdownMenu');
       if (dd) dd.classList.add('hidden');
+      appState.activeSyncSubTab = 'audit_backup';
       const syncTabBtn = document.querySelector('[data-nav="sync"]');
       if (syncTabBtn) syncTabBtn.click();
+      switchSyncSubTabUI('audit_backup');
       setTimeout(() => {
         const cardEl = document.getElementById('fullJsonBackupAndAuditCard');
         if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth' });
@@ -7778,14 +7953,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v79)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v81)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=79',
-    './js/accounting.js?v=79',
-    './js/storage-sync.js?v=79',
-    './js/excel-engine.js?v=79',
-    './js/print-export.js?v=79',
-    './js/ui-controllers.js?v=79'
+    './js/core-state.js?v=81',
+    './js/accounting.js?v=81',
+    './js/storage-sync.js?v=81',
+    './js/excel-engine.js?v=81',
+    './js/print-export.js?v=81',
+    './js/ui-controllers.js?v=81'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -7877,7 +8052,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v79)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v81)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -7995,14 +8170,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=79');
+        scTpl.setAttribute('src', './excel-template.js?v=81');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=79');
+        lnk.setAttribute('href', './style.css?v=81');
         bundledStyleEl.replaceWith(lnk);
       }
     }
@@ -8345,8 +8520,8 @@ function initFarmSalesApp() {
   }
 
   document.getElementById('btnResetDemoData').addEventListener('click', () => {
-    if (!hasPermission('farms') && !hasPermission('sales')) {
-      showToast('عفواً، تصفير الحركات متاح لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
+    if (!hasPermission('admin')) {
+      showToast('🔒 عفواً، التصفير الشامل للموقع أو المزرعة متاح لمدير الموقع فقط!', '🔒');
       return;
     }
     if (!smartResetBox) {
@@ -8376,6 +8551,10 @@ function initFarmSalesApp() {
 
   if (btnConfirmSmartReset) {
     btnConfirmSmartReset.addEventListener('click', () => {
+      if (!hasPermission('admin')) {
+        showToast('🔒 عفواً، تنفيذ التصفير متاح لمدير الموقع فقط!', '🔒');
+        return;
+      }
       const isFactoryZeroMode = Boolean(radResetFactoryZero && radResetFactoryZero.checked);
       const isFullMode = Boolean(!isFactoryZeroMode && radResetFull && radResetFull.checked);
       if (isFactoryZeroMode) {

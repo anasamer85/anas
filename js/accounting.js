@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v79)
+// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v81)
 // =========================================================================
 
 function addSpecificDayToCycle(targetDayNum, customLabel = '') {
@@ -112,8 +112,8 @@ function recordDayItemsAsDeleted(dayObj) {
 }
 
 function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '🗑️') {
-  if (!hasPermission('farms') && !hasPermission('sales')) {
-    showToast('عفواً، تصفير حركات المزرعة متاح لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
+  if (!hasPermission('admin')) {
+    showToast('🔒 عفواً، تصفير حركات المزرعة متاح لمدير الموقع فقط!', '🔒');
     return false;
   }
   const currentFarm = appState.farmName || 'مزرعة جديدة';
@@ -159,7 +159,7 @@ function clearActiveFarmMovementsKeepMerchants(customMsg = '', customIcon = '�
 }
 
 function clearAllSiteMovementsAndArchiveKeepMerchants(customMsg = '', customIcon = '🧨') {
-  if (!hasPermission('farms') && !hasPermission('admin')) {
+  if (!hasPermission('admin')) {
     showToast('عفواً، التصفير الشامل للموقع متاح لمدير الموقع والمستخدمين المصرح لهم.', '🔒');
     return false;
   }
@@ -226,7 +226,7 @@ function clearAllSiteMovementsAndArchiveKeepMerchants(customMsg = '', customIcon
 }
 
 function clearEverythingToFactoryZeroState(customMsg = '', customIcon = '☢️') {
-  if (!hasPermission('farms') && !hasPermission('admin')) {
+  if (!hasPermission('admin')) {
     showToast('عفواً، المسح الجذري الشامل للموقع والسحابة متاح لمدير الموقع والمستخدمين المصرح لهم فقط.', '🔒');
     return false;
   }
