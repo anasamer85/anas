@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v75)
+// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v76)
 // =========================================================================
 
 function addSpecificDayToCycle(targetDayNum, customLabel = '') {

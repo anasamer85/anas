@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v75)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v76)
 // =========================================================================
 
 // =========================================================================
@@ -1012,6 +1012,21 @@ const DOM_EXCEL_TABLES = {
 
 const domTableRawCache = {};
 
+function captureDomTableRawRows(tableId) {
+  const cfg = DOM_EXCEL_TABLES[tableId];
+  if (!cfg) return [];
+  const tbody = document.getElementById(cfg.tbodyId);
+  if (!tbody) return [];
+  const currentTrs = Array.from(tbody.querySelectorAll('tr'));
+  const isSingleEmptyMessage = currentTrs.length === 1 && currentTrs[0].children.length === 1 && currentTrs[0].children[0].colSpan > 1;
+  if (!isSingleEmptyMessage) {
+    domTableRawCache[tableId] = currentTrs.map(tr => tr.cloneNode(true));
+  } else {
+    domTableRawCache[tableId] = [];
+  }
+  return domTableRawCache[tableId];
+}
+
 function applyDomTableExcelEngine(tableId) {
   const cfg = DOM_EXCEL_TABLES[tableId];
   if (!cfg) return;
@@ -1025,26 +1040,23 @@ function applyDomTableExcelEngine(tableId) {
     theadRow.innerHTML = cfg.columns.map(col => renderExcelHeaderCell(tableId, col, cfg.lightHeader)).join('');
   }
 
-  // Capture freshly rendered rows into cache
-  const currentTrs = Array.from(tbody.querySelectorAll('tr'));
-  const isSingleEmptyMessage = currentTrs.length === 1 && currentTrs[0].children.length === 1 && currentTrs[0].children[0].colSpan > 1;
-  if (!isSingleEmptyMessage) {
-    domTableRawCache[tableId] = currentTrs.map(tr => tr.cloneNode(true));
-  } else {
-    domTableRawCache[tableId] = [];
-  }
-
-  const rawRows = domTableRawCache[tableId] || [];
-  if (rawRows.length === 0) return;
-
   const st = excelTableState[tableId];
   const hasAnyFilterOrSort = Boolean(
-    (st.searchQuery && st.searchQuery.trim()) ||
-    st.sortCol ||
-    Object.keys(st.colFilters).some(k => isColumnFilteredOrSorted(tableId, k).filtered)
+    st && (
+      (st.searchQuery && st.searchQuery.trim()) ||
+      st.sortCol ||
+      Object.keys(st.colFilters || {}).some(k => isColumnFilteredOrSorted(tableId, k).filtered)
+    )
   );
 
-  if (!hasAnyFilterOrSort) return;
+  // تأجيل استنساخ عقد الـ DOM (cloneNode) وحفظها في domTableRawCache فقط عند تفعيل أو استخدام الفلتر/الفرز فعلياً لتقليل استهلاك الذاكرة على الهواتف
+  if (!hasAnyFilterOrSort) {
+    delete domTableRawCache[tableId];
+    return;
+  }
+
+  const rawRows = captureDomTableRawRows(tableId);
+  if (rawRows.length === 0) return;
 
   const filteredRows = applyExcelSortAndFilter(rawRows, cfg.columns, tableId);
   tbody.innerHTML = '';
@@ -3622,7 +3634,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v75-delta-sync';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v76-performance-sync';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3653,11 +3665,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v75) without automatic reload loops
+  // Register Offline Service Worker (v76) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV75) {
-      window.__swRegisteredOnceV75 = true;
-      navigator.serviceWorker.register('./sw.js?v=75', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV76) {
+      window.__swRegisteredOnceV76 = true;
+      navigator.serviceWorker.register('./sw.js?v=76', { scope: './' }).catch(() => {});
     }
   }
 
@@ -4473,10 +4485,10 @@ function initFarmSalesApp() {
   document.getElementById('btnPushCloudNow').addEventListener('click', () => pushDatabaseToCloud(false, true));
   document.getElementById('btnPullCloudNow').addEventListener('click', () => pullDatabaseFromCloud(false, true));
 
-  // Copy Ready-Made Google Apps Script Cloud Database Code (v75: End-to-End Cloud Delta Sync & GAS LockService)
+  // Copy Ready-Made Google Apps Script Cloud Database Code (v76: End-to-End Cloud Delta Sync & GAS LockService)
   document.getElementById('btnCopyCloudScriptCode').addEventListener('click', () => {
     const scriptCode = [
-      "// كود قاعدة البيانات السحابية المطور (الإصدار v75 — يدعم Delta Sync اللحظي + LockService الذري + الأحجام الكبيرة)",
+      "// كود قاعدة البيانات السحابية المطور (الإصدار v76 — يدعم Delta Sync اللحظي + LockService الذري + الأحجام الكبيرة)",
       "// 1. افتح script.google.com وامسح الكود القديم بالكامل والصق هذا الكود ثم اضغط حفظ (Save 💾)",
       "// 2. اضغط Deploy -> Manage deployments -> Edit (أيقونة القلم ✏️) -> اختر Version: New version -> Deploy",
       "//    (أو Deploy -> New deployment -> Web app -> Execute as: Me -> Who has access: Anyone)",
@@ -4656,7 +4668,7 @@ function initFarmSalesApp() {
       "}"
     ].join('\n');
     copyTextToClipboardReliable(scriptCode);
-    showToast('تم نسخ كود السحابة المطور (v75 Delta Sync + LockService)! حدثه في script.google.com واختر (New version) عند النشر.', '📋');
+    showToast('تم نسخ كود السحابة المطور (v76 Delta Sync + LockService)! حدثه في script.google.com واختر (New version) عند النشر.', '📋');
   });
   window.addEventListener('offline', () => {
     updateConnectionAndSyncUI();
@@ -7152,6 +7164,9 @@ function initFarmSalesApp() {
     }
     const domCfg = DOM_EXCEL_TABLES[tableId];
     if (domCfg) {
+      if (!Array.isArray(domTableRawCache[tableId])) {
+        captureDomTableRawRows(tableId);
+      }
       return { columns: domCfg.columns, rawBaseRows: domTableRawCache[tableId] || [] };
     }
     return { columns: [], rawBaseRows: [] };
@@ -7824,14 +7839,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v75)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v76)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=75',
-    './js/accounting.js?v=75',
-    './js/storage-sync.js?v=75',
-    './js/excel-engine.js?v=75',
-    './js/print-export.js?v=75',
-    './js/ui-controllers.js?v=75'
+    './js/core-state.js?v=76',
+    './js/accounting.js?v=76',
+    './js/storage-sync.js?v=76',
+    './js/excel-engine.js?v=76',
+    './js/print-export.js?v=76',
+    './js/ui-controllers.js?v=76'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -7923,7 +7938,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v75)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v76)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8041,14 +8056,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=75');
+        scTpl.setAttribute('src', './excel-template.js?v=76');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=75');
+        lnk.setAttribute('href', './style.css?v=76');
         bundledStyleEl.replaceWith(lnk);
       }
     }
