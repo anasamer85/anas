@@ -1339,6 +1339,84 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   return true;
 }
 
+// =========================================================================
+// FIREBASE & CLOUD URL BUILDER ENGINE (Standard URL Object + ?auth= Support)
+// يضمن إضافة المسار /abouzekry_cloud_db.json في نهاية pathname دائماً قبل معاملات الاستعلام مثل ?auth=SECRET و &_t=...
+// =========================================================================
+function buildCloudEndpointUrl(rawUrl, extraQueryParams = {}) {
+  const cleanUrl = String(rawUrl || '').trim();
+  if (!cleanUrl) return '';
+  const isFirebase = cleanUrl.includes('firebaseio.com') || cleanUrl.includes('firebasedatabase.app');
+  try {
+    const parsedUrl = new URL(cleanUrl);
+    if (isFirebase) {
+      let path = parsedUrl.pathname || '/';
+      // إزالة أي شرطة مائلة زائدة في النهاية
+      path = path.replace(/\/+$/, '');
+      if (!path.endsWith('.json')) {
+        if (!path.endsWith('/abouzekry_cloud_db')) {
+          path = (path ? path : '') + '/abouzekry_cloud_db.json';
+        } else {
+          path = path + '.json';
+        }
+      }
+      parsedUrl.pathname = path.startsWith('/') ? path : ('/' + path);
+    }
+    if (extraQueryParams && typeof extraQueryParams === 'object') {
+      Object.keys(extraQueryParams).forEach(k => {
+        const val = extraQueryParams[k];
+        if (val !== undefined && val !== null && val !== '') {
+          parsedUrl.searchParams.set(k, String(val));
+        }
+      });
+    }
+    return parsedUrl.toString();
+  } catch (e) {
+    // Fallback آمن في حال كان الرابط غير قياسي
+    let fallbackBase = cleanUrl;
+    let queryPart = '';
+    const qIdx = cleanUrl.indexOf('?');
+    if (qIdx !== -1) {
+      fallbackBase = cleanUrl.slice(0, qIdx);
+      queryPart = cleanUrl.slice(qIdx + 1);
+    }
+    if (isFirebase) {
+      fallbackBase = fallbackBase.replace(/\/+$/, '');
+      if (!fallbackBase.endsWith('.json')) {
+        fallbackBase += '/abouzekry_cloud_db.json';
+      }
+    }
+    const params = new URLSearchParams(queryPart);
+    if (extraQueryParams && typeof extraQueryParams === 'object') {
+      Object.keys(extraQueryParams).forEach(k => {
+        const val = extraQueryParams[k];
+        if (val !== undefined && val !== null && val !== '') {
+          params.set(k, String(val));
+        }
+      });
+    }
+    const qs = params.toString();
+    return qs ? `${fallbackBase}?${qs}` : fallbackBase;
+  }
+}
+
+async function performAtomicPreFetchMerge(rawUrl) {
+  const preEndpoint = buildCloudEndpointUrl(rawUrl, { _t: Date.now() });
+  const preRes = await fetch(preEndpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
+  if (!preRes.ok) {
+    throw new Error(`HTTP ${preRes.status}`);
+  }
+  const preText = await preRes.text();
+  if (preText && preText.trim() !== '{}' && preText.trim() !== 'null') {
+    const remoteData = JSON.parse(preText);
+    if (remoteData && remoteData.days && remoteData.merchants) {
+      // دمج ذري مع تفضيل التعديلات المحلية الحديثة (preferCloud = false) لمنع مسح أو استبدال فواتير المندوبين الآخرين
+      mergeCloudDataIntoLocal(remoteData, false);
+      renderAllPreservingActiveInputs();
+    }
+  }
+}
+
 async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFetchMerge = false) {
   if (isCloudSyncInProgress && !forcePush) return false;
   syncActiveFarmIntoArchive();
@@ -1382,7 +1460,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
 
   isCloudSyncInProgress = true;
   try {
-    const baseEndpoint = isFirebase ? (url.replace(/\/$/, '') + '/abouzekry_cloud_db.json') : url;
+    const baseEndpoint = buildCloudEndpointUrl(url);
     const outboxBatch = Array.isArray(appState.syncOutbox) ? [...appState.syncOutbox] : [];
     const canUseDeltaPush = Boolean(
       outboxBatch.length > 0 &&
@@ -1392,7 +1470,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       String(appState.farmName || '').trim()
     );
 
-    // 1. المسار الجزئي السريع (Delta Sync Push): إرسال الحركات الموجودة في syncOutbox فقط + lastDeltaSyncAt
+    // 1. المسار الجزئي السريع لـ Google Apps Script (Delta Sync Push)
     if (canUseDeltaPush && !isFirebase) {
       try {
         const deltaPayloadStr = JSON.stringify({
@@ -1436,24 +1514,57 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       }
     }
 
-    // دعم طلبات PATCH الجزئية لروابط Firebase
+    // 2. جلب ودمج مسبق ذري (Atomic Pre-Fetch & Merge) قبل إرسال PATCH أو PUT إلى Firebase (أو Full POST إلى GAS)
+    // يحمي مصفوفات المبيعات والوزنات المؤقتة والمصروفات من الاستبدال المتبادل (Array Overwrite Protection) في حال التزامن في نفس الثانية
+    if (!skipPreFetchMerge) {
+      try {
+        await performAtomicPreFetchMerge(url);
+      } catch (preErr) {
+        if (!silent) showToast('⏳ الشبكة غير مستقرة حالياً — تم تأجيل الرفع التلقائي لحين استقرار الاتصال لمنع الكتابة فوق حركات المندوبين الآخرين.', '🟠');
+        return false;
+      }
+    }
+
+    // 3. دعم طلبات PATCH الجزئية المحصّنة لروابط Firebase (بعد إتمام الجلب والدمج المسبق الذري بنجاح)
     if (canUseDeltaPush && isFirebase) {
       try {
-        const nowIso = new Date(getSyncedNow()).toISOString();
-        appState.updatedAt = nowIso;
+        const nowMsPatch = getSyncedNow();
+        const nowIsoPatch = new Date(nowMsPatch).toISOString();
+        appState.updatedAt = nowIsoPatch;
+        syncActiveFarmIntoArchive();
+
+        // تحديد الأيام التي تأثرت في syncOutbox بالإضافة إلى اليوم الحالي لدمجها وتحديثها ذرياً عبر PATCH
+        const touchedDaysSet = new Set([Number(appState.currentDay) || 1]);
+        outboxBatch.forEach(ev => {
+          const dNum = Number(ev && ev.payload && ev.payload.dayNum);
+          if (dNum >= 1 && dNum <= 10) touchedDaysSet.add(dNum);
+        });
+
         const patchObj = {
-          updatedAt: nowIso,
+          updatedAt: nowIsoPatch,
+          hasLocalEdits: true,
           farmName: appState.farmName,
-          lastScaleNo: appState.lastScaleNo,
+          lastFarmSwitchAt: Number(appState.lastFarmSwitchAt) || 0,
+          farmResetAt: Number(appState.farmResetAt) || 0,
+          factoryZeroWipeAt: Number(appState.factoryZeroWipeAt) || 0,
+          lastBulkImportAt: Number(appState.lastBulkImportAt) || 0,
+          currentDay: appState.currentDay,
+          visibleDays: appState.visibleDays,
           defaultPrice: appState.defaultPrice,
           defaultTip: appState.defaultTip,
-          visibleDays: appState.visibleDays,
+          lastScaleNo: appState.lastScaleNo,
+          inactivityTimeoutMin: appState.inactivityTimeoutMin,
           deletedIds: ensureDeletedIdsStructure(appState.deletedIds),
           deletedTimestamps: ensureDeletedTimestampsStructure(appState.deletedTimestamps),
           merchants: appState.merchants,
-          users: appState.users,
-          [`days/${appState.currentDay}`]: appState.days[appState.currentDay]
+          users: appState.users
         };
+        touchedDaysSet.forEach(dNum => {
+          if (appState.days && appState.days[dNum]) {
+            patchObj[`days/${dNum}`] = appState.days[dNum];
+          }
+        });
+
         const patchRes = await fetch(baseEndpoint, {
           method: 'PATCH',
           redirect: 'follow',
@@ -1463,39 +1574,23 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
         if (patchRes.ok) {
           const sentIds = new Set(outboxBatch.map(ev => ev.id));
           appState.syncOutbox = (appState.syncOutbox || []).filter(ev => !sentIds.has(ev.id));
-          appState.lastDeltaSyncAt = getSyncedNow();
+          appState.lastDeltaSyncAt = nowMsPatch;
           appState.pendingChanges = appState.syncOutbox.length;
-          appState.lastExcelSync = `مزامنة جزئية Firebase PATCH ⚡ (${new Date().toLocaleTimeString('ar-EG')})`;
+          appState.lastExcelSync = `مزامنة جزئية ذرية Firebase PATCH ⚡ (${new Date().toLocaleTimeString('ar-EG')})`;
           saveState(false);
-          if (!silent) showToast('✅ تم تحديث الحركات جزئياً عبر Firebase PATCH بنجاح!', '⚡');
+          if (liveBroadcastChannel) {
+            try { liveBroadcastChannel.postMessage({ type: 'STATE_UPDATED', updatedAt: nowIsoPatch }); } catch (e) {}
+          }
+          verifyActiveUserSession();
+          if (!silent) showToast('✅ تم دمج وتحديث الحركات جزئياً عبر Firebase PATCH الذري بنجاح!', '⚡');
           return true;
         }
-      } catch (fbPatchErr) {}
-    }
-
-    // 2. المسار الشامل (Full State Snapshot & Auto-Fallback)
-    if (!skipPreFetchMerge) {
-      try {
-        const sep = baseEndpoint.includes('?') ? '&' : '?';
-        const preEndpoint = `${baseEndpoint}${sep}_t=${Date.now()}`;
-        const preRes = await fetch(preEndpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
-        if (!preRes.ok) {
-          throw new Error(`HTTP ${preRes.status}`);
-        }
-        const preText = await preRes.text();
-        if (preText && preText.trim() !== '{}' && preText.trim() !== 'null') {
-          const remoteData = JSON.parse(preText);
-          if (remoteData && remoteData.days && remoteData.merchants) {
-            mergeCloudDataIntoLocal(remoteData, false);
-            renderAllPreservingActiveInputs();
-          }
-        }
-      } catch (preErr) {
-        if (!silent) showToast('⏳ الشبكة غير مستقرة حالياً — تم تأجيل الرفع التلقائي لحين استقرار الاتصال لمنع الكتابة فوق حركات المندوبين الآخرين.', '🟠');
-        return false;
+      } catch (fbPatchErr) {
+        // Auto-Fallback إلى PUT الكامل بالأسفل
       }
     }
 
+    // 4. المسار الشامل (Full State Snapshot PUT لـ Firebase أو POST لـ GAS)
     const method = isFirebase ? 'PUT' : 'POST';
     const nowMs = getSyncedNow();
     const nowIso = new Date(nowMs).toISOString();
@@ -1559,6 +1654,10 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
         appState.lastDeltaSyncAt = nowMs;
       }
     } else {
+      if (!res.ok) {
+        if (!silent) showToast(`❌ رفضت قاعدة بيانات Firebase الحفظ (HTTP ${res.status})! تحقق من صلاحيات القواعد أو مفتاح ?auth=`, '❌');
+        return false;
+      }
       appState.lastDeltaSyncAt = nowMs;
     }
 
@@ -1573,7 +1672,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
     if (!silent) showToast('✅ تم دمج ورفع وحفظ جميع التعديلات والموازين في السحابة بنجاح!', '☁️');
     return true;
   } catch (err) {
-    if (!silent) showToast('⚠️ تعذر الاتصال بالسحابة، تأكد من اتصال الإنترنت ومن إعداد (Who has access: Anyone) في السكربت.', '🟠');
+    if (!silent) showToast('⚠️ تعذر الاتصال بالسحابة، تأكد من اتصال الإنترنتوصحة رابط السحابة.', '🟠');
     return false;
   } finally {
     isCloudSyncInProgress = false;
@@ -1588,7 +1687,7 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
   }
   const url = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
   if (!url) {
-    if (!silent) showToast('⚠️ الصق رابط السحابة (Google Apps Script URL) أولاً ثم اضغط حفظ وسحب من السحابة!', 'ℹ️');
+    if (!silent) showToast('⚠️ الصق رابط السحابة (Firebase / Google Apps Script URL) أولاً ثم اضغط حفظ وسحب من السحابة!', 'ℹ️');
     return false;
   }
   if (!navigator.onLine) {
@@ -1598,10 +1697,8 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
   const pullStartEpoch = localMutationEpoch;
   try {
     const isFirebase = url.includes('firebaseio.com') || url.includes('firebasedatabase.app');
-    const baseEndpoint = isFirebase ? (url.replace(/\/$/, '') + '/abouzekry_cloud_db.json') : url;
-    const sep = baseEndpoint.includes('?') ? '&' : '?';
 
-    // في النبض الدوري الخلفي (Live Sync)، نطلب فقط الحركات التي تغيرت بعد lastDeltaSyncAt لتقليل استهلاك البيانات بنسبة 98%
+    // في النبض الدوري الخلفي (Live Sync)، يطلب المتصفح من GAS فقط الحركات التي تغيرت بعد lastDeltaSyncAt، بينما يستخدم مع Firebase رابط JSON المدمج مع ?auth=
     const canUseDeltaPull = Boolean(
       isLiveBackgroundTick &&
       !isFirebase &&
@@ -1609,10 +1706,13 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
       String(appState.farmName || '').trim()
     );
     const endpoint = canUseDeltaPull
-      ? `${baseEndpoint}${sep}mode=delta_pull&since=${Number(appState.lastDeltaSyncAt)}&_t=${Date.now()}`
-      : `${baseEndpoint}${sep}_t=${Date.now()}`;
+      ? buildCloudEndpointUrl(url, { mode: 'delta_pull', since: Number(appState.lastDeltaSyncAt), _t: Date.now() })
+      : buildCloudEndpointUrl(url, { _t: Date.now() });
 
     const res = await fetch(endpoint, { method: 'GET', redirect: 'follow', cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
     const text = await res.text();
     if (isLiveBackgroundTick && (localMutationEpoch !== pullStartEpoch || isCloudSyncInProgress || Number(appState.pendingChanges) > 0 || (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000)))) {
       return false;
@@ -1646,7 +1746,7 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
       return true;
     }
 
-    // 2. التوافق التلقائي الرجعي (Auto-Fallback) للسحب الكامل عند فتح متصفح جديد أو إذا كان السكربت على الإصدار القديم
+    // 2. التوافق التلقائي الرجعي (Auto-Fallback) للسحب الكامل (Firebase JSON أو GAS Full Snapshot)
     if (data && data.days && data.merchants) {
       const prevUpdatedAt = appState.updatedAt;
       const hadUnsyncedLocalChanges = (Number(appState.pendingChanges) > 0 || (Array.isArray(appState.syncOutbox) && appState.syncOutbox.length > 0));
@@ -1674,7 +1774,7 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
       if (!silent) showToast('⚠️ السحابة فارغة حالياً أو لم يتم رفع تعديلات إليها بعد.', 'ℹ️');
     }
   } catch (err) {
-    if (!silent) showToast('❌ تعذر قراءة بيانات السحابة! تأكد أن الرابط ينتهي بـ /exec ومنشور بصلاحية (Anyone).', '⚠️');
+    if (!silent) showToast('❌ تعذر قراءة بيانات السحابة! تحقق من صحة الرابط وإعدادات الصلاحية أو مفتاح ?auth=.', '⚠️');
   }
   return false;
 }
@@ -1713,7 +1813,7 @@ function updateLiveSyncIndicatorsUI() {
     } else if (hasUrl) {
       const isFb = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').includes('firebase');
       badge.textContent = isFb
-        ? '⚡ بث لحظي حي عبر Firebase Stream + دمج ذكي للسجلات ✓'
+        ? '⚡ بث لحظي حي عبر Firebase Stream + دمج ذري للسجلات ✓'
         : `⚡ مزامنة لحظية حية نشطة (كل ${intervalSec} ثوانٍ) + دمج ذكي متوافق مع السحابة ✓`;
       badge.className = 'text-[11px] font-extrabold text-emerald-900 bg-white px-2.5 py-0.5 rounded-full border border-emerald-300';
     } else {
@@ -1739,26 +1839,32 @@ function startLiveRealtimeSyncEngine() {
   const url = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
   const intervalMs = Math.max(3, Number(appState.liveSyncIntervalSec) || 5) * 1000;
 
-  // 1. إذا كان الرابط Firebase Realtime Database، نفتح اتصال EventSource لحظي حي (Server-Sent Events)
+  // 1. إذا كان الرابط Firebase Realtime Database، نفتح اتصال EventSource لحظي حي (Server-Sent Events) مع بناء الرابط السليم الداعم لـ ?auth=
   if (url && (url.includes('firebaseio.com') || url.includes('firebasedatabase.app')) && typeof EventSource !== 'undefined') {
     try {
-      const sseUrl = url.replace(/\/$/, '') + '/abouzekry_cloud_db.json';
+      const sseUrl = buildCloudEndpointUrl(url);
       firebaseEventSource = new EventSource(sseUrl);
-      firebaseEventSource.addEventListener('put', (evt) => {
+      const handleFirebaseStreamEvent = (evt) => {
         try {
-          if (isCloudSyncInProgress || Number(appState.pendingChanges) > 0 || (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000))) {
+          if (isCloudSyncInProgress || Number(appState.pendingChanges) > 0 || (Array.isArray(appState.syncOutbox) && appState.syncOutbox.length > 0) || (lastLocalMutationAt > 0 && (Date.now() - lastLocalMutationAt < 10000))) {
             return;
           }
           const packet = JSON.parse(evt.data);
-          if (packet && packet.data && packet.data.days) {
+          if (!packet || !packet.data) return;
+          if (packet.path === '/' && packet.data.days && packet.data.merchants) {
             mergeCloudDataIntoLocal(packet.data, false);
             saveState(false);
             if (verifyActiveUserSession()) {
               renderAllPreservingActiveInputs();
             }
+          } else {
+            // إذا وصل حدث PATCH فرعي، نسحب الحالة المدمجة الذرية بهدوء
+            pullDatabaseFromCloud(true, true, true);
           }
         } catch (err) {}
-      });
+      };
+      firebaseEventSource.addEventListener('put', handleFirebaseStreamEvent);
+      firebaseEventSource.addEventListener('patch', handleFirebaseStreamEvent);
     } catch (err) {}
   }
 
@@ -1952,4 +2058,8 @@ function showToast(msg, icon = '✅') {
 if (typeof window !== 'undefined') {
   window.enqueueDeltaSyncEvent = enqueueDeltaSyncEvent;
   window.applyIncomingDeltaEvents = applyIncomingDeltaEvents;
+}
+
+if (typeof window !== 'undefined') {
+  window.buildCloudEndpointUrl = buildCloudEndpointUrl;
 }
