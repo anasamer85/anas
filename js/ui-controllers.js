@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v87)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v88)
 // =========================================================================
 
 // =========================================================================
@@ -2177,7 +2177,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v87):
+  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v88):
   //    - Admin sees all 5 sub-tabs.
   //    - Regular delegate sees only (🗂️ المزارع والإكسيل if permitted) and (🎨 تفضيلات الواجهة), while the 3 Admin sub-tabs (🔐 المستخدمون والصلاحيات, ☁️ الربط السحابي, 🕵️ الرقابة والنسخ) are completely hidden.
   const uPerms = (activeUser && activeUser.perms) || {};
@@ -3956,7 +3956,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v87-login-fix';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v88-floating-new-sale';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3987,11 +3987,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v87) without automatic reload loops
+  // Register Offline Service Worker (v88) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV87) {
-      window.__swRegisteredOnceV87 = true;
-      navigator.serviceWorker.register('./sw.js?v=87', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV88) {
+      window.__swRegisteredOnceV88 = true;
+      navigator.serviceWorker.register('./sw.js?v=88', { scope: './' }).catch(() => {});
     }
   }
 
@@ -8218,14 +8218,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v87)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v88)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=87',
-    './js/accounting.js?v=87',
-    './js/storage-sync.js?v=87',
-    './js/excel-engine.js?v=87',
-    './js/print-export.js?v=87',
-    './js/ui-controllers.js?v=87'
+    './js/core-state.js?v=88',
+    './js/accounting.js?v=88',
+    './js/storage-sync.js?v=88',
+    './js/excel-engine.js?v=88',
+    './js/print-export.js?v=88',
+    './js/ui-controllers.js?v=88'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8317,7 +8317,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v87)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v88)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8435,14 +8435,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=87');
+        scTpl.setAttribute('src', './excel-template.js?v=88');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=87');
+        lnk.setAttribute('href', './style.css?v=88');
         bundledStyleEl.replaceWith(lnk);
       }
     }

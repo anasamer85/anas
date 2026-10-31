@@ -2105,6 +2105,7 @@ body.lite-field-mode-active #saleEntryForm select {
 
 body.lite-field-mode-active #btnSaveSale,
 body.lite-field-mode-active #btnSavePendingW1,
+body.lite-field-mode-active #btnLiteQuickNewSale,
 body.lite-field-mode-active #btnInlineSaveSale,
 body.lite-field-mode-active #btnInlineSavePendingW1 {
   min-height: 46px !important;
@@ -2175,12 +2176,13 @@ body.lite-field-mode-active #btnInlineSavePendingW1 {
   }
   #mobileWeighbridgeActionBar .sticky-bar-actions-group {
     display: grid !important;
-    grid-template-columns: auto 1fr 1fr !important;
+    grid-template-columns: auto auto 1fr 1fr !important;
     gap: 4px !important;
     width: 100% !important;
   }
-  #mobileWeighbridgeActionBar #btnCancelEditSale {
-    padding: 6px 9px !important;
+  #mobileWeighbridgeActionBar #btnCancelEditSale,
+  #mobileWeighbridgeActionBar #btnLiteQuickNewSale {
+    padding: 6px 8px !important;
     min-height: 38px !important;
   }
   #mobileWeighbridgeActionBar #btnSavePendingW1,

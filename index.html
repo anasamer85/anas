@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=87"></script>
+  <script src="./vendor/vendor-loader.js?v=88"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
@@ -24,7 +24,7 @@
     window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=87" />
+  <link rel="stylesheet" href="./style.css?v=88" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -534,7 +534,7 @@
             مزرعة <strong id="liteBannerFarmName">مزرعة جديدة</strong> — <strong id="liteBannerDayLabel">يوم 1</strong>
           </span>
         </div>
-        <div class="flex items-center gap-1.5 flex-wrap"><button type="button" id="btnLiteQuickNewSale" class="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-extrabold transition flex items-center gap-1 shadow-sm border border-emerald-300" title="تجهيز حركة بيع جديدة والانتقال الفوري لحقل اسم التاجر"><span>➕</span><span>حركة جديدة</span></button>
+        <div class="flex items-center gap-1.5 flex-wrap">
           <button type="button" id="btnQuickToggleStickyLiteBanner" class="px-2 py-1 rounded-lg bg-amber-400 text-slate-950 text-[11px] font-extrabold transition flex items-center gap-1 shadow-sm" title="تثبيت أو إلغاء تثبيت شريط المندوب في أعلى الشاشة أثناء التمرير">
             <span id="iconQuickStickyLiteBanner">📌</span>
             <span id="txtQuickStickyLiteBanner" class="hidden sm:inline">مثبت</span>
@@ -1090,11 +1090,15 @@
                 </button>
               </div>
 
-              <!-- Pinned Action Buttons (✕ إلغاء الإدخال + ⏳ حفظ مؤقت وزنة 1 + 💾 حفظ نهائي) -->
+              <!-- Pinned Action Buttons (✕ إلغاء الإدخال + ➕ حركة جديدة + ⏳ حفظ مؤقت وزنة 1 + 💾 حفظ نهائي) -->
               <div class="sticky-bar-actions-group flex items-center gap-1.5 md:gap-2 flex-1 sm:flex-initial justify-end w-full sm:w-auto">
                 <button type="button" id="btnCancelEditSale" class="px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-300/60 font-extrabold text-xs md:text-sm shadow transition flex items-center justify-center gap-1 shrink-0" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
                   <span>✕</span>
                   <span id="btnCancelEditSaleText" class="sticky-bar-label-txt">إلغاء الإدخال</span>
+                </button>
+                <button type="button" id="btnLiteQuickNewSale" class="px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 border border-teal-200 font-extrabold text-xs md:text-sm shadow transition flex items-center justify-center gap-1 shrink-0" title="تجهيز حركة بيع جديدة والانتقال الفوري لحقل اسم التاجر">
+                  <span>➕</span>
+                  <span class="sticky-bar-label-txt">حركة جديدة</span>
                 </button>
                 <button type="button" id="btnSavePendingW1" class="flex-1 sm:flex-initial px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1" title="حفظ مؤقت للوزنة الأولى">
                   <span>⏳</span>
@@ -2995,45 +2999,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=87"></script>
-  <script src="./js/core-state.js?v=87"></script>
-  <script src="./js/accounting.js?v=87"></script>
-  <script src="./js/storage-sync.js?v=87"></script>
-  <script src="./js/excel-engine.js?v=87"></script>
-  <script src="./js/print-export.js?v=87"></script>
-  <script src="./js/ui-controllers.js?v=87"></script>
+  <script src="./excel-template.js?v=88"></script>
+  <script src="./js/core-state.js?v=88"></script>
+  <script src="./js/accounting.js?v=88"></script>
+  <script src="./js/storage-sync.js?v=88"></script>
+  <script src="./js/excel-engine.js?v=88"></script>
+  <script src="./js/print-export.js?v=88"></script>
+  <script src="./js/ui-controllers.js?v=88"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v87-login-fix';
+      var SW_CACHE_NAME = 'farm-sales-v88-floating-new-sale';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=87',
+        './style.css?v=88',
         './excel-template.js',
-        './excel-template.js?v=87',
+        './excel-template.js?v=88',
         './js/core-state.js',
-        './js/core-state.js?v=87',
+        './js/core-state.js?v=88',
         './js/accounting.js',
-        './js/accounting.js?v=87',
+        './js/accounting.js?v=88',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=87',
+        './js/storage-sync.js?v=88',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=87',
+        './js/excel-engine.js?v=88',
         './js/print-export.js',
-        './js/print-export.js?v=87',
+        './js/print-export.js?v=88',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=87',
+        './js/ui-controllers.js?v=88',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=87'
+        './vendor/vendor-loader.js?v=88'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-        if (!window.__swRegisteredOnceV87) {
-          window.__swRegisteredOnceV87 = true;
-          navigator.serviceWorker.register('./sw.js?v=87', { scope: './' }).catch(function () {});
+        if (!window.__swRegisteredOnceV88) {
+          window.__swRegisteredOnceV88 = true;
+          navigator.serviceWorker.register('./sw.js?v=88', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {
