@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v86)
+// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v87)
 // =========================================================================
 
 function loadState() {
@@ -299,6 +299,9 @@ function getDeltaEventTargetKey(actionType, payload) {
   if (actionType === 'DELETE_FARM') {
     return `farm:${String(payload.farmName || '')}`;
   }
+  if (actionType === 'DELETE_DAY') {
+    return `delday:${fName}:${dNum}`;
+  }
   return '';
 }
 
@@ -466,8 +469,22 @@ function applyIncomingDeltaEvents(eventsList) {
       case 'DELETE_MERCHANT': {
         const codeNum = Number(p.code);
         if (!codeNum) break;
+        const targetMerch = (appState.merchants || []).find(m => m && Number(m.code) === codeNum);
+        if (targetMerch && targetMerch.name && appState.deletedTimestamps && appState.deletedTimestamps.merchants) {
+          appState.deletedTimestamps.merchants['name:' + normalizeArabicMerchantCompareKey(targetMerch.name)] = evTs;
+        }
+        if (p.name && appState.deletedTimestamps && appState.deletedTimestamps.merchants) {
+          appState.deletedTimestamps.merchants['name:' + normalizeArabicMerchantCompareKey(p.name)] = evTs;
+        }
         recordDeletedItem('merchants', codeNum, evTs, false);
         appState.merchants = (appState.merchants || []).filter(m => m && Number(m.code) !== codeNum);
+        if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
+          Object.values(appState.farmsArchive).forEach(fObj => {
+            if (fObj && Array.isArray(fObj.merchants)) {
+              fObj.merchants = fObj.merchants.filter(fm => fm && Number(fm.code) !== codeNum);
+            }
+          });
+        }
         changed = true;
         break;
       }
@@ -491,7 +508,35 @@ function applyIncomingDeltaEvents(eventsList) {
         const fn = String(p.farmName || '').trim();
         if (!fn) break;
         recordDeletedItem('farms', fn, evTs, false);
-        if (appState.farmsArchive) delete appState.farmsArchive[fn];
+        if (appState.farmsArchive && appState.farmsArchive[fn]) {
+          delete appState.farmsArchive[fn];
+        }
+        if (String(appState.farmName || '').trim() === fn) {
+          const remKeys = Object.keys(appState.farmsArchive || {}).filter(k => k && k !== fn);
+          if (remKeys.length > 0) {
+            activateFarmFromArchive(remKeys[0]);
+          }
+        }
+        changed = true;
+        break;
+      }
+      case 'DELETE_DAY': {
+        if (!daysMap || !daysMap[dNum]) break;
+        recordDayItemsAsDeleted(daysMap[dNum]);
+        daysMap[dNum] = {
+          dayNumber: dNum,
+          dateLabel: `اليوم ${dNum}`,
+          sales: [],
+          pendingSales: [],
+          expenses: [],
+          deliveredCash: 0,
+          clearedAt: evTs,
+          addedAt: 0,
+          isHidden: Boolean(p.isHidden)
+        };
+        if (isCurrentFarm && Array.isArray(p.visibleDays) && p.visibleDays.length > 0) {
+          appState.visibleDays = [...p.visibleDays];
+        }
         changed = true;
         break;
       }
@@ -1579,6 +1624,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
 
         const patchObj = {
           updatedAt: nowIsoPatch,
+          last_sync_timestamp: nowMsPatch,
           hasLocalEdits: true,
           farmName: appState.farmName,
           lastFarmSwitchAt: Number(appState.lastFarmSwitchAt) || 0,
@@ -1601,6 +1647,51 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
             patchObj[`days/${dNum}`] = appState.days[dNum];
           }
         });
+
+        // إرسال مسارات الحذف الصريحة بقيمة null في طلب PATCH لضمان الحذف النهائي من Firebase وعدم عودة المزارع أو الأيام أو التجار المحذوفين
+        const activeMerchMap = {};
+        (appState.merchants || []).forEach(m => {
+          if (m && m.code) activeMerchMap[String(m.code)] = m;
+        });
+        Object.keys(activeMerchMap).forEach(mc => {
+          patchObj[`merchantsRegistry/${mc}`] = activeMerchMap[mc];
+        });
+
+        outboxBatch.forEach(ev => {
+          if (!ev || !ev.action) return;
+          const p = ev.payload || {};
+          if (ev.action === 'DELETE_FARM' && p.farmName) {
+            const cleanFn = String(p.farmName).trim().replace(/[.#$\[\]\/]/g, '_');
+            patchObj[`farmsArchive/${cleanFn}`] = null;
+          } else if (ev.action === 'DELETE_DAY' && p.dayNum) {
+            const dNum = Number(p.dayNum);
+            if (dNum >= 1 && dNum <= 10) {
+              patchObj[`days/${dNum}/sales`] = null;
+              patchObj[`days/${dNum}/pendingSales`] = null;
+              patchObj[`days/${dNum}/expenses`] = null;
+              patchObj[`days/${dNum}`] = appState.days[dNum];
+            }
+          } else if (ev.action === 'DELETE_MERCHANT' && p.code) {
+            const delCode = Number(p.code);
+            patchObj[`merchantsRegistry/${delCode}`] = null;
+          }
+        });
+
+        if (appState.deletedIds && Array.isArray(appState.deletedIds.farms)) {
+          appState.deletedIds.farms.forEach(fn => {
+            if (fn && (!appState.farmsArchive || !appState.farmsArchive[fn])) {
+              const cleanFn = String(fn).trim().replace(/[.#$\[\]\/]/g, '_');
+              patchObj[`farmsArchive/${cleanFn}`] = null;
+            }
+          });
+        }
+        if (appState.deletedIds && Array.isArray(appState.deletedIds.merchants)) {
+          appState.deletedIds.merchants.forEach(mc => {
+            if (mc && !activeMerchMap[String(mc)]) {
+              patchObj[`merchantsRegistry/${mc}`] = null;
+            }
+          });
+        }
 
         const patchRes = await fetch(baseEndpoint, {
           method: 'PATCH',
@@ -1644,6 +1735,8 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
 
     const payloadStr = JSON.stringify({
       updatedAt: nowIso,
+      last_sync_timestamp: nowMs,
+      isSiteReset: Boolean(isExplicitFarmReset),
       hasLocalEdits: true,
       farmName: appState.farmName,
       lastFarmSwitchAt: Number(appState.lastFarmSwitchAt) || 0,
@@ -1788,6 +1881,60 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
     // 2. التوافق التلقائي الرجعي (Auto-Fallback) للسحب الكامل (Firebase JSON أو GAS Full Snapshot)
     if (data && data.days && data.merchants) {
       const prevUpdatedAt = appState.updatedAt;
+      const cloudResetTs = Math.max(
+        Number(data.factoryZeroWipeAt) || 0,
+        Number(data.farmResetAt) || 0,
+        data.isSiteReset ? (Number(data.last_sync_timestamp) || Date.parse(String(data.updatedAt || '')) || 0) : 0
+      );
+      const localResetTs = Math.max(Number(appState.factoryZeroWipeAt) || 0, Number(appState.farmResetAt) || 0);
+      const cloudMovCnt = countMovementsInDays(data.days);
+      const cloudArchKeys = Object.keys(data.farmsArchive || {});
+      const isCloudWipedOrReset = Boolean(
+        cloudResetTs > localResetTs &&
+        cloudMovCnt === 0 &&
+        (
+          Number(data.factoryZeroWipeAt) > Number(appState.factoryZeroWipeAt || 0) ||
+          (Boolean(data.isSiteReset) && cloudArchKeys.length === 0) ||
+          (Number(data.farmResetAt) > Number(appState.farmResetAt || 0) && cloudArchKeys.length === 0)
+        )
+      );
+
+      // إذا اكتشف الجهاز عند السحب (Pull) أن السحابة قد تم تصفيرها شاملاً بختم زمني أحدث، يقوم بمسح بياناته المحلية (LocalStorage) إجبارياً ليتطابق مع السحابة ولا يعيد رفع بياناته القديمة
+      if (isCloudWipedOrReset) {
+        const savedWebhook = appState.webhookUrl;
+        const savedFbUrl = appState.firebaseUrl;
+        const savedFbSecret = appState.firebaseSecret;
+        const savedActiveUser = appState.activeUserId;
+        const savedLoggedIn = appState.isLoggedIn;
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+          LEGACY_STORAGE_KEYS.forEach(k => localStorage.removeItem(k));
+        } catch (e) {}
+
+        appState = {
+          ...getDefaultState(data.farmName || ''),
+          ...data,
+          webhookUrl: savedWebhook,
+          firebaseUrl: savedFbUrl,
+          firebaseSecret: savedFbSecret,
+          activeUserId: savedActiveUser,
+          isLoggedIn: savedLoggedIn,
+          syncOutbox: [],
+          pendingChanges: 0,
+          hasLocalEdits: false,
+          lastDeltaSyncAt: Number(data.last_sync_timestamp) || Date.parse(String(data.updatedAt || '')) || getSyncedNow()
+        };
+        appState.days = ensureDaysSchemaIntact(data.days);
+        appState.deletedIds = ensureDeletedIdsStructure(data.deletedIds);
+        appState.deletedTimestamps = ensureDeletedTimestampsStructure(data.deletedTimestamps);
+        saveState(false);
+        if (verifyActiveUserSession()) {
+          renderAllPreservingActiveInputs(true);
+        }
+        if (!silent) showToast('🧹 تم اكتشاف تصفير شامل على السحابة — تم تصفير ومطابقة البيانات المحلية بنجاح!', '☁️');
+        return true;
+      }
+
       const hadUnsyncedLocalChanges = (Number(appState.pendingChanges) > 0 || (Array.isArray(appState.syncOutbox) && appState.syncOutbox.length > 0));
       mergeCloudDataIntoLocal(data, !hadUnsyncedLocalChanges);
       appState.lastDeltaSyncAt = Math.max(Number(appState.lastDeltaSyncAt) || 0, Date.parse(String(data.updatedAt || '')) || getSyncedNow());
@@ -1897,6 +2044,12 @@ function startLiveRealtimeSyncEngine() {
           const packet = JSON.parse(evt.data);
           if (!packet || !packet.data) return;
           if (packet.path === '/' && packet.data.days && packet.data.merchants) {
+            const incomingResetTs = Math.max(Number(packet.data.factoryZeroWipeAt) || 0, Number(packet.data.farmResetAt) || 0);
+            const currentResetTs = Math.max(Number(appState.factoryZeroWipeAt) || 0, Number(appState.farmResetAt) || 0);
+            if (incomingResetTs > currentResetTs || packet.data.isSiteReset) {
+              pullDatabaseFromCloud(true, true, true);
+              return;
+            }
             mergeCloudDataIntoLocal(packet.data, false);
             saveState(false);
             if (verifyActiveUserSession()) {

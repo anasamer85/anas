@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v86)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v87)
 // =========================================================================
 
 // =========================================================================
@@ -3852,7 +3852,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v86-bug-fixes';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v87-sync-deletions';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3887,7 +3887,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=86', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=87', { scope: './' }).catch(() => {});
     }
   }
 
@@ -4476,7 +4476,15 @@ function initFarmSalesApp() {
         showToast('لا يمكن حذف المزرعة الوحيدة في قاعدة البيانات — يمكنك تعديل اسمها أو تصفيرها.', '⚠️');
         return;
       }
-      recordDeletedItem('farms', fn);
+      const delTs = getSyncedNow() + 100;
+      if (appState.farmsArchive && appState.farmsArchive[fn] && appState.farmsArchive[fn].days) {
+        for (let d = 1; d <= 10; d++) {
+          if (appState.farmsArchive[fn].days[d]) {
+            recordDayItemsAsDeleted(appState.farmsArchive[fn].days[d]);
+          }
+        }
+      }
+      recordDeletedItem('farms', fn, delTs, true);
       delete appState.farmsArchive[fn];
       if (appState.farmName === fn) {
         const nextFn = Object.keys(appState.farmsArchive)[0];
@@ -4485,7 +4493,7 @@ function initFarmSalesApp() {
       }
       saveState(true);
       renderAll();
-      showToast(`تم حذف مزرعة (${fn}) من سجل قاعدة البيانات`, '🗑️');
+      showToast(`تم حذف مزرعة (${fn}) من سجل قاعدة البيانات ومزامنة الحذف مع السحابة`, '🗑️');
     }
   });
 
@@ -7889,12 +7897,26 @@ function initFarmSalesApp() {
     if (delBtn) {
       if (!hasPermission('merchants')) return;
       const code = Number(delBtn.getAttribute('data-del-merchant'));
-      const mObj = appState.merchants.find(m => m.code === code);
-      recordDeletedItem('merchants', code);
-      appState.merchants = appState.merchants.filter(m => m.code !== code);
+      const mObj = appState.merchants.find(m => Number(m.code) === code);
+      const delTs = getSyncedNow() + 100;
+      if (mObj && mObj.name) {
+        const normName = normalizeArabicMerchantCompareKey(mObj.name);
+        if (appState.deletedTimestamps && appState.deletedTimestamps.merchants) {
+          appState.deletedTimestamps.merchants['name:' + normName] = delTs;
+        }
+      }
+      recordDeletedItem('merchants', code, delTs, true);
+      appState.merchants = (appState.merchants || []).filter(m => Number(m.code) !== code);
+      if (appState.farmsArchive && typeof appState.farmsArchive === 'object') {
+        Object.values(appState.farmsArchive).forEach(fObj => {
+          if (fObj && Array.isArray(fObj.merchants)) {
+            fObj.merchants = fObj.merchants.filter(fm => fm && Number(fm.code) !== code && (!mObj || !isSameMerchantIdentity(fm.name, mObj.name)));
+          }
+        });
+      }
       saveState(true);
       renderAll();
-      showToast(`تم حذف التاجر (${mObj ? mObj.name : code}) من قائمة التكويد`, '🗑️');
+      showToast(`تم حذف التاجر (${mObj ? mObj.name : code}) من قائمة التكويد ومزامنة الحذف مع السحابة`, '🗑️');
     }
   });
 
@@ -8139,12 +8161,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=86',
-    './js/accounting.js?v=86',
-    './js/storage-sync.js?v=86',
-    './js/excel-engine.js?v=86',
-    './js/print-export.js?v=86',
-    './js/ui-controllers.js?v=86'
+    './js/core-state.js?v=87',
+    './js/accounting.js?v=87',
+    './js/storage-sync.js?v=87',
+    './js/excel-engine.js?v=87',
+    './js/print-export.js?v=87',
+    './js/ui-controllers.js?v=87'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8354,14 +8376,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=86');
+        scTpl.setAttribute('src', './excel-template.js?v=87');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=86');
+        lnk.setAttribute('href', './style.css?v=87');
         bundledStyleEl.replaceWith(lnk);
       }
     }

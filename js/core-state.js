@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v86)
+// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v87)
 // =========================================================================
 
 // =========================================================================
@@ -1028,7 +1028,7 @@ function unifyGlobalMerchantsRegistry() {
     });
   }
 
-  // 4. استخراج وتكويد أي تاجر موجود في حركات البيع أو الوزنات المؤقتة في الأيام الحالية أو الأرشيف غير موجود في الدليل
+  // 4. استخراج وتكويد أي تاجر موجود في حركات البيع أو الوزنات المؤقتة الفعلية فقط في الأيام الحالية أو الأرشيف غير موجود في الدليل (مع منع إعادة إنشاء التاجر المحذوف إذا لم يكن له فواتير فعلية)
   const scanDaysForMissingMerchants = (daysMap) => {
     if (!daysMap || typeof daysMap !== 'object') return;
     for (let d = 1; d <= 10; d++) {
@@ -1036,8 +1036,24 @@ function unifyGlobalMerchantsRegistry() {
       if (!dayObj) continue;
       [...(dayObj.sales || []), ...(dayObj.pendingSales || [])].forEach(row => {
         if (!row || !row.merchant) return;
+        const hasActualInvoice = (
+          (Number(row.w1) || 0) > 0 ||
+          (Number(row.w2) || 0) > 0 ||
+          (Number(row.cashSales) || 0) > 0 ||
+          (Number(row.transferSales) || 0) > 0 ||
+          (Number(row.creditSales) || 0) > 0 ||
+          (Number(row.debtCash) || 0) > 0 ||
+          (Number(row.debtTransfer) || 0) > 0 ||
+          (Number(row.prevCash) || 0) > 0 ||
+          (Number(row.prevTransfer) || 0) > 0
+        );
+        if (!hasActualInvoice) return;
         const baseName = cleanMerchantBaseName(row.merchant) || String(row.merchant).trim();
         if (!baseName) return;
+        const normBaseKey = normalizeArabicMerchantCompareKey(baseName);
+        const delNameTs = Number(appState.deletedTimestamps && appState.deletedTimestamps.merchants && appState.deletedTimestamps.merchants['name:' + normBaseKey]) || 0;
+        const rowTs = extractTimestampFromRecord(row);
+        if (delNameTs > 0 && delNameTs >= rowTs) return;
         const existingCode = resolveMerchantCode(baseName);
         if (existingCode <= 0) {
           const nextCode = appState.merchants.length > 0

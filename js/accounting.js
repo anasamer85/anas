@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v86)
+// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v87)
 // =========================================================================
 
 function addSpecificDayToCycle(targetDayNum, customLabel = '') {
@@ -379,6 +379,15 @@ function deleteSpecificDayFromCycle(targetDayNum) {
     addedAt: 0,
     isHidden: !isOnlyDayLeft
   };
+  if (typeof enqueueDeltaSyncEvent === 'function') {
+    enqueueDeltaSyncEvent('DELETE_DAY', {
+      farmName: currentFarm,
+      dayNum: cur,
+      clearedAt: nowTs,
+      isHidden: !isOnlyDayLeft,
+      visibleDays: isOnlyDayLeft ? [cur] : otherVisibleDays
+    });
+  }
 
   if (isOnlyDayLeft) {
     appState.visibleDays = [cur];

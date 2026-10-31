@@ -1,7 +1,7 @@
 # 📘 وثيقة التسليم التقنية الشاملة (Comprehensive Technical Handover Document)
 
 **المشروع:** نظام محاضر لجان بيع المزارع (Offline-First PWA + Two-Way Excel Sync + Cloud Sync)
-**الإصدار المرجعي الحالي:** `v86` (`farm-sales-v86-bug-fixes` — Performance, QA Fortification & Enterprise Delta Sync) (Modular Architecture & Client-Side Delta Outbox Engine)
+**الإصدار المرجعي الحالي:** `v87` (`farm-sales-v87-sync-deletions` — Performance, QA Fortification & Enterprise Delta Sync) (Modular Architecture & Client-Side Delta Outbox Engine)
 **الهدف القادم المباشر:** تنفيذ المرحلة الرابعة والأخيرة (`v75`: End-to-End Cloud Delta Sync & GAS LockService)
 
 ---
@@ -17,7 +17,7 @@
 | `style.css` | التنسيقات المخصصة، قواعد الطباعة الحرجة (`@media print` بحجم A4 Landscape)، فئات التثبيت الاختياري للجداول الـ 12 (`sticky-headers-on`, `sticky-footers-on`, `sticky-right-cols-on`, `sticky-left-cols-on`)، وقواعد إخفاء العناصر غير الضرورية عند تفعيل وضع المندوب (`body.lite-field-mode-active`). |
 | `excel-template.js` | القالب الهيكلي ومحرك بناء وتنسيق شيتات الإكسيل الـ 15 بالمعادلات الحية والألوان والحدود الرسمية. |
 | `vendor/vendor-loader.js` | **محرك التحميل المحلي الذكي للمكتبات + درع منع التحديث اللانهائي:** يحمل المكتبات الـ 4 (`XLSX`, `Chart`, `html2canvas`, `jspdf`) بترتيب (`CacheStorage -> CDN -> Local Fallback`)، ويوفر دالة `downloadAndBundleVendorPackagesLocally()` لتنزيلها محلياً للعمل أوفلاين بنسبة 100%، كما يعترض `navigator.serviceWorker.register` وحدث `controllerchange` لمنع دخول الصفحة في حلقة تحديث لا نهائية (Infinite Reload Loop). |
-| `sw.js` | عامل الخدمة (Service Worker) بإصدار كاش `farm-sales-v86-bug-fixes`؛ يدير التخزين المسبق للأصول المحلية والـ CDN ودالة المطابقة الذكية `matchFromCacheSmart`. |
+| `sw.js` | عامل الخدمة (Service Worker) بإصدار كاش `farm-sales-v87-sync-deletions`؛ يدير التخزين المسبق للأصول المحلية والـ CDN ودالة المطابقة الذكية `matchFromCacheSmart`. |
 | `manifest.json` & Icons | إعدادات تطبيق الـ PWA (`icon-192.png`, `icon-512.png`) لدعم التثبيت المباشر على شاشة الهاتف والكمبيوتر. |
 
 ### ب. الوحدات البرمجية الـ 6 داخل مجلد `./js/` (تُحمّل بهذا الترتيب):
@@ -321,7 +321,7 @@
 
 ---
 
-## 7. ✅ سجل إنجازات وترقيات الإصدار `v86` (`farm-sales-v86-bug-fixes`)
+## 7. ✅ سجل إنجازات وترقيات الإصدار `v87` (`farm-sales-v87-sync-deletions`)
 
 تم في الإصدار **`v86`** إغلاق كافة ملاحظات الفحص التقني والجودة الشاملة (QA Audit) واعتماد التحسينات المعمارية والمحاسبية التالية:
 1. **إحكام طابور المزامنة الجزئية (`syncOutbox`):** إدراج أحداث تعديل أسماء التجار (`UPSERT_MERCHANT`) وإضافة/تعديل المستخدمين وتحديث الملف الشخصي (`UPSERT_USER`) في طابور `syncOutbox` لضمان مزامنتها اللحظية عبر بروتوكول `delta_sync`.
@@ -376,3 +376,6 @@
 15. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes` — إصلاح أخطاء الواجهة وإدارة الأيام وتبويب الرقابة):**
    - إصلاح أخطاء اختفاء محتوى تبويب الرقابة، وإصلاح جميع وظائف إدارة الأيام والقوائم المنسدلة التي تعطلت بعد إعادة هيكلة الواجهة.
    - فصل إغلاق حاوية التبويب الرابع (`#syncSubView-cloud_link`) عن التبويب الخامس (`#syncSubView-audit_backup`) في `index.html`، وتصدير دوال إدارة الأيام (`refreshDayManagementBoxesUI`, `openDayManagementBox`, `openDailyQuickAddDayBox`) للنطاق العام واستدعاؤها فور التهيئة في `js/ui-controllers.js`.
+
+16. **تحديثات الإصدار `v87` (`farm-sales-v87-sync-deletions`):**
+   - إصلاح مزامنة عمليات الحذف (التجار والمزارع) عبر دعم إرسال `null` في فايربيز `PATCH`، وإصلاح آلية التصفير الشامل للأجهزة المتعددة.
