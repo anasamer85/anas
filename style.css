@@ -1906,11 +1906,18 @@ body {
 
 body.floating-bar-hidden #mobileWeighbridgeActionBar,
 #mobileWeighbridgeActionBar.hidden,
-.mobile-weighbridge-sticky-bar.hidden {
+.mobile-weighbridge-sticky-bar.hidden,
+body:not(.floating-bar-hidden) #inlineSaleFormActionsMobile {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+body.floating-bar-hidden #inlineSaleFormActionsMobile {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 /* Mobile Phones (< 768px): Fixed floating bar directly above the mobile bottom navigation bar */

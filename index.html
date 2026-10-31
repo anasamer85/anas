@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=87"></script>
+  <script src="./vendor/vendor-loader.js?v=88"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
@@ -24,7 +24,7 @@
     window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=87" />
+  <link rel="stylesheet" href="./style.css?v=88" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -74,11 +74,17 @@
     }
     body.floating-bar-hidden #mobileWeighbridgeActionBar,
     #mobileWeighbridgeActionBar.hidden,
+    body:not(.floating-bar-hidden) #inlineSaleFormActionsMobile,
     body.audit-metadata-hidden .audit-metadata-badge {
       display: none !important;
       visibility: hidden !important;
       opacity: 0 !important;
       pointer-events: none !important;
+    }
+    body.floating-bar-hidden #inlineSaleFormActionsMobile {
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
     }
     @media screen and (max-width: 767px) {
       #mobileWeighbridgeActionBar {
@@ -410,10 +416,6 @@
             <span id="hdrLiteModeIcon">📱</span>
             <span id="hdrLiteModeTxt">وضع المندوب</span>
           </button>
-          <a href="#syncPermissionsSection" id="btnOpenUsersModal" class="lite-hide-el px-2 md:px-2.5 py-0.5 md:py-1 rounded-lg bg-amber-400/95 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] md:text-xs md:underline transition flex items-center gap-1 shadow-sm" title="الانتقال لتبويب التحكم والمزامنة وإدارة المستخدمين والصلاحيات">
-            <span>⚙️</span>
-            <span class="hidden md:inline">الصلاحيات</span>
-          </a>
         </div>
 
         <!-- Unified User Account Button with Dropdown Menu (الملف الشخصي، الصلاحيات، تسجيل الخروج، إلخ) -->
@@ -1051,7 +1053,7 @@
           </div>
 
           <!-- Inline Form Action Buttons at end of form for both Phone & Desktop (4 Buttons: ➕ حركة جديدة | ✕ إلغاء الإدخال | ⏳ حفظ مؤقت وزنة 1 | 💾 حفظ نهائي) -->
-          <div id="inlineSaleFormActionsMobile" class="flex items-center justify-end gap-2 pt-2.5 border-t border-slate-200 flex-wrap">
+          <div id="inlineSaleFormActionsMobile" style="display: none;" class="hidden items-center justify-end gap-2 pt-2.5 border-t border-slate-200 flex-wrap">
             <div class="inline-bar-actions-group flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
               <button type="button" id="btnInlineNewSale" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-950 border border-sky-300 font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1" title="بدء حركة جديدة وتفريغ الحقول مع الانتقال الفوري لخانة اسم التاجر">
                 <span class="action-btn-icon">➕</span>
@@ -2686,10 +2688,6 @@
               <span id="auditTrailCountBadge" class="px-2 py-0.5 rounded-full bg-white/15 text-white text-[11px] font-extrabold">0 حركة</span>
             </div>
             <div class="flex items-center gap-1.5 flex-wrap">
-              <button type="button" id="btnToggleAuditMetadataHeader" class="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow-sm transition flex items-center gap-1" title="إظهار أو إخفاء نصوص الرقابة التفصيلية (👤 اسم المندوب | 🕒 وقت الحركة) داخل جدول حركات البيع المسجلة">
-                <span id="btnToggleAuditMetadataHeaderIcon">🙈</span>
-                <span id="btnToggleAuditMetadataHeaderText">إخفاء نصوص الرقابة بجدول البيع</span>
-              </button>
               <input id="inpFilterAuditTrail" type="text" placeholder="🔍 ابحث باسم المندوب، التاجر، البند، أو اليوم..."
                 class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-56" />
               <select id="selFilterAuditType" class="px-2 py-1 text-xs font-extrabold text-slate-900 rounded-lg bg-white border border-slate-300">
@@ -2994,45 +2992,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=87"></script>
-  <script src="./js/core-state.js?v=87"></script>
-  <script src="./js/accounting.js?v=87"></script>
-  <script src="./js/storage-sync.js?v=87"></script>
-  <script src="./js/excel-engine.js?v=87"></script>
-  <script src="./js/print-export.js?v=87"></script>
-  <script src="./js/ui-controllers.js?v=87"></script>
+  <script src="./excel-template.js?v=88"></script>
+  <script src="./js/core-state.js?v=88"></script>
+  <script src="./js/accounting.js?v=88"></script>
+  <script src="./js/storage-sync.js?v=88"></script>
+  <script src="./js/excel-engine.js?v=88"></script>
+  <script src="./js/print-export.js?v=88"></script>
+  <script src="./js/ui-controllers.js?v=88"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v87-sync-deletions';
+      var SW_CACHE_NAME = 'farm-sales-v88-ui-cleanup';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=87',
+        './style.css?v=88',
         './excel-template.js',
-        './excel-template.js?v=87',
+        './excel-template.js?v=88',
         './js/core-state.js',
-        './js/core-state.js?v=87',
+        './js/core-state.js?v=88',
         './js/accounting.js',
-        './js/accounting.js?v=87',
+        './js/accounting.js?v=88',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=87',
+        './js/storage-sync.js?v=88',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=87',
+        './js/excel-engine.js?v=88',
         './js/print-export.js',
-        './js/print-export.js?v=87',
+        './js/print-export.js?v=88',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=87',
+        './js/ui-controllers.js?v=88',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=87'
+        './vendor/vendor-loader.js?v=88'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
         if (!window.__swRegisteredOnceV86) {
           window.__swRegisteredOnceV86 = true;
-          navigator.serviceWorker.register('./sw.js?v=87', { scope: './' }).catch(function () {});
+          navigator.serviceWorker.register('./sw.js?v=88', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {
