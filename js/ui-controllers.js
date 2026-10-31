@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v86)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v87)
 // =========================================================================
 
 // =========================================================================
@@ -222,9 +222,12 @@ function renderDailyView() {
           : `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-edit-sale="${safeId}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
              <button type="button" data-del-sale="${safeId}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`);
 
+      const isAdvCustodyRow = Boolean(r.isPending && !r.scaleNo && (Number(r.w1) || 0) <= 0 && ((Number(r.custodyCash) || 0) > 0 || (Number(r.custodyTransfer) || 0) > 0));
       const scaleOrVoucherCellHtml = r.isDebtCollectionOnly
         ? `سند #${escXmlStr(r.voucherNo || r.scaleNo || '-')}${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}`
-        : `${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}`;
+        : (isAdvCustodyRow
+            ? `<span class="px-1.5 py-0.5 rounded bg-amber-300 text-slate-950 text-[10px] font-extrabold">⏳ عهدة مسبقة</span>${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}`
+            : `${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}`);
       tr.innerHTML = `
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
         <td class="p-2 border text-center font-extrabold text-blue-900">${r.code || '-'}</td>
@@ -436,7 +439,7 @@ function renderDailyView() {
         const safePendId = escXmlStr(item.id);
         return `
         <tr class="hover:bg-amber-50/60">
-          <td class="p-1.5 border text-center font-extrabold text-blue-900">${escXmlStr(item.scaleNo || '-')}</td>
+          <td class="p-1.5 border text-center font-extrabold text-blue-900">${item.scaleNo ? escXmlStr(item.scaleNo) : '<span class="px-1.5 py-0.5 rounded bg-amber-300 text-slate-950 text-[10px] font-extrabold">⏳ عهدة مسبقة</span>'}</td>
           <td class="p-1.5 border font-extrabold text-slate-900">${escXmlStr(item.merchant)}</td>
           <td class="p-1.5 border text-center font-bold">${escXmlStr(item.carNo || '-')}</td>
           <td class="p-1.5 border text-left font-extrabold text-amber-900">${fmtMoney(item.w1)} كجم</td>
@@ -2174,7 +2177,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v86):
+  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v87):
   //    - Admin sees all 5 sub-tabs.
   //    - Regular delegate sees only (🗂️ المزارع والإكسيل if permitted) and (🎨 تفضيلات الواجهة), while the 3 Admin sub-tabs (🔐 المستخدمون والصلاحيات, ☁️ الربط السحابي, 🕵️ الرقابة والنسخ) are completely hidden.
   const uPerms = (activeUser && activeUser.perms) || {};
@@ -3774,9 +3777,11 @@ function initFarmSalesApp() {
   if (hasWebhookNow && !String(appState.farmName || '').trim()) {
     isInitialCloudPullPending = true;
   }
-  renderAll(true);
-  if (!loadedFromLocal) {
-      const btnExpDashPng = document.getElementById('btnExportDashboardPng');
+  try {
+    renderAll(true);
+  } catch (initRenderErr) {}
+
+  const btnExpDashPng = document.getElementById('btnExportDashboardPng');
   if (btnExpDashPng) {
     btnExpDashPng.addEventListener('click', exportDashboardAsPngImage);
   }
@@ -3786,7 +3791,8 @@ function initFarmSalesApp() {
     btnExpAllMerchExcel.addEventListener('click', exportAllMerchantsStatementsToExcel);
   }
 
-  loadFromIndexedDBAsync().then((idbState) => {
+  if (!loadedFromLocal) {
+    loadFromIndexedDBAsync().then((idbState) => {
       const wasLoggedInNow = Boolean(appState.isLoggedIn);
       const currentActiveUser = appState.activeUserId;
       if (!appState.hasLocalEdits && idbState && applyParsedStateObject(idbState)) {
@@ -3950,7 +3956,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v86-advance-custody';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v87-login-fix';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3981,11 +3987,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v86) without automatic reload loops
+  // Register Offline Service Worker (v87) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV86) {
-      window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=86', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV87) {
+      window.__swRegisteredOnceV87 = true;
+      navigator.serviceWorker.register('./sw.js?v=87', { scope: './' }).catch(() => {});
     }
   }
 
@@ -5770,6 +5776,7 @@ function initFarmSalesApp() {
     if (c2) c2.textContent = cancelText;
   }
 
+  window.cancelOrClearCurrentSaleEntry = cancelOrClearCurrentSaleEntry;
   function cancelOrClearCurrentSaleEntry(showFeedbackToast = true) {
     const wasEditing = Boolean((document.getElementById('editSaleId') && document.getElementById('editSaleId').value) || activeRecalledPendingId);
     activeRecalledPendingId = '';
@@ -6382,8 +6389,9 @@ function initFarmSalesApp() {
     activeRecalledPendingId = item.id;
     setSaleEntryMode('sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
     document.getElementById('editSaleId').value = '';
+    const assignedScaleOnRecall = Number(item.scaleNo) > 0 ? item.scaleNo : getNextSequentialScaleNo();
     document.getElementById('inpMerchantName').value = item.merchant;
-    document.getElementById('inpScaleNo').value = item.scaleNo || '';
+    document.getElementById('inpScaleNo').value = assignedScaleOnRecall;
     document.getElementById('inpCarNo').value = item.carNo || '';
     document.getElementById('inpW1').value = item.w1 ? fmtMoney(item.w1) : '';
     document.getElementById('inpW2').value = item.w2 ? fmtMoney(item.w2) : '';
@@ -6408,7 +6416,11 @@ function initFarmSalesApp() {
     updateMerchantSuggestions();
     updateLiveFormCalculation();
     document.getElementById('saleFormCard').scrollIntoView({ behavior: 'smooth' });
-    setTimeout(() => document.getElementById('inpW2').focus(), 100);
+    setTimeout(() => {
+      const targetInpId = (Number(item.w1) || 0) > 0 ? 'inpW2' : 'inpW1';
+      const elToFocus = document.getElementById(targetInpId);
+      if (elToFocus) elToFocus.focus();
+    }, 100);
     showToast(`تم استرجاع حركة (${item.merchant}) المحجوزة بمسلسل ميزان (${item.scaleNo || '-'}) — أدخل الآن (الوزنة الثانية) واضغط حفظ!`, '🔄');
   }
 
@@ -8206,14 +8218,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v87)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=86',
-    './js/accounting.js?v=86',
-    './js/storage-sync.js?v=86',
-    './js/excel-engine.js?v=86',
-    './js/print-export.js?v=86',
-    './js/ui-controllers.js?v=86'
+    './js/core-state.js?v=87',
+    './js/accounting.js?v=87',
+    './js/storage-sync.js?v=87',
+    './js/excel-engine.js?v=87',
+    './js/print-export.js?v=87',
+    './js/ui-controllers.js?v=87'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8305,7 +8317,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v86)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v87)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8423,14 +8435,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=86');
+        scTpl.setAttribute('src', './excel-template.js?v=87');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=86');
+        lnk.setAttribute('href', './style.css?v=87');
         bundledStyleEl.replaceWith(lnk);
       }
     }
@@ -8863,7 +8875,9 @@ if (document.readyState === 'loading') {
   const btnLiteQuickNewSaleEl = document.getElementById('btnLiteQuickNewSale');
   if (btnLiteQuickNewSaleEl) {
     btnLiteQuickNewSaleEl.addEventListener('click', () => {
-      cancelOrClearCurrentSaleEntry(false);
+      if (typeof window.cancelOrClearCurrentSaleEntry === 'function') {
+        window.cancelOrClearCurrentSaleEntry(false);
+      }
       const saleCardEl = document.getElementById('saleFormCard');
       const merchInpEl = document.getElementById('inpMerchantName');
       if (saleCardEl) {

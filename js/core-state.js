@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v86)
+// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v87)
 // =========================================================================
 
 // =========================================================================
@@ -600,6 +600,10 @@ function isRecordDebtOnlyVoucher(row) {
 function sortSalesListByScaleNo(list) {
   if (!Array.isArray(list)) return [];
   return [...list].sort((a, b) => {
+    const aAdv = typeof isAdvanceCustodyOnlyPendingRecord === 'function' ? isAdvanceCustodyOnlyPendingRecord(a) : false;
+    const bAdv = typeof isAdvanceCustodyOnlyPendingRecord === 'function' ? isAdvanceCustodyOnlyPendingRecord(b) : false;
+    if (aAdv !== bAdv) return aAdv ? 1 : -1;
+
     const aDebtOnly = isRecordDebtOnlyVoucher(a);
     const bDebtOnly = isRecordDebtOnlyVoucher(b);
     // وضع حركات (سند تحصيل مديونية فقط - بدون ميزان) دائماً في آخر الجدول بعد حركات الميزان
@@ -609,6 +613,8 @@ function sortSalesListByScaleNo(list) {
     const sa = Number(a && (aDebtOnly ? (a.voucherNo || a.scaleNo) : a.scaleNo)) || 0;
     const sb = Number(b && (bDebtOnly ? (b.voucherNo || b.scaleNo) : b.scaleNo)) || 0;
     if (sa > 0 && sb > 0 && sa !== sb) return sa - sb;
+    if (sa > 0 && sb <= 0) return -1;
+    if (sb > 0 && sa <= 0) return 1;
     return 0;
   });
 }

@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v86)
+// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v87)
 // =========================================================================
 
 function addSpecificDayToCycle(targetDayNum, customLabel = '') {
@@ -707,9 +707,11 @@ function computeSaleRow(row) {
   // Invoice Difference = (Cash Sales + Transfer Sales + Credit Sales) - Total Invoice (with Tip)
   const totalPaidAndCredit = Math.round(cashSales + transferSales + creditSales);
   const invoiceDiff = isDebtCollectionOnly ? 0 : Math.round(totalPaidAndCredit - totalWithTip);
+  const code = resolveMerchantCode(row.merchant);
 
   return {
     ...row,
+    code,
     isDebtCollectionOnly,
     voucherNo: isDebtCollectionOnly ? (Number(row.voucherNo || row.scaleNo) || 0) : (Number(row.voucherNo) || 0),
     w1, w2, netWeight, price, tip, baseAmount, totalWithTip,
@@ -719,6 +721,7 @@ function computeSaleRow(row) {
     debtCash, debtTransfer, debtTransferType: row.debtTransferType || '',
     prevCash, prevTransfer, prevTransferType: row.prevTransferType || '',
     notes: row.notes || '',
+    totalPaidAndCredit,
     invoiceDiff
   };
 }
