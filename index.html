@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=85"></script>
+  <script src="./vendor/vendor-loader.js?v=84"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
@@ -24,7 +24,7 @@
     window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=85" />
+  <link rel="stylesheet" href="./style.css?v=84" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -1353,10 +1353,6 @@
             <p class="text-xs text-slate-500">يتم عرض الأيام المفتوحة والتي عليها سجل حركات فقط (الأيام غير النشطة تظل مخفية) — اضغط على أي يوم لفتح محضره فوراً</p>
           </div>
           <div class="flex items-center gap-2 flex-wrap">
-            <button type="button" id="btnExportDashboardPng" class="px-3.5 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-600 text-white border border-teal-400 text-xs font-extrabold transition flex items-center gap-1.5 shadow" title="تصدير الملخص التنفيذي ورسم المؤشرات كصورة PNG جاهزة للإرسال عبر واتساب للمدير">
-              <span>📸</span>
-              <span>تصدير كصورة (PNG)</span>
-            </button>
             <button type="button" id="btnJumpFarmTrialBalance" class="px-3 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-400 text-xs font-extrabold transition flex items-center gap-1 shadow-sm">
               <span>⚖️</span>
               <span>ميزان المراجعة الكامل للمزرعة</span>
@@ -1500,23 +1496,17 @@
               <strong class="text-emerald-800">الكود الموحد واسم التاجر الأساسي ثابت وموحد تلقائياً في جميع المزارع والدورات</strong> (التاجر يُكوّد مرة واحدة فقط ويظهر بنفس الكود والاسم عند فتح أو إنشاء أي مزرعة، وأي سيارة فرعية مثل <strong class="text-blue-900">كرنك 1</strong> و<strong class="text-blue-900">كرنك 2</strong> تأخذ تلقائياً نفس كود التاجر الأساسي <strong class="text-blue-900">104 - كرنك</strong>) — <strong class="text-blue-800 underline">اضغط على اسم أي تاجر في الجدول لفتح نافذة كشف حسابه التفصيلي بالحركات ومشاركته عبر واتساب</strong>.
             </p>
           </div>
-          <div class="flex items-center gap-2 flex-wrap">
-            <button type="button" id="btnExportAllMerchantsStatementsExcel" class="px-3.5 py-2 rounded-xl gold-badge font-extrabold text-xs shadow transition flex items-center gap-1.5" title="تصدير كشوف حسابات جميع التجار النشطين أو المكودين دفعة واحدة في ملف إكسيل واحد">
-              <span>📥</span>
-              <span>تصدير كشوف جميع التجار (.xlsx)</span>
+          <form id="addMerchantForm" class="flex flex-wrap items-center gap-2">
+            <input type="hidden" id="editMerchantCodeInput" value="" />
+            <input id="inpNewMerchantBase" type="text" required placeholder="اسم تاجر أساسي جديد..."
+              class="px-3 py-1.5 text-xs md:text-sm font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white" />
+            <button type="submit" id="btnSubmitMerchantForm" class="px-3.5 py-1.5 rounded-xl bg-blue-900 text-white font-extrabold text-xs md:text-sm hover:bg-blue-800">
+              ➕ تكويد تاجر جديد
             </button>
-            <form id="addMerchantForm" class="flex flex-wrap items-center gap-2">
-              <input type="hidden" id="editMerchantCodeInput" value="" />
-              <input id="inpNewMerchantBase" type="text" required placeholder="اسم تاجر أساسي جديد..."
-                class="px-3 py-1.5 text-xs md:text-sm font-bold border border-slate-300 rounded-lg bg-slate-50 focus:bg-white" />
-              <button type="submit" id="btnSubmitMerchantForm" class="px-3.5 py-1.5 rounded-xl bg-blue-900 text-white font-extrabold text-xs md:text-sm hover:bg-blue-800">
-                ➕ تكويد تاجر جديد
-              </button>
-              <button type="button" id="btnCancelMerchantEdit" class="hidden px-3 py-1.5 rounded-xl bg-slate-200 text-slate-800 font-bold text-xs">
-                إلغاء التعديل
-              </button>
-            </form>
-          </div>
+            <button type="button" id="btnCancelMerchantEdit" class="hidden px-3 py-1.5 rounded-xl bg-slate-200 text-slate-800 font-bold text-xs">
+              إلغاء التعديل
+            </button>
+          </form>
         </div>
 
         <!-- Smart Filter Bar + Excel Sort & Filter Toolbar for Merchants Table -->
@@ -2994,45 +2984,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=85"></script>
-  <script src="./js/core-state.js?v=85"></script>
-  <script src="./js/accounting.js?v=85"></script>
-  <script src="./js/storage-sync.js?v=85"></script>
-  <script src="./js/excel-engine.js?v=85"></script>
-  <script src="./js/print-export.js?v=85"></script>
-  <script src="./js/ui-controllers.js?v=85"></script>
+  <script src="./excel-template.js?v=84"></script>
+  <script src="./js/core-state.js?v=84"></script>
+  <script src="./js/accounting.js?v=84"></script>
+  <script src="./js/storage-sync.js?v=84"></script>
+  <script src="./js/excel-engine.js?v=84"></script>
+  <script src="./js/print-export.js?v=84"></script>
+  <script src="./js/ui-controllers.js?v=84"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v85-final-polish';
+      var SW_CACHE_NAME = 'farm-sales-v84-desktop-ui';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=85',
+        './style.css?v=84',
         './excel-template.js',
-        './excel-template.js?v=85',
+        './excel-template.js?v=84',
         './js/core-state.js',
-        './js/core-state.js?v=85',
+        './js/core-state.js?v=84',
         './js/accounting.js',
-        './js/accounting.js?v=85',
+        './js/accounting.js?v=84',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=85',
+        './js/storage-sync.js?v=84',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=85',
+        './js/excel-engine.js?v=84',
         './js/print-export.js',
-        './js/print-export.js?v=85',
+        './js/print-export.js?v=84',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=85',
+        './js/ui-controllers.js?v=84',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=85'
+        './vendor/vendor-loader.js?v=84'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-        if (!window.__swRegisteredOnceV85) {
-          window.__swRegisteredOnceV85 = true;
-          navigator.serviceWorker.register('./sw.js?v=85', { scope: './' }).catch(function () {});
+        if (!window.__swRegisteredOnceV84) {
+          window.__swRegisteredOnceV84 = true;
+          navigator.serviceWorker.register('./sw.js?v=84', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {
