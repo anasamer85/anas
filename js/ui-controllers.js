@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v88)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v85)
 // =========================================================================
 
 // =========================================================================
@@ -222,12 +222,9 @@ function renderDailyView() {
           : `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-edit-sale="${safeId}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
              <button type="button" data-del-sale="${safeId}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`);
 
-      const isAdvCustodyRow = Boolean(r.isPending && !r.scaleNo && (Number(r.w1) || 0) <= 0 && ((Number(r.custodyCash) || 0) > 0 || (Number(r.custodyTransfer) || 0) > 0));
       const scaleOrVoucherCellHtml = r.isDebtCollectionOnly
         ? `سند #${escXmlStr(r.voucherNo || r.scaleNo || '-')}${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}`
-        : (isAdvCustodyRow
-            ? `<span class="px-1.5 py-0.5 rounded bg-amber-300 text-slate-950 text-[10px] font-extrabold">⏳ عهدة مسبقة</span>${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}`
-            : `${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}`);
+        : `${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}`;
       tr.innerHTML = `
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
         <td class="p-2 border text-center font-extrabold text-blue-900">${r.code || '-'}</td>
@@ -439,7 +436,7 @@ function renderDailyView() {
         const safePendId = escXmlStr(item.id);
         return `
         <tr class="hover:bg-amber-50/60">
-          <td class="p-1.5 border text-center font-extrabold text-blue-900">${item.scaleNo ? escXmlStr(item.scaleNo) : '<span class="px-1.5 py-0.5 rounded bg-amber-300 text-slate-950 text-[10px] font-extrabold">⏳ عهدة مسبقة</span>'}</td>
+          <td class="p-1.5 border text-center font-extrabold text-blue-900">${escXmlStr(item.scaleNo || '-')}</td>
           <td class="p-1.5 border font-extrabold text-slate-900">${escXmlStr(item.merchant)}</td>
           <td class="p-1.5 border text-center font-bold">${escXmlStr(item.carNo || '-')}</td>
           <td class="p-1.5 border text-left font-extrabold text-amber-900">${fmtMoney(item.w1)} كجم</td>
@@ -2177,7 +2174,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v88):
+  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v85):
   //    - Admin sees all 5 sub-tabs.
   //    - Regular delegate sees only (🗂️ المزارع والإكسيل if permitted) and (🎨 تفضيلات الواجهة), while the 3 Admin sub-tabs (🔐 المستخدمون والصلاحيات, ☁️ الربط السحابي, 🕵️ الرقابة والنسخ) are completely hidden.
   const uPerms = (activeUser && activeUser.perms) || {};
@@ -3378,14 +3375,14 @@ function updateLiveFormCalculation() {
     inpW2El.classList.toggle('bg-rose-50', hasInvalidWeight);
   }
 
-  const netW = (!hasInvalidWeight && w2 >= w1 && w2 > 0) ? Math.round(w2 - w1) : 0;
-  const totalWithTip = Math.round((netW * price) + tip);
+  const netW = (!hasInvalidWeight && w2 >= w1 && w2 > 0) ? (w2 - w1) : 0;
+  const totalWithTip = (netW * price) + tip;
 
   // Invoice collections (not linked to Custody)
-  const cashS = Math.round(parseNum(document.getElementById('inpCashSales').value) || 0);
-  const trS = Math.round(parseNum(document.getElementById('inpTransferSales').value) || 0);
-  const credS = Math.round(parseNum(document.getElementById('inpCreditSales').value) || 0);
-  const diff = Math.round((cashS + trS + credS) - totalWithTip);
+  const cashS = parseNum(document.getElementById('inpCashSales').value) || 0;
+  const trS = parseNum(document.getElementById('inpTransferSales').value) || 0;
+  const credS = parseNum(document.getElementById('inpCreditSales').value) || 0;
+  const diff = (cashS + trS + credS) - totalWithTip;
 
   document.getElementById('calcNetWeight').textContent = `${fmtInt(netW)} كجم`;
   document.getElementById('calcTotalWithTip').textContent = `${fmtDec(totalWithTip)} ج.م`;
@@ -3777,11 +3774,9 @@ function initFarmSalesApp() {
   if (hasWebhookNow && !String(appState.farmName || '').trim()) {
     isInitialCloudPullPending = true;
   }
-  try {
-    renderAll(true);
-  } catch (initRenderErr) {}
-
-  const btnExpDashPng = document.getElementById('btnExportDashboardPng');
+  renderAll(true);
+  if (!loadedFromLocal) {
+      const btnExpDashPng = document.getElementById('btnExportDashboardPng');
   if (btnExpDashPng) {
     btnExpDashPng.addEventListener('click', exportDashboardAsPngImage);
   }
@@ -3791,8 +3786,7 @@ function initFarmSalesApp() {
     btnExpAllMerchExcel.addEventListener('click', exportAllMerchantsStatementsToExcel);
   }
 
-  if (!loadedFromLocal) {
-    loadFromIndexedDBAsync().then((idbState) => {
+  loadFromIndexedDBAsync().then((idbState) => {
       const wasLoggedInNow = Boolean(appState.isLoggedIn);
       const currentActiveUser = appState.activeUserId;
       if (!appState.hasLocalEdits && idbState && applyParsedStateObject(idbState)) {
@@ -3956,7 +3950,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v88-floating-new-sale';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v85-final-polish';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3987,11 +3981,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v88) without automatic reload loops
+  // Register Offline Service Worker (v85) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV88) {
-      window.__swRegisteredOnceV88 = true;
-      navigator.serviceWorker.register('./sw.js?v=88', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV85) {
+      window.__swRegisteredOnceV85 = true;
+      navigator.serviceWorker.register('./sw.js?v=85', { scope: './' }).catch(() => {});
     }
   }
 
@@ -5561,7 +5555,7 @@ function initFarmSalesApp() {
     const netW = hasValidW2 ? (w2 - w1) : 0;
     const price = Math.max(0, parseNum(document.getElementById('inpPrice')?.value) || 0);
     const tip = Math.max(0, parseNum(document.getElementById('inpTip')?.value) || 0);
-    const totalWithTip = hasValidW2 ? Math.round((netW * price) + tip) : 0;
+    const totalWithTip = hasValidW2 ? Math.round(((netW * price) + tip) * 100) / 100 : 0;
 
     const mName = (document.getElementById('inpMerchantName')?.value || '').trim();
     const editId = document.getElementById('editSaleId')?.value || '';
@@ -5776,7 +5770,6 @@ function initFarmSalesApp() {
     if (c2) c2.textContent = cancelText;
   }
 
-  window.cancelOrClearCurrentSaleEntry = cancelOrClearCurrentSaleEntry;
   function cancelOrClearCurrentSaleEntry(showFeedbackToast = true) {
     const wasEditing = Boolean((document.getElementById('editSaleId') && document.getElementById('editSaleId').value) || activeRecalledPendingId);
     activeRecalledPendingId = '';
@@ -6389,9 +6382,8 @@ function initFarmSalesApp() {
     activeRecalledPendingId = item.id;
     setSaleEntryMode('sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
     document.getElementById('editSaleId').value = '';
-    const assignedScaleOnRecall = Number(item.scaleNo) > 0 ? item.scaleNo : getNextSequentialScaleNo();
     document.getElementById('inpMerchantName').value = item.merchant;
-    document.getElementById('inpScaleNo').value = assignedScaleOnRecall;
+    document.getElementById('inpScaleNo').value = item.scaleNo || '';
     document.getElementById('inpCarNo').value = item.carNo || '';
     document.getElementById('inpW1').value = item.w1 ? fmtMoney(item.w1) : '';
     document.getElementById('inpW2').value = item.w2 ? fmtMoney(item.w2) : '';
@@ -6416,11 +6408,7 @@ function initFarmSalesApp() {
     updateMerchantSuggestions();
     updateLiveFormCalculation();
     document.getElementById('saleFormCard').scrollIntoView({ behavior: 'smooth' });
-    setTimeout(() => {
-      const targetInpId = (Number(item.w1) || 0) > 0 ? 'inpW2' : 'inpW1';
-      const elToFocus = document.getElementById(targetInpId);
-      if (elToFocus) elToFocus.focus();
-    }, 100);
+    setTimeout(() => document.getElementById('inpW2').focus(), 100);
     showToast(`تم استرجاع حركة (${item.merchant}) المحجوزة بمسلسل ميزان (${item.scaleNo || '-'}) — أدخل الآن (الوزنة الثانية) واضغط حفظ!`, '🔄');
   }
 
@@ -6533,17 +6521,13 @@ function initFarmSalesApp() {
     }
     const mName = document.getElementById('inpMerchantName').value.trim();
     const w1Val = parseNum(document.getElementById('inpW1').value);
-    const custCashVal = parseNum(document.getElementById('inpCustodyCash').value) || 0;
-    const custTrVal = parseNum(document.getElementById('inpCustodyTransfer').value) || 0;
-    const isAdvanceCustodyOnly = Boolean(w1Val <= 0 && (custCashVal > 0 || custTrVal > 0));
-
     if (!mName) {
-      showToast('يرجى إدخال اسم التاجر / السيارة أولاً لحفظ الحركة مؤقتاً!', '⚠️');
+      showToast('يرجى إدخال اسم التاجر / السيارة أولاً لحفظ الوزنة الأولى مؤقتاً!', '⚠️');
       document.getElementById('inpMerchantName').focus();
       return;
     }
-    if (w1Val <= 0 && !isAdvanceCustodyOnly) {
-      showToast('يرجى إدخال (الوزنة الأولى - فارغ) أو مبلغ (العهدة المسبقة) لحفظ الحركة مؤقتاً!', '⚠️');
+    if (w1Val <= 0) {
+      showToast('يرجى إدخال (الوزنة الأولى - فارغ) لحفظ الحركة مؤقتاً!', '⚠️');
       document.getElementById('inpW1').focus();
       return;
     }
@@ -6551,13 +6535,7 @@ function initFarmSalesApp() {
     const dayObj = appState.days[appState.currentDay];
     if (!Array.isArray(dayObj.pendingSales)) dayObj.pendingSales = [];
 
-    let enteredScale = '';
-    if (!isAdvanceCustodyOnly) {
-      enteredScale = Number(document.getElementById('inpScaleNo').value) || getNextSequentialScaleNo();
-    } else {
-      const manualScale = Number(document.getElementById('inpScaleNo').value) || 0;
-      enteredScale = manualScale > 0 ? manualScale : '';
-    }
+    let enteredScale = Number(document.getElementById('inpScaleNo').value) || getNextSequentialScaleNo();
     const scaleConflict = [
       ...(dayObj.sales || []).filter(x => !isRecordDebtOnlyVoucher(x)),
       ...(dayObj.pendingSales || [])
@@ -8218,14 +8196,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v88)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v85)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=88',
-    './js/accounting.js?v=88',
-    './js/storage-sync.js?v=88',
-    './js/excel-engine.js?v=88',
-    './js/print-export.js?v=88',
-    './js/ui-controllers.js?v=88'
+    './js/core-state.js?v=85',
+    './js/accounting.js?v=85',
+    './js/storage-sync.js?v=85',
+    './js/excel-engine.js?v=85',
+    './js/print-export.js?v=85',
+    './js/ui-controllers.js?v=85'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8317,7 +8295,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v88)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v85)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8435,14 +8413,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=88');
+        scTpl.setAttribute('src', './excel-template.js?v=85');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=88');
+        lnk.setAttribute('href', './style.css?v=85');
         bundledStyleEl.replaceWith(lnk);
       }
     }
@@ -8871,27 +8849,4 @@ if (document.readyState === 'loading') {
 } else {
   initFarmSalesApp();
 }
-
-  const btnLiteQuickNewSaleEl = document.getElementById('btnLiteQuickNewSale');
-  if (btnLiteQuickNewSaleEl) {
-    btnLiteQuickNewSaleEl.addEventListener('click', () => {
-      if (typeof window.cancelOrClearCurrentSaleEntry === 'function') {
-        window.cancelOrClearCurrentSaleEntry(false);
-      }
-      const saleCardEl = document.getElementById('saleFormCard');
-      const merchInpEl = document.getElementById('inpMerchantName');
-      if (saleCardEl) {
-        saleCardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-      if (merchInpEl) {
-        setTimeout(() => {
-          try {
-            merchInpEl.focus();
-            merchInpEl.select();
-          } catch (e) {}
-        }, 120);
-      }
-      showToast('➕ جاهز لتسجيل حركة جديدة — اكتب اسم التاجر الآن', '🚛');
-    });
-  }
 

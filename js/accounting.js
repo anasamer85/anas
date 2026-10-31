@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v88)
+// MODULE 2: ACCOUNTING FORMULAS, TREASURY & MERCHANT CODING (js/accounting.js — v85)
 // =========================================================================
 
 function addSpecificDayToCycle(targetDayNum, customLabel = '') {
@@ -670,57 +670,79 @@ if (typeof window !== 'undefined') {
 }
 
 function computeSaleRow(row) {
-  const isDebtCollectionOnly = isRecordDebtOnlyVoucher(row);
-  const w1 = isDebtCollectionOnly ? 0 : Math.round(Math.max(0, Number(row.w1) || 0));
-  const w2 = isDebtCollectionOnly ? 0 : Math.round(Math.max(0, Number(row.w2) || 0));
+  const w1 = roundMoney2(Math.max(0, Number(row.w1) || 0));
+  const w2 = roundMoney2(Math.max(0, Number(row.w2) || 0));
   // الوزنة الثانية يجب أن تكون أكبر من أو تساوي الوزنة الأولى
-  const netWeight = (!isDebtCollectionOnly && w2 >= w1 && w2 > 0) ? Math.round(w2 - w1) : 0;
-  const price = isDebtCollectionOnly ? 0 : Math.round(Math.max(0, Number(row.price) || 0));
-  const tip = isDebtCollectionOnly ? 0 : Math.round(Math.max(0, Number(row.tip) || 0));
-  const baseAmount = Math.round(netWeight * price);
-  const totalWithTip = Math.round(baseAmount + tip);
+  const netWeight = (w2 >= w1 && w2 > 0) ? roundMoney2(w2 - w1) : 0;
+  const price = roundMoney2(Math.max(0, Number(row.price) || 0));
+  const tip = roundMoney2(Math.max(0, Number(row.tip) || 0));
+  const baseAmount = roundMoney2(netWeight * price);
+  const totalWithTip = roundMoney2(baseAmount + tip);
 
   // Custody is a standalone statement (مجرد بيان مستقل لا يرتبط بالفاتورة أو الخزنة)
-  const custodyCash = Math.round(Math.max(0, Number(row.custodyCash) || 0));
-  const custodyTransfer = Math.round(Math.max(0, Number(row.custodyTransfer) || 0));
+  const custodyCash = roundMoney2(Math.max(0, Number(row.custodyCash) || 0));
+  const custodyTransfer = roundMoney2(Math.max(0, Number(row.custodyTransfer) || 0));
   const custodyTransferType = row.custodyTransferType || '';
-  const totalCustody = Math.round(custodyCash + custodyTransfer);
+  const totalCustody = roundMoney2(custodyCash + custodyTransfer);
 
-  const cashSales = isDebtCollectionOnly ? 0 : Math.round(Math.max(0, Number(row.cashSales) || 0));
-  const transferSales = isDebtCollectionOnly ? 0 : Math.round(Math.max(0, Number(row.transferSales) || 0));
-  const transferSalesType = isDebtCollectionOnly ? '' : (row.transferSalesType || '');
-  const creditSales = isDebtCollectionOnly ? 0 : Math.round(Math.max(0, Number(row.creditSales) || 0));
-  const debtCash = Math.round(Math.max(0, Number(row.debtCash) || 0));
-  const debtTransfer = Math.round(Math.max(0, Number(row.debtTransfer) || 0));
-  const prevCash = Math.round(Math.max(0, Number(row.prevCash) || 0));
-  const prevTransfer = Math.round(Math.max(0, Number(row.prevTransfer) || 0));
+  const cashSales = roundMoney2(Math.max(0, Number(row.cashSales) || 0));
+  const transferSales = roundMoney2(Math.max(0, Number(row.transferSales) || 0));
+  const transferSalesType = row.transferSalesType || '';
+  const creditSales = roundMoney2(Math.max(0, Number(row.creditSales) || 0));
+  const debtCash = roundMoney2(Math.max(0, Number(row.debtCash) || 0));
+  const debtTransfer = roundMoney2(Math.max(0, Number(row.debtTransfer) || 0));
+  const prevCash = roundMoney2(Math.max(0, Number(row.prevCash) || 0));
+  const prevTransfer = roundMoney2(Math.max(0, Number(row.prevTransfer) || 0));
 
   // صافي متبقي العهدة بعد خصم سداد المديونيات وسداد فاتورة اليوم (مع التوافق التام مع السجلات القديمة)
-  const custodyUsedForDebt = Math.round(debtCash + debtTransfer);
-  const custodyUsedForInvoice = Math.round(cashSales + transferSales);
-  const totalSettledFromCustody = Math.round(custodyUsedForDebt + custodyUsedForInvoice);
-  const netCustodyAfterDebt = Math.round(totalCustody - custodyUsedForDebt);
+  const custodyUsedForDebt = roundMoney2(debtCash + debtTransfer);
+  const custodyUsedForInvoice = roundMoney2(cashSales + transferSales);
+  const totalSettledFromCustody = roundMoney2(custodyUsedForDebt + custodyUsedForInvoice);
+  const netCustodyAfterDebt = roundMoney2(totalCustody - custodyUsedForDebt);
   const netCustodyRemaining = totalCustody > 0
-    ? Math.round(totalCustody >= totalSettledFromCustody ? (totalCustody - totalSettledFromCustody) : Math.max(0, totalCustody - custodyUsedForDebt))
+    ? roundMoney2(totalCustody >= totalSettledFromCustody ? (totalCustody - totalSettledFromCustody) : netCustodyAfterDebt)
     : 0;
 
-  // Invoice Difference = (Cash Sales + Transfer Sales + Credit Sales) - Total Invoice (with Tip)
-  const totalPaidAndCredit = Math.round(cashSales + transferSales + creditSales);
-  const invoiceDiff = isDebtCollectionOnly ? 0 : Math.round(totalPaidAndCredit - totalWithTip);
+  const totalPaidAndCredit = roundMoney2(cashSales + transferSales + creditSales);
+  const invoiceDiff = roundMoney2(totalPaidAndCredit - totalWithTip);
   const code = resolveMerchantCode(row.merchant);
+  const isDebtCollectionOnly = Boolean(
+    !row.isPending &&
+    w1 === 0 &&
+    w2 === 0 &&
+    totalWithTip === 0 &&
+    cashSales === 0 &&
+    transferSales === 0 &&
+    creditSales === 0 &&
+    (debtCash > 0 || debtTransfer > 0 || prevCash > 0 || prevTransfer > 0 || row.entryMode === 'debt_only')
+  );
 
+  const voucherNo = isDebtCollectionOnly ? (Number(row.voucherNo || row.scaleNo) || 0) : 0;
   return {
     ...row,
     code,
+    voucherNo,
     isDebtCollectionOnly,
-    voucherNo: isDebtCollectionOnly ? (Number(row.voucherNo || row.scaleNo) || 0) : (Number(row.voucherNo) || 0),
-    w1, w2, netWeight, price, tip, baseAmount, totalWithTip,
-    custodyCash, custodyTransfer, custodyTransferType, totalCustody,
-    netCustodyAfterDebt, netCustodyRemaining,
-    cashSales, transferSales, transferSalesType, creditSales,
-    debtCash, debtTransfer, debtTransferType: row.debtTransferType || '',
-    prevCash, prevTransfer, prevTransferType: row.prevTransferType || '',
-    notes: row.notes || '',
+    w1,
+    w2,
+    netWeight,
+    price,
+    tip,
+    baseAmount,
+    totalWithTip,
+    custodyCash,
+    custodyTransfer,
+    custodyTransferType,
+    totalCustody,
+    netCustodyRemaining,
+    cashSales,
+    transferSales,
+    transferSalesType,
+    creditSales,
+    debtCash,
+    debtTransfer,
+    prevCash,
+    prevTransfer,
     totalPaidAndCredit,
     invoiceDiff
   };
@@ -743,24 +765,6 @@ function computeDaySummary(dayNum) {
   let sumDebtCash = 0, sumDebtTransfer = 0;
   let sumPrevCash = 0, sumPrevTransfer = 0;
   let sumPaidAndCredit = 0, sumInvoiceDiff = 0;
-
-  let sumPendingAdvanceCashInBox = 0;
-  let sumPendingAdvanceTransfers = 0;
-
-  pendingRows.forEach(pr => {
-    const pCustCash = roundMoney2(Math.max(0, Number(pr.custodyCash) || 0));
-    const pCustTr = roundMoney2(Math.max(0, Number(pr.custodyTransfer) || 0));
-    const pDebtCash = roundMoney2(Math.max(0, Number(pr.debtCash) || 0));
-    const pDebtTr = roundMoney2(Math.max(0, Number(pr.debtTransfer) || 0));
-    const pCashSales = roundMoney2(Math.max(0, Number(pr.cashSales) || 0));
-    const pTrSales = roundMoney2(Math.max(0, Number(pr.transferSales) || 0));
-
-    const effectivePendingCashIn = roundMoney2(Math.max(pCustCash, pDebtCash + pCashSales));
-    const effectivePendingTrIn = roundMoney2(Math.max(pCustTr, pDebtTr + pTrSales));
-
-    sumPendingAdvanceCashInBox = roundMoney2(sumPendingAdvanceCashInBox + effectivePendingCashIn);
-    sumPendingAdvanceTransfers = roundMoney2(sumPendingAdvanceTransfers + effectivePendingTrIn);
-  });
 
   rows.forEach(r => {
     if (r.isDebtCollectionOnly) {
@@ -828,7 +832,7 @@ function computeDaySummary(dayNum) {
       ? (Number(appState.days && appState.days[dayNum - 1] && appState.days[dayNum - 1].carriedForwardCash) || 0)
       : (Number(dayObj.openingCash) || 0)
   );
-  const totalCashBeforeExpenses = roundMoney2(sumCashSales + sumDebtCash + sumPrevCash + sumPendingAdvanceCashInBox);
+  const totalCashBeforeExpenses = roundMoney2(sumCashSales + sumDebtCash + sumPrevCash);
   const netCashInBox = roundMoney2(totalCashBeforeExpenses - sumExpenses);
   const totalAvailableCashInBox = roundMoney2(openingCashFromPrevDay + netCashInBox);
   const deliveredCash = roundMoney2(Number(dayObj.deliveredCash) || 0);
@@ -836,7 +840,7 @@ function computeDaySummary(dayNum) {
   const totalSettledAndCarriedCash = roundMoney2(deliveredCash + carriedForwardCash);
   const cashBoxDiff = roundMoney2(totalAvailableCashInBox - totalSettledAndCarriedCash);
 
-  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer + sumPendingAdvanceTransfers);
+  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer);
   const totalAllTransfers = roundMoney2(currentFarmTransfers + sumPrevTransfer);
 
   const weightAuditDiff = roundMoney2(sumNetW - (sumW2 - sumW1));
@@ -1009,7 +1013,7 @@ function computeFarmCumulativeTrialBalance(summariesList = null) {
   const avgCarWeight = countCars > 0 ? Math.round(sumNetW / countCars) : 0;
   const weightAuditDiff = roundMoney2(sumNetW - roundMoney2(sumW2 - sumW1));
 
-  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer + sumPendingAdvanceTransfers);
+  const currentFarmTransfers = roundMoney2(sumTransferSales + sumDebtTransfer);
   const totalAllTransfers = roundMoney2(currentFarmTransfers + sumPrevTransfer);
   const totalDebtCollected = roundMoney2(sumDebtCash + sumDebtTransfer);
   const closingFarmDebt = roundMoney2(sumCreditSales - totalDebtCollected);
