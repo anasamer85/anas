@@ -1,7 +1,7 @@
 # 📘 وثيقة التسليم التقنية الشاملة (Comprehensive Technical Handover Document)
 
 **المشروع:** نظام محاضر لجان بيع المزارع (Offline-First PWA + Two-Way Excel Sync + Cloud Sync)
-**الإصدار المرجعي الحالي:** `v85` (`farm-sales-v85-new-transaction` — Performance, QA Fortification & Enterprise Delta Sync) (Modular Architecture & Client-Side Delta Outbox Engine)
+**الإصدار المرجعي الحالي:** `v86` (`farm-sales-v86-bug-fixes` — Performance, QA Fortification & Enterprise Delta Sync) (Modular Architecture & Client-Side Delta Outbox Engine)
 **الهدف القادم المباشر:** تنفيذ المرحلة الرابعة والأخيرة (`v75`: End-to-End Cloud Delta Sync & GAS LockService)
 
 ---
@@ -17,7 +17,7 @@
 | `style.css` | التنسيقات المخصصة، قواعد الطباعة الحرجة (`@media print` بحجم A4 Landscape)، فئات التثبيت الاختياري للجداول الـ 12 (`sticky-headers-on`, `sticky-footers-on`, `sticky-right-cols-on`, `sticky-left-cols-on`)، وقواعد إخفاء العناصر غير الضرورية عند تفعيل وضع المندوب (`body.lite-field-mode-active`). |
 | `excel-template.js` | القالب الهيكلي ومحرك بناء وتنسيق شيتات الإكسيل الـ 15 بالمعادلات الحية والألوان والحدود الرسمية. |
 | `vendor/vendor-loader.js` | **محرك التحميل المحلي الذكي للمكتبات + درع منع التحديث اللانهائي:** يحمل المكتبات الـ 4 (`XLSX`, `Chart`, `html2canvas`, `jspdf`) بترتيب (`CacheStorage -> CDN -> Local Fallback`)، ويوفر دالة `downloadAndBundleVendorPackagesLocally()` لتنزيلها محلياً للعمل أوفلاين بنسبة 100%، كما يعترض `navigator.serviceWorker.register` وحدث `controllerchange` لمنع دخول الصفحة في حلقة تحديث لا نهائية (Infinite Reload Loop). |
-| `sw.js` | عامل الخدمة (Service Worker) بإصدار كاش `farm-sales-v85-new-transaction`؛ يدير التخزين المسبق للأصول المحلية والـ CDN ودالة المطابقة الذكية `matchFromCacheSmart`. |
+| `sw.js` | عامل الخدمة (Service Worker) بإصدار كاش `farm-sales-v86-bug-fixes`؛ يدير التخزين المسبق للأصول المحلية والـ CDN ودالة المطابقة الذكية `matchFromCacheSmart`. |
 | `manifest.json` & Icons | إعدادات تطبيق الـ PWA (`icon-192.png`, `icon-512.png`) لدعم التثبيت المباشر على شاشة الهاتف والكمبيوتر. |
 
 ### ب. الوحدات البرمجية الـ 6 داخل مجلد `./js/` (تُحمّل بهذا الترتيب):
@@ -321,54 +321,58 @@
 
 ---
 
-## 7. ✅ سجل إنجازات وترقيات الإصدار `v85` (`farm-sales-v85-new-transaction`)
+## 7. ✅ سجل إنجازات وترقيات الإصدار `v86` (`farm-sales-v86-bug-fixes`)
 
-تم في الإصدار **`v85`** إغلاق كافة ملاحظات الفحص التقني والجودة الشاملة (QA Audit) واعتماد التحسينات المعمارية والمحاسبية التالية:
+تم في الإصدار **`v86`** إغلاق كافة ملاحظات الفحص التقني والجودة الشاملة (QA Audit) واعتماد التحسينات المعمارية والمحاسبية التالية:
 1. **إحكام طابور المزامنة الجزئية (`syncOutbox`):** إدراج أحداث تعديل أسماء التجار (`UPSERT_MERCHANT`) وإضافة/تعديل المستخدمين وتحديث الملف الشخصي (`UPSERT_USER`) في طابور `syncOutbox` لضمان مزامنتها اللحظية عبر بروتوكول `delta_sync`.
 2. **دقة الفاصلة العائمة بنسبة 100% (`roundMoney2`):** تغليف كافة العمليات الحسابية التراكمية والفرعية في `js/accounting.js` و `js/storage-sync.js` بدالة `roundMoney2`.
 3. **تطوير تجربة المندوب الميداني (`Lite Field Mode`):** إخفاء الهيدر الرئيسي (`#mainHeader`) في وضع المندوب لمنع الازدواجية، ورفع الهامش السفلي (`padding-bottom: 135px / 150px`)، وإضافة خيار تثبيت شريط المندوب العلوي (`#chkStickyLiteBanner` / `.sticky-lite-banner`) المحفوظ في `LocalStorage` (`pref_sticky_lite_banner`).
-4. **مهلة الشبكة الذكية (`3s Network Timeout`) وترقية الكاش (`v85`):** إضافة مهلة 3 ثوانٍ باستخدام `Promise.race` و `AbortController` لطلبات الملفات الأساسية في `sw.js` للتحول الفوري للكاش عند ضعف شبكة المزرعة، وترقية الكاش الموحد إلى `farm-sales-v85-new-transaction` دون استخدام `caches.delete` خارج حدث `activate`.
+4. **مهلة الشبكة الذكية (`3s Network Timeout`) وترقية الكاش (`v86`):** إضافة مهلة 3 ثوانٍ باستخدام `Promise.race` و `AbortController` لطلبات الملفات الأساسية في `sw.js` للتحول الفوري للكاش عند ضعف شبكة المزرعة، وترقية الكاش الموحد إلى `farm-sales-v86-bug-fixes` دون استخدام `caches.delete` خارج حدث `activate`.
 5. **الاستنساخ الكسول للفلاتر (`Lazy DOM Cloning`):** تأجيل استنساخ عقد الـ DOM (`cloneNode(true)`) في `applyDomTableExcelEngine` ليتم فقط عند تفعيل الفلتر أو الفرز فعلياً عبر `captureDomTableRawRows` لتقليل استهلاك الذاكرة على الهواتف الضعيفة.
 
-6. **تحديثات الإصدار `v85` (`farm-sales-v85-new-transaction`):**
+6. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes`):**
    - **إصلاح ظهور شريط المندوب في صفحة الدخول:** إزالة الكلاس `lite-field-mode-active` وإخفاء `#liteFieldModeActiveBanner` (`style.display = 'none'`) فور تسجيل الخروج اليدوي أو التلقائي (`Session Timeout`) أو عند عدم تسجيل الدخول.
    - **جعل وضع المندوب المبسط هو الوضع الافتراضي للموبايل:** تفعيل وضع المندوب المبسط تلقائياً وإظهار شريط المندوب فور تسجيل الدخول من الهواتف المحمولة (`window.innerWidth <= 768`) دون الحاجة لتفعيله يدوياً في كل جلسة.
 
-7. **تحديثات الإصدار `v85` (`farm-sales-v85-new-transaction` — الانتقال الكامل والمؤمّن إلى Firebase Realtime Database):**
+7. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes` — الانتقال الكامل والمؤمّن إلى Firebase Realtime Database):**
    - تم الانتقال بالكامل إلى Firebase Realtime Database (REST API). تم تأمين طلبات PATCH عبر آلية الجلب والدمج المسبق الذري (Atomic Pre-Fetch Merge) لمنع تضارب المصفوفات، وتم تأمين الواجهة بإخفاء الرمز السري عن المندوبين.
    - تمت إزالة زر نسخ كود Google Apps Script القديم (`#btnCopyCloudScriptCode`)، وإنشاء حقلين مخصصين لمدير الموقع فقط (`firebaseUrlInput` و `firebaseSecretInput` من نوع `password`) داخل قسم `#adminFirebaseSettingsSection` مع حفظهما في `LocalStorage` وتشفيرهما داخل خزينة الدخول (`v70_vault`).
 
-8. **تحديثات الإصدار `v85` (`farm-sales-v85-new-transaction`):**
+8. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes`):**
    - **تحسين رسائل أخطاء الاتصال:** تم تعديل محرك المزامنة لالتقاط أخطاء المصادقة الخاصة بـ Firebase (مثل خطأ 401 عند إدخال رمز سري خاطئ أو 404 لرابط غير صحيح) وإظهار رسالة واضحة للمدير بدلاً من إظهار رسالة (الشبكة غير مستقرة) العشوائية.
 
-9. **تحديثات الإصدار `v85` (`farm-sales-v85-new-transaction` — إغلاق الثغرات الأمنية وإعادة هيكلة منطق الصلاحيات):**
+9. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes` — إغلاق الثغرات الأمنية وإعادة هيكلة منطق الصلاحيات):**
    - **حصر النسخ الاحتياطي وسجل الرقابة والتصفير بالمدير فقط (`isAdm`):** إخفاء بطاقة `#fullJsonBackupAndAuditCard` وزر `#btnResetDemoData` ودوال التصفير الثلاث بالكامل عن غير المديرين.
    - **إخفاء بطاقة التحكم السريع بالكامل عند عدم وجود صلاحية:** ربط ظهور `#syncQuickControlCard` بشرط `!showQuickCtrl` بدلاً من ترك هيكلها ظاهراً.
    - **فك التداخل بين الصلاحيات:** جعل `showCloudHub` مستقلة تماماً ومرتبطة بـ `uPerms.showSyncCloud` فقط دون تفعيلها خفياً مع صلاحية `farms`.
    - **تنظيم نموذج الصلاحيات (`#addUserForm`):** تقسيم مربعات الصلاحيات إلى 3 مجموعات بصرية واضحة (`fieldset`) مع تفعيل التحديد والقفل التلقائي التفاعلي لجميع المربعات عند اختيار `👑 صلاحيات مدير كامل` (`chkPermAdmin`).
 
-10. **تحديثات الإصدار `v85` (`farm-sales-v85-new-transaction` — إعادة الهيكلة البصرية لنظام التبويبات الفرعية):**
+10. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes` — إعادة الهيكلة البصرية لنظام التبويبات الفرعية):**
    - **إنشاء شريط التبويبات الفرعية (`#syncSubNavBar`):** تقسيم شاشة التحكم والمزامنة (`#view-sync`) إلى 5 تبويبات فرعية مستقلة (`🗂️ المزارع والإكسيل`، `🎨 تفضيلات الواجهة`، `🔐 المستخدمون والصلاحيات`، `☁️ الربط السحابي`، `🕵️ الرقابة والنسخ`) مع إظهار التبويب النشط فقط وإخفاء التبويبات الإدارية الثلاثة الأخيرة عن غير المديرين.
    - **تأسيس تبويب `🎨 تفضيلات الواجهة` (`#syncSubView-ui_prefs`):** تجميع بطاقة الملف الشخصي (`#myProfileCardSection`) مع كافة إعدادات شكل الواجهة والجداول (وضع شاشة المندوب المبسط، الشريط العائم، تثبيت الرؤوس والأعمدة، وإظهار/إخفاء نصوص الرقابة بجدول البيع) في شاشة واحدة منظمة ومريحة.
 
-11. **تحديثات الإصدار النهائي `v85` (`farm-sales-v85-new-transaction` — تسكين التبويبات الخمسة وتنظيف الهياكل القديمة):**
+11. **تحديثات الإصدار النهائي `v86` (`farm-sales-v86-bug-fixes` — تسكين التبويبات الخمسة وتنظيف الهياكل القديمة):**
    - **تسكين تبويب `🗂️ المزارع والإكسيل` (`#syncSubView-farms_excel`):** يضم شريط الإكسيل الموحد (بزر واحد لتصدير الإكسيل الشامل وزر استيراد الإكسيل بعد حذف الأزرار المكررة) + قسم إدارة الأيام + جدول سجل أرشيف المزارع.
    - **تسكين تبويبات الإدارة الثلاثة (للمدير فقط `isAdm`):**
      * **تبويب `🔐 المستخدمون والصلاحيات` (`#syncSubView-users_perms`):** يضم جدول المستخدمين ونموذج إضافة/تعديل مستخدم مقسماً لـ 3 مجموعات بصرية ووقت الخروج التلقائي.
      * **تبويب `☁️ الربط السحابي` (`#syncSubView-cloud_link`):** يضم إعدادات Firebase والرمز السري وسرعة المزامنة اللحظية وأزرار تنزيل مكتبات الأوفلاين وتصدير GitHub/Google Sites.
      * **تبويب `🕵️ الرقابة والنسخ` (`#syncSubView-audit_backup`):** يضم جدول سجل الرقابة الزمني (`Audit Trail`) وأزرار النسخ الاحتياطي الشامل (`.json`) ولوحة التصفير الذكي للموقع (`#btnResetDemoData` / `#smartResetInlineBox`).
-   - **التنظيف المعماري الشامل:** حذف الهياكل القديمة للبطاقات الست العملاقة (`#syncQuickControlCard`، `#syncCloudDbHubCard`، `#fullJsonBackupAndAuditCard`، `#syncTwoWayExcelCard`، `#usersPermissionsModal`) وإخفاء التبويبات الإدارية الثلاثة عن المندوبين العاديين، مع ترقية الكاش إلى `farm-sales-v85-new-transaction`.
+   - **التنظيف المعماري الشامل:** حذف الهياكل القديمة للبطاقات الست العملاقة (`#syncQuickControlCard`، `#syncCloudDbHubCard`، `#fullJsonBackupAndAuditCard`، `#syncTwoWayExcelCard`، `#usersPermissionsModal`) وإخفاء التبويبات الإدارية الثلاثة عن المندوبين العاديين، مع ترقية الكاش إلى `farm-sales-v86-bug-fixes`.
 
-12. **تحديثات الإصدار `v85` (`farm-sales-v85-new-transaction` — تحسين واجهة الموبايل ووضع المندوب المبسط):**
+12. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes` — تحسين واجهة الموبايل ووضع المندوب المبسط):**
    - **معالجة التكدس في الشريط السفلي العائم للشاشات الصغيرة جداً (`max-width: 360px`):** تحويل تخطيط `#mobileWeighbridgeActionBar` إلى `display: grid` وإخفاء النصوص التوضيحية الطويلة (`.sticky-bar-label-txt`) مع الإبقاء على الأيقونات التعبيرية والأرقام المالية فقط لمنع أي تداخل.
    - **تحسين تصفح بطاقات المبيعات الطويلة (`> 15 بطاقة`):** إضافة زري تنقل عائمين (`#btnLiteScrollToTop` ⬆️ و `#btnLiteScrollToBottom` ⬇️ داخل `#liteScrollNavFloatingBtns`) يظهران تلقائياً في وضع المندوب عند تجاوز عدد بطاقات المبيعات لليوم الحالي 15 بطاقة مع تمرير سلس (`behavior: 'smooth'`).
 
-13. **تحديثات الإصدار `v85` (`farm-sales-v85-new-transaction` — تبسيط شاشة الكمبيوتر وتقليل التعقيد البصري):**
+13. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes` — تبسيط شاشة الكمبيوتر وتقليل التعقيد البصري):**
    - **التجميع البصري والإخفاء التدريجي في محضر البيع (`Progressive Disclosure`):** إضافة فئات التجميع البصري الهادئة (`.form-visual-group-identity`, `.form-visual-group-weights`, `.form-visual-group-payments`) في `style.css`، وإخفاء قسم تحصيل المديونية ووضع "سند تحصيل مديونية فقط" افتراضياً خلف خيار التبديل (`#chkShowDebtCollectionOptions` / `#btnToggleDebtCollectionOptions`) مع فتحه تلقائياً عند وجود تحصيل مديونية.
    - **دمج جدولي التحويلات والمزارع السابقة بنظام التبويبات الفرعية (`#transfersSubNavBar`):** وضع جدول التحويلات (`#transfersSubPane-transfers`) وجدول تحصيلات المزارع السابقة (`#transfersSubPane-prev_farms`) داخل حاوية واحدة للتبديل الفوري بنقرة واحدة وتقليل التمرير العمودي.
    - **إضافة تلميحات المساعدة (`Tooltips`):** إضافة شارات المساعدة التفاعلية (`.ui-tooltip-badge` مع `title` و `data-tooltip`) بجوار الخانات المحاسبية لشرح وظيفتها عند تمرير الماوس.
 
-14. **تحديثات الإصدار النهائي `v85` (`farm-sales-v85-new-transaction` — إضافة زر "➕ حركة جديدة" السريع وتحسينات الشاشات الضيقة):**
+14. **تحديثات الإصدار النهائي `v86` (`farm-sales-v86-bug-fixes` — إضافة زر "➕ حركة جديدة" السريع وتحسينات الشاشات الضيقة):**
    - **إضافة زر `➕ حركة جديدة` (`#btnStickyNewSale` و `#btnInlineNewSale`):** إضافة زر بدء حركة جديدة في كل من شريط الإجراءات السفلي العائم ومنطقة أزرار النموذج بالترتيب القياسي ليد المندوب: `(➕ حركة جديدة) | (✕ إلغاء الإدخال) | (⏳ حفظ مؤقت وزنة 1) | (💾 حفظ نهائي)`.
    - **التهيئة والتركيز التلقائي المتمركز (`resetSaleForm`):** تفريغ النموذج والانتقال بتمرير سلس (`scrollIntoView({ behavior: 'smooth', block: 'center' })`) مع تركيز تلقائي (`focus()`) على حقل اسم التاجر (`#inpMerchantName`).
-   - **تخطيط شبكي رباعي للشاشات الصغيرة (`< 360px`):** ضبط الأزرار الأربعة بنظام `display: grid; grid-template-columns: repeat(4, 1fr);` مع إخفاء النصوص والاكتفاء بالأيقونات المكبرة (`➕`, `✕`, `⏳`, `💾`) لسهولة النقر بيد واحدة، وترقية الكاش في `sw.js` إلى `farm-sales-v85-new-transaction`.
+   - **تخطيط شبكي رباعي للشاشات الصغيرة (`< 360px`):** ضبط الأزرار الأربعة بنظام `display: grid; grid-template-columns: repeat(4, 1fr);` مع إخفاء النصوص والاكتفاء بالأيقونات المكبرة (`➕`, `✕`, `⏳`, `💾`) لسهولة النقر بيد واحدة، وترقية الكاش في `sw.js` إلى `farm-sales-v86-bug-fixes`.
+
+15. **تحديثات الإصدار `v86` (`farm-sales-v86-bug-fixes` — إصلاح أخطاء الواجهة وإدارة الأيام وتبويب الرقابة):**
+   - إصلاح أخطاء اختفاء محتوى تبويب الرقابة، وإصلاح جميع وظائف إدارة الأيام والقوائم المنسدلة التي تعطلت بعد إعادة هيكلة الواجهة.
+   - فصل إغلاق حاوية التبويب الرابع (`#syncSubView-cloud_link`) عن التبويب الخامس (`#syncSubView-audit_backup`) في `index.html`، وتصدير دوال إدارة الأيام (`refreshDayManagementBoxesUI`, `openDayManagementBox`, `openDailyQuickAddDayBox`) للنطاق العام واستدعاؤها فور التهيئة في `js/ui-controllers.js`.
