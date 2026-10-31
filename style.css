@@ -2344,6 +2344,9 @@ body:not(.lite-field-mode-active) #liteScrollNavFloatingBtns,
   .table-scroll-wrapper > table > tbody > tr.bg-emerald-50\/70 > td {
     background-color: #ecfdf5 !important;
   }
+  .table-scroll-wrapper > table > tbody > tr.pre-weighing-row > td {
+    background-color: #f0fdfa !important;
+  }
   .table-scroll-wrapper > table > tbody > tr:hover > td {
     background-color: #eff6ff !important;
   }

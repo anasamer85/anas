@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v89)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v90)
 // =========================================================================
 
 // =========================================================================
@@ -180,9 +180,13 @@ function renderDailyView() {
       </tr>
     `;
   } else {
-    filteredRows.forEach((r, idx) => {
+    const orderedSalesAndPendingRows = sortSalesListByScaleNo(filteredRows);
+    orderedSalesAndPendingRows.forEach((r, idx) => {
+      const isPreWeighing = Boolean(r.status === 'pre_weighing' || (r.isPending && (Number(r.w1) || 0) <= 0));
       const tr = document.createElement('tr');
-      if (r.isPending) {
+      if (isPreWeighing) {
+        tr.className = 'pre-weighing-row bg-teal-50/50 hover:bg-teal-50 border-y border-dashed border-teal-300 opacity-95';
+      } else if (r.isPending) {
         tr.className = 'bg-amber-50/85 hover:bg-amber-100/75 border-y border-amber-300';
       } else {
         tr.className = idx % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/70 hover:bg-blue-50/40';
@@ -195,18 +199,25 @@ function renderDailyView() {
         : '';
       const prevTxt = (r.prevCash + r.prevTransfer) > 0
         ? `${fmtInt(r.prevCash + r.prevTransfer)} ${r.notes ? `[${r.notes}]` : ''}${custodyBadge}`
-        : ((r.notes || '') + custodyBadge || (r.isPending ? '⏳ محجوز (بانتظار الوزنة 2)' : '-'));
+        : ((r.notes || '') + custodyBadge || (isPreWeighing ? '💰 عهدة مبدئية (بانتظار الميزان)' : (r.isPending ? '⏳ محجوز (بانتظار الوزنة 2)' : '-')));
 
       const safeMerchant = escXmlStr(r.merchant);
       const safeId = escXmlStr(r.id);
-      const merchantCellHtml = r.isPending
-        ? `${safeMerchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold shadow-sm">⏳ محجوز (وزنة 1)</span>`
-        : (r.isDebtCollectionOnly
-            ? `${safeMerchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-teal-700 text-white text-[10px] font-extrabold shadow-sm">💵 سند تحصيل مديونية</span>`
-            : safeMerchant);
-      const w2CellHtml = r.isPending
-        ? '<span class="text-amber-800 font-extrabold text-[11px]">⏳ بانتظار وزنة 2</span>'
-        : (r.isDebtCollectionOnly ? '<span class="text-teal-800 font-extrabold text-[10px]">💵 سند تحصيل</span>' : fmtInt(r.w2));
+      const merchantCellHtml = isPreWeighing
+        ? `${safeMerchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-950 border border-teal-400 text-[10px] font-extrabold shadow-sm">💰⏳ عهدة مبدئية (بانتظار الميزان)</span>`
+        : (r.isPending
+            ? `${safeMerchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold shadow-sm">⏳ محجوز (وزنة 1)</span>`
+            : (r.isDebtCollectionOnly
+                ? `${safeMerchant} <span class="inline-block mr-1 px-1.5 py-0.5 rounded bg-teal-700 text-white text-[10px] font-extrabold shadow-sm">💵 سند تحصيل مديونية</span>`
+                : safeMerchant));
+      const w1CellHtml = isPreWeighing
+        ? '<span class="text-teal-800 font-extrabold text-[10px]">⏳ بانتظار الميزان</span>'
+        : fmtInt(r.w1);
+      const w2CellHtml = isPreWeighing
+        ? '<span class="text-teal-700 font-bold text-[10px]">💰 عهدة قبل الميزان</span>'
+        : (r.isPending
+            ? '<span class="text-amber-800 font-extrabold text-[11px]">⏳ بانتظار وزنة 2</span>'
+            : (r.isDebtCollectionOnly ? '<span class="text-teal-800 font-extrabold text-[10px]">💵 سند تحصيل</span>' : fmtInt(r.w2)));
       const showReceiptBtn = Boolean(excelTableState && excelTableState.showScaleReceiptButtons);
       const receiptBtnHtml = showReceiptBtn
         ? `<span class="inline-flex items-center gap-0.5 ml-1 bg-indigo-50 p-0.5 rounded-lg border border-indigo-200">
@@ -219,20 +230,22 @@ function renderDailyView() {
       const actionCellHtml = !canEditSalesToday
         ? `${auditBadgeHtml}${receiptBtnHtml}<span class="text-slate-500 text-[11px] font-bold">${dayLocked ? '🔒 يوم معتمد ومقفل' : '🔒 عرض فقط'}</span>`
         : (r.isPending
-          ? `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-recall-pending="${safeId}" class="px-2 py-1 rounded bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 ml-1 shadow-sm" title="استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية">🔄 استكمال</button>
+          ? `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-recall-pending="${safeId}" class="px-2 py-1 rounded ${isPreWeighing ? 'bg-teal-700 hover:bg-teal-600' : 'bg-emerald-600 hover:bg-emerald-500'} text-white font-extrabold ml-1 shadow-sm" title="${isPreWeighing ? 'استرجاع حركة العهدة المبدئية لتسجيل الوزنة الأولى وترقيتها للميزان' : 'استرجاع الحركة المحجوزة لاستكمال الوزنة الثانية'}">${isPreWeighing ? '💰 استرجاع للميزان' : '🔄 استكمال'}</button>
              <button type="button" data-del-pending="${safeId}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`
           : `${auditBadgeHtml}${receiptBtnHtml}<button type="button" data-edit-sale="${safeId}" class="px-2 py-1 rounded bg-blue-100 text-blue-900 font-bold hover:bg-blue-200 ml-1">تعديل</button>
              <button type="button" data-del-sale="${safeId}" class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold hover:bg-rose-200">حذف</button>`);
 
-      const scaleOrVoucherCellHtml = r.isDebtCollectionOnly
-        ? `سند #${escXmlStr(r.voucherNo || r.scaleNo || '-')}${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}`
-        : `${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}`;
+      const scaleOrVoucherCellHtml = isPreWeighing
+        ? `💰 بانتظار الميزان${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}`
+        : (r.isDebtCollectionOnly
+            ? `سند #${escXmlStr(r.voucherNo || r.scaleNo || '-')}${r.carNo ? ' / ' + escXmlStr(r.carNo) : ''}`
+            : `${escXmlStr(r.scaleNo || '-')} / ${escXmlStr(r.carNo || '-')}`);
       tr.innerHTML = `
         <td class="p-2 border text-center font-bold">${idx + 1}</td>
         <td class="p-2 border text-center font-extrabold text-blue-900">${r.code || '-'}</td>
         <td class="p-2 border font-extrabold text-slate-900">${merchantCellHtml}</td>
-        <td class="p-2 border text-center text-[11px] font-extrabold ${r.isPending ? 'text-amber-900 bg-amber-100/60' : (r.isDebtCollectionOnly ? 'text-teal-900 bg-teal-50/70' : '')}">${scaleOrVoucherCellHtml}</td>
-        <td class="p-2 border text-left font-bold">${fmtInt(r.w1)}</td>
+        <td class="p-2 border text-center text-[11px] font-extrabold ${isPreWeighing ? 'text-teal-900 bg-teal-100/60' : (r.isPending ? 'text-amber-900 bg-amber-100/60' : (r.isDebtCollectionOnly ? 'text-teal-900 bg-teal-50/70' : ''))}">${scaleOrVoucherCellHtml}</td>
+        <td class="p-2 border text-left font-bold">${w1CellHtml}</td>
         <td class="p-2 border text-left">${w2CellHtml}</td>
         <td class="p-2 border text-left font-extrabold bg-blue-50/50 text-blue-950">${r.isPending ? '0' : fmtInt(r.netWeight)}</td>
         <td class="p-2 border text-left">${fmtDec(r.price)}</td>
@@ -423,8 +436,9 @@ function renderDailyView() {
     ${carryNextDayNote}
   `;
 
-  // Render Pending First-Weigh Cars (الوزنة الأولى المحفوظة مؤقتاً لحين استكمال الوزنة الثانية)
-  const pendingList = (appState.days[d] && appState.days[d].pendingSales) || [];
+  // Render Pending First-Weigh Cars & Pre-Weighing Custody (فرز حركات pre_weighing مجمعة دائماً في أسفل الجدول)
+  const rawPendingList = (appState.days[d] && appState.days[d].pendingSales) || [];
+  const pendingList = sortSalesListByScaleNo(rawPendingList);
   const pendSec = document.getElementById('pendingWeighInsSection');
   const pendTbody = document.getElementById('pendingWeighInsTbody');
   const pendBadge = document.getElementById('pendingWeighInsCountBadge');
@@ -436,14 +450,28 @@ function renderDailyView() {
       pendSec.classList.remove('hidden');
       pendTbody.innerHTML = pendingList.map(item => {
         const safePendId = escXmlStr(item.id);
+        const isPreWeighing = Boolean(item.status === 'pre_weighing' || (Number(item.w1) || 0) <= 0);
+        const totalDepositAmt = (Number(item.custodyCash) || 0) + (Number(item.custodyTransfer) || 0) + (Number(item.cashSales) || 0) + (Number(item.debtCash) || 0);
+        const rowCls = isPreWeighing
+          ? 'pre-weighing-row bg-teal-50/50 hover:bg-teal-50 border-y border-dashed border-teal-300'
+          : 'hover:bg-amber-50/60';
+        const scaleCellHtml = isPreWeighing
+          ? '<span class="px-1.5 py-0.5 rounded bg-teal-100 text-teal-900 border border-teal-300 text-[10px] font-extrabold">💰⏳ بانتظار الميزان</span>'
+          : escXmlStr(item.scaleNo || '-');
+        const merchCellHtml = isPreWeighing
+          ? `${escXmlStr(item.merchant)} <span class="px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-bold">💰 عهدة مبدئية</span>`
+          : escXmlStr(item.merchant);
+        const w1CellHtml = isPreWeighing
+          ? '<span class="text-teal-800 font-extrabold text-[11px]">⏳ بانتظار وزنة 1</span>'
+          : `${fmtMoney(item.w1)} كجم`;
         return `
-        <tr class="hover:bg-amber-50/60">
-          <td class="p-1.5 border text-center font-extrabold text-blue-900">${escXmlStr(item.scaleNo || '-')}</td>
-          <td class="p-1.5 border font-extrabold text-slate-900">${escXmlStr(item.merchant)}</td>
+        <tr class="${rowCls}">
+          <td class="p-1.5 border text-center font-extrabold text-blue-900">${scaleCellHtml}</td>
+          <td class="p-1.5 border font-extrabold text-slate-900">${merchCellHtml}</td>
           <td class="p-1.5 border text-center font-bold">${escXmlStr(item.carNo || '-')}</td>
-          <td class="p-1.5 border text-left font-extrabold text-amber-900">${fmtMoney(item.w1)} كجم</td>
+          <td class="p-1.5 border text-left font-extrabold text-amber-900">${w1CellHtml}</td>
           <td class="p-1.5 border text-left">${fmtMoney(item.price)} | إكرامية: ${fmtMoney(item.tip)}</td>
-          <td class="p-1.5 border text-right text-[11px]">${(item.custodyCash || item.custodyTransfer) ? `عهدة: ${fmtMoney((Number(item.custodyCash)||0)+(Number(item.custodyTransfer)||0))}` : escXmlStr(item.notes || 'بانتظار الوزنة الثانية')}</td>
+          <td class="p-1.5 border text-right text-[11px] font-bold ${isPreWeighing ? 'text-teal-950' : ''}">${totalDepositAmt > 0 ? `💰 عهدة/نقدي: ${fmtMoney(totalDepositAmt)} ج.م` : escXmlStr(item.notes || 'بانتظار الوزنة الثانية')}</td>
           <td class="p-1 border text-center whitespace-nowrap">
             ${renderAuditTrailBadgeHtml(item)}
             ${excelTableState && excelTableState.showScaleReceiptButtons ? `<span class="inline-flex items-center gap-0.5 ml-1 bg-indigo-50 p-0.5 rounded-lg border border-indigo-200">
@@ -451,8 +479,8 @@ function renderDailyView() {
               <button type="button" data-export-receipt-img="${safePendId}" data-receipt-day="${d}" class="px-1.5 py-0.5 rounded bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-[10px] shadow-sm" title="حفظ كارتة/بون الميزان كصورة PNG">🖼️ صورة</button>
               <button type="button" data-export-receipt-pdf="${safePendId}" data-receipt-day="${d}" class="px-1.5 py-0.5 rounded bg-rose-700 hover:bg-rose-600 text-white font-extrabold text-[10px] shadow-sm" title="حفظ كارتة/بون الميزان كملف PDF">📄 PDF</button>
             </span>` : ''}
-            <button type="button" data-recall-pending="${safePendId}" class="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] ml-1 shadow-sm">
-              🔄 استرجاع
+            <button type="button" data-recall-pending="${safePendId}" class="px-2 py-0.5 rounded-lg ${isPreWeighing ? 'bg-teal-700 hover:bg-teal-600' : 'bg-emerald-600 hover:bg-emerald-500'} text-white font-extrabold text-[11px] ml-1 shadow-sm">
+              ${isPreWeighing ? '💰 استرجاع للميزان' : '🔄 استرجاع'}
             </button>
             <button type="button" data-del-pending="${safePendId}" class="px-2 py-0.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px]">
               🗑️ حذف
@@ -2734,7 +2762,7 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
   const pendCntBadge = document.getElementById('litePendingCardsCountBadge');
   const salesCardsBox = document.getElementById('liteSalesCardsContainer');
 
-  const pendingList = (appState.days[dayNum] && appState.days[dayNum].pendingSales) || [];
+  const pendingList = sortSalesListByScaleNo((appState.days[dayNum] && appState.days[dayNum].pendingSales) || []);
 
   // 1. العنصر الأول: شريط البطاقات الأفقية للوزنات المؤقتة (Swipeable Pending Cards) مع دعم البحث السريع
   if (pendStripBox && pendHorizList && pendCntBadge) {
@@ -2781,25 +2809,26 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
       pendStripBox.classList.remove('hidden');
       pendHorizList.innerHTML = filteredPendingList.map(item => {
         const safeId = escXmlStr(item.id);
-        const custodyAmt = (Number(item.custodyCash) || 0) + (Number(item.custodyTransfer) || 0);
+        const isPreWeighing = Boolean(item.status === 'pre_weighing' || (Number(item.w1) || 0) <= 0);
+        const custodyAmt = (Number(item.custodyCash) || 0) + (Number(item.custodyTransfer) || 0) + (Number(item.cashSales) || 0) + (Number(item.debtCash) || 0);
         return `
-          <div class="lite-pending-card bg-white rounded-xl border-2 border-amber-500 p-2.5 shadow-sm flex flex-col justify-between gap-2">
-            <div class="cursor-pointer" data-recall-pending="${safeId}" title="المس لاسترجاع السيارة وإدخال الوزنة الثانية فوراً">
-              <div class="flex items-center justify-between gap-1 border-b border-amber-200 pb-1">
-                <span class="px-2 py-0.5 rounded-md bg-slate-900 text-amber-300 text-[11px] font-extrabold">ميزان #${escXmlStr(item.scaleNo || '-')}</span>
+          <div class="lite-pending-card ${isPreWeighing ? 'bg-teal-50/70 border-2 border-dashed border-teal-500' : 'bg-white border-2 border-amber-500'} rounded-xl p-2.5 shadow-sm flex flex-col justify-between gap-2">
+            <div class="cursor-pointer" data-recall-pending="${safeId}" title="${isPreWeighing ? 'المس لاسترجاع العهدة المبدئية وإدخال الوزنة الأولى' : 'المس لاسترجاع السيارة وإدخال الوزنة الثانية فوراً'}">
+              <div class="flex items-center justify-between gap-1 border-b ${isPreWeighing ? 'border-teal-200' : 'border-amber-200'} pb-1">
+                <span class="px-2 py-0.5 rounded-md ${isPreWeighing ? 'bg-teal-800 text-amber-200' : 'bg-slate-900 text-amber-300'} text-[11px] font-extrabold">${isPreWeighing ? '💰⏳ بانتظار الميزان' : `ميزان #${escXmlStr(item.scaleNo || '-')}`}</span>
                 <span class="text-[11px] font-extrabold text-slate-600">سيارة: <strong class="text-slate-950">${escXmlStr(item.carNo || '-')}</strong></span>
               </div>
               <div class="font-extrabold text-sm text-blue-950 mt-1 truncate">${escXmlStr(item.merchant)}</div>
-              <div class="flex items-center justify-between text-xs font-extrabold text-amber-900 mt-1 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200">
-                <span>وزنة 1 (فارغ):</span>
-                <span>${fmtInt(item.w1)} كجم</span>
+              <div class="flex items-center justify-between text-xs font-extrabold ${isPreWeighing ? 'text-teal-900 bg-white border-teal-200' : 'text-amber-900 bg-amber-50 border-amber-200'} mt-1 px-2 py-1 rounded-lg border">
+                <span>${isPreWeighing ? 'حالة الميزان:' : 'وزنة 1 (فارغ):'}</span>
+                <span>${isPreWeighing ? '⏳ بانتظار وزنة 1' : `${fmtInt(item.w1)} كجم`}</span>
               </div>
-              ${custodyAmt > 0 ? `<div class="text-[10px] font-extrabold text-emerald-800 mt-1">💼 عهدة: ${fmtInt(custodyAmt)} ج.م</div>` : ''}
+              ${custodyAmt > 0 ? `<div class="text-[10px] font-extrabold text-emerald-800 mt-1">💰 عهدة/نقدي: ${fmtInt(custodyAmt)} ج.م</div>` : ''}
             </div>
             <div class="flex items-center gap-1.5 pt-1 border-t border-slate-100">
-              <button type="button" data-recall-pending="${safeId}" class="flex-1 py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-sm flex items-center justify-center gap-1">
-                <span>🔄</span>
-                <span>استكمال وزنة 2</span>
+              <button type="button" data-recall-pending="${safeId}" class="flex-1 py-1.5 px-2 rounded-lg ${isPreWeighing ? 'bg-teal-700 hover:bg-teal-600' : 'bg-emerald-600 hover:bg-emerald-500'} text-white font-extrabold text-xs shadow-sm flex items-center justify-center gap-1">
+                <span>${isPreWeighing ? '💰' : '🔄'}</span>
+                <span>${isPreWeighing ? 'إدخال وزنة 1' : 'استكمال وزنة 2'}</span>
               </button>
               <button type="button" data-print-receipt="${safeId}" data-receipt-day="${dayNum}" class="py-1.5 px-2 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-sm" title="طباعة بون وزنة أولى">
                 🖨️
@@ -2851,22 +2880,27 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
     return;
   }
 
-  salesCardsBox.innerHTML = filteredRows.map((r, idx) => {
+  salesCardsBox.innerHTML = sortSalesListByScaleNo(filteredRows).map((r, idx) => {
     const safeId = escXmlStr(r.id);
     const safeMerchant = escXmlStr(r.merchant);
     const auditBadge = renderAuditTrailBadgeHtml(r);
     const isPend = Boolean(r.isPending);
+    const isPreWeighing = Boolean(r.status === 'pre_weighing' || (isPend && (Number(r.w1) || 0) <= 0));
     const isDebtOnly = Boolean(r.isDebtCollectionOnly);
 
-    const cardBorder = isPend
-      ? 'border-2 border-amber-400 bg-amber-50/90'
-      : (isDebtOnly ? 'border-2 border-teal-500 bg-teal-50/40' : 'border border-slate-300 bg-white');
+    const cardBorder = isPreWeighing
+      ? 'border-2 border-dashed border-teal-400 bg-teal-50/50'
+      : (isPend
+          ? 'border-2 border-amber-400 bg-amber-50/90'
+          : (isDebtOnly ? 'border-2 border-teal-500 bg-teal-50/40' : 'border border-slate-300 bg-white'));
 
-    const statusBadge = isPend
-      ? '<span class="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 text-[10px] font-extrabold">⏳ بانتظار وزنة 2</span>'
-      : (isDebtOnly
-          ? '<span class="px-2 py-0.5 rounded-md bg-teal-700 text-white text-[10px] font-extrabold">💵 سند تحصيل مديونية</span>'
-          : `<span class="px-2 py-0.5 rounded-md bg-blue-900 text-amber-300 text-[11px] font-extrabold">صافي: ${fmtInt(r.netWeight)} كجم</span>`);
+    const statusBadge = isPreWeighing
+      ? '<span class="px-2 py-0.5 rounded-md bg-teal-100 text-teal-950 border border-teal-400 text-[10px] font-extrabold">💰⏳ عهدة مبدئية (بانتظار الميزان)</span>'
+      : (isPend
+          ? '<span class="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 text-[10px] font-extrabold">⏳ بانتظار وزنة 2</span>'
+          : (isDebtOnly
+              ? '<span class="px-2 py-0.5 rounded-md bg-teal-700 text-white text-[10px] font-extrabold">💵 سند تحصيل مديونية</span>'
+              : `<span class="px-2 py-0.5 rounded-md bg-blue-900 text-amber-300 text-[11px] font-extrabold">صافي: ${fmtInt(r.netWeight)} كجم</span>`));
 
     const settledToday = r.cashSales + r.transferSales + r.debtCash + r.debtTransfer;
     const debtCollected = r.debtCash + r.debtTransfer;
@@ -2874,7 +2908,7 @@ function renderLiteFieldModeComponents(dayNum, summary, canEditSalesToday, dayLo
     const actionsHtml = !canEditSalesToday
       ? `<span class="text-slate-500 text-[11px] font-bold">${dayLocked ? '🔒 يوم معتمد ومقفل' : '🔒 عرض فقط'}</span>`
       : (isPend
-          ? `<button type="button" data-recall-pending="${safeId}" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-sm">🔄 استكمال وزنة 2</button>
+          ? `<button type="button" data-recall-pending="${safeId}" class="px-3 py-1.5 rounded-lg ${isPreWeighing ? 'bg-teal-700 hover:bg-teal-600' : 'bg-emerald-600 hover:bg-emerald-500'} text-white font-extrabold text-xs shadow-sm">${isPreWeighing ? '💰 استرجاع للميزان' : '🔄 استكمال وزنة 2'}</button>
              <button type="button" data-del-pending="${safeId}" class="px-2.5 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs">🗑️ حذف</button>`
           : `<button type="button" data-edit-sale="${safeId}" class="px-3 py-1.5 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 font-extrabold text-xs">✏️ تعديل</button>
              <button type="button" data-del-sale="${safeId}" class="px-2.5 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs">🗑️ حذف</button>`);
@@ -3859,7 +3893,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v89-core-sync-fix';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v90-smart-deposit';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3894,7 +3928,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=89', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=90', { scope: './' }).catch(() => {});
     }
   }
 
@@ -6347,10 +6381,11 @@ function initFarmSalesApp() {
     const item = (dayObj.pendingSales || []).find(x => x.id === pid);
     if (!item) return;
     activeRecalledPendingId = item.id;
+    const isPreWeighingItem = Boolean(item.status === 'pre_weighing' || (Number(item.w1) || 0) <= 0);
     setSaleEntryMode('sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
     document.getElementById('editSaleId').value = '';
     document.getElementById('inpMerchantName').value = item.merchant;
-    document.getElementById('inpScaleNo').value = item.scaleNo || '';
+    document.getElementById('inpScaleNo').value = isPreWeighingItem ? '' : (item.scaleNo || '');
     document.getElementById('inpCarNo').value = item.carNo || '';
     document.getElementById('inpW1').value = item.w1 ? fmtMoney(item.w1) : '';
     document.getElementById('inpW2').value = item.w2 ? fmtMoney(item.w2) : '';
@@ -6371,12 +6406,20 @@ function initFarmSalesApp() {
     document.getElementById('inpPrevTransfer').value = item.prevTransfer ? fmtMoney(item.prevTransfer) : '';
     document.getElementById('selPrevTransferType').value = item.prevTransferType || '';
     document.getElementById('inpNotes').value = item.notes || '';
-    setSaleFormActionLabels(`حفظ نهائي (ميزان ${item.scaleNo || ''})`, true);
+    setSaleFormActionLabels(isPreWeighingItem ? 'حفظ نهائي' : `حفظ نهائي (ميزان ${item.scaleNo || ''})`, true);
     updateMerchantSuggestions();
+    if ((Number(item.custodyCash) || 0) > 0 || (Number(item.custodyTransfer) || 0) > 0) {
+      distributeCustodyWaterfall({ silent: true, focusTarget: false });
+    }
     updateLiveFormCalculation();
     document.getElementById('saleFormCard').scrollIntoView({ behavior: 'smooth' });
-    setTimeout(() => document.getElementById('inpW2').focus(), 100);
-    showToast(`تم استرجاع حركة (${item.merchant}) المحجوزة بمسلسل ميزان (${item.scaleNo || '-'}) — أدخل الآن (الوزنة الثانية) واضغط حفظ!`, '🔄');
+    if (isPreWeighingItem) {
+      setTimeout(() => document.getElementById('inpW1').focus(), 100);
+      showToast(`💰 تم استرجاع العهدة المبدئية للتاجر (${item.merchant}) وتصفية حسابه تلقائياً — أدخل الآن (الوزنة الأولى) واضغط (⏳ حفظ مؤقت وزنة 1) لترقيتها وتوليد رقم الميزان!`, '💰');
+    } else {
+      setTimeout(() => document.getElementById('inpW2').focus(), 100);
+      showToast(`تم استرجاع حركة (${item.merchant}) المحجوزة بمسلسل ميزان (${item.scaleNo || '-'}) — أدخل الآن (الوزنة الثانية) واضغط حفظ!`, '🔄');
+    }
   }
 
   function deletePendingSaleById(pid) {
@@ -6488,13 +6531,20 @@ function initFarmSalesApp() {
     }
     const mName = document.getElementById('inpMerchantName').value.trim();
     const w1Val = parseNum(document.getElementById('inpW1').value);
+    const custodyCashVal = parseNum(document.getElementById('inpCustodyCash').value) || 0;
+    const custodyTrVal = parseNum(document.getElementById('inpCustodyTransfer').value) || 0;
+    const cashSalesVal = parseNum(document.getElementById('inpCashSales').value) || 0;
+    const debtCashVal = parseNum(document.getElementById('inpDebtCash').value) || 0;
+    const totalPreWeighDeposit = custodyCashVal + custodyTrVal + cashSalesVal + debtCashVal;
+    const isPreWeighingDeposit = (w1Val <= 0 && totalPreWeighDeposit > 0);
+
     if (!mName) {
-      showToast('يرجى إدخال اسم التاجر / السيارة أولاً لحفظ الوزنة الأولى مؤقتاً!', '⚠️');
+      showToast('يرجى إدخال اسم التاجر / السيارة أولاً لحفظ الحركة مؤقتاً!', '⚠️');
       document.getElementById('inpMerchantName').focus();
       return;
     }
-    if (w1Val <= 0) {
-      showToast('يرجى إدخال (الوزنة الأولى - فارغ) لحفظ الحركة مؤقتاً!', '⚠️');
+    if (w1Val <= 0 && !isPreWeighingDeposit) {
+      showToast('يرجى إدخال (الوزنة الأولى - فارغ) أو مبلغ (العهدة / الدفع النقدي) لحفظ الحركة مؤقتاً!', '⚠️');
       document.getElementById('inpW1').focus();
       return;
     }
@@ -6502,50 +6552,66 @@ function initFarmSalesApp() {
     const dayObj = appState.days[appState.currentDay];
     if (!Array.isArray(dayObj.pendingSales)) dayObj.pendingSales = [];
 
-    let enteredScale = Number(document.getElementById('inpScaleNo').value) || getNextSequentialScaleNo();
-    const scaleConflict = [
-      ...(dayObj.sales || []).filter(x => !isRecordDebtOnlyVoucher(x)),
-      ...(dayObj.pendingSales || [])
-    ].find(x =>
-      x.id !== activeRecalledPendingId && Number(x.scaleNo) > 0 && Number(x.scaleNo) === enteredScale
-    );
-    if (scaleConflict) {
-      const nextFree = getNextSequentialScaleNo();
-      showToast(`⚠️ مسلسل الميزان (${enteredScale}) محجوز بالفعل للتاجر (${scaleConflict.merchant})! تم حجز المسلسل التلقائي (${nextFree}).`, '⚠️');
-      enteredScale = nextFree;
-      document.getElementById('inpScaleNo').value = enteredScale;
-    }
-
-    const enteredPrice = parseNum(document.getElementById('inpPrice').value);
-    if (enteredPrice <= 0) {
-      openAskMissingPriceModal('pending', mName);
-      return;
-    }
-    const enteredTip = parseNum(document.getElementById('inpTip').value) || 0;
-
-    appState.defaultPrice = enteredPrice;
-    appState.defaultTip = enteredTip;
-    appState.lastScaleNo = Math.max(Number(appState.lastScaleNo) || 0, enteredScale);
-
     const existingPendingForAudit = activeRecalledPendingId
       ? dayObj.pendingSales.find(x => x.id === activeRecalledPendingId)
       : null;
+    const wasPreWeighingBefore = Boolean(
+      existingPendingForAudit && (existingPendingForAudit.status === 'pre_weighing' || (Number(existingPendingForAudit.w1) || 0) <= 0)
+    );
+
+    let enteredScale = null;
+    let enteredPrice = parseNum(document.getElementById('inpPrice').value) || 0;
+    const enteredTip = parseNum(document.getElementById('inpTip').value) || 0;
+
+    if (isPreWeighingDeposit) {
+      // استلام العهدة قبل الميزان (pre_weighing): لا تأخذ الحركة رقم مسلسل ميزان (scaleNo = null)
+      enteredScale = null;
+      if (enteredPrice <= 0 && Number(appState.defaultPrice) > 0) {
+        enteredPrice = Number(appState.defaultPrice);
+      }
+    } else {
+      // مسار الوزنة الأولى (أو ترقية حركة من pre_weighing إلى pending بعد إدخال الوزنة الأولى)
+      const rawInpScale = Number(document.getElementById('inpScaleNo').value) || 0;
+      enteredScale = (wasPreWeighingBefore || rawInpScale <= 0) ? getNextSequentialScaleNo() : rawInpScale;
+      const scaleConflict = [
+        ...(dayObj.sales || []).filter(x => !isRecordDebtOnlyVoucher(x)),
+        ...(dayObj.pendingSales || [])
+      ].find(x =>
+        x.id !== activeRecalledPendingId && Number(x.scaleNo) > 0 && Number(x.scaleNo) === enteredScale
+      );
+      if (scaleConflict) {
+        const nextFree = getNextSequentialScaleNo();
+        showToast(`⚠️ مسلسل الميزان (${enteredScale}) محجوز بالفعل للتاجر (${scaleConflict.merchant})! تم حجز المسلسل التلقائي (${nextFree}).`, '⚠️');
+        enteredScale = nextFree;
+        document.getElementById('inpScaleNo').value = enteredScale;
+      }
+
+      if (enteredPrice <= 0) {
+        openAskMissingPriceModal('pending', mName);
+        return;
+      }
+      appState.defaultPrice = enteredPrice;
+      appState.defaultTip = enteredTip;
+      appState.lastScaleNo = Math.max(Number(appState.lastScaleNo) || 0, enteredScale);
+    }
+
     const candidatePendingFields = {
+      status: isPreWeighingDeposit ? 'pre_weighing' : 'pending',
       merchant: mName,
-      scaleNo: enteredScale,
+      scaleNo: isPreWeighingDeposit ? null : enteredScale,
       carNo: Number(document.getElementById('inpCarNo').value) || '',
-      w1: w1Val,
+      w1: isPreWeighingDeposit ? 0 : w1Val,
       w2: parseNum(document.getElementById('inpW2').value) || 0,
       price: enteredPrice,
       tip: enteredTip,
-      custodyCash: parseNum(document.getElementById('inpCustodyCash').value) || 0,
-      custodyTransfer: parseNum(document.getElementById('inpCustodyTransfer').value) || 0,
+      custodyCash: custodyCashVal,
+      custodyTransfer: custodyTrVal,
       custodyTransferType: document.getElementById('selCustodyTransferType').value,
-      cashSales: parseNum(document.getElementById('inpCashSales').value) || 0,
+      cashSales: cashSalesVal,
       transferSales: parseNum(document.getElementById('inpTransferSales').value) || 0,
       transferSalesType: document.getElementById('selTransferSalesType').value,
       creditSales: parseNum(document.getElementById('inpCreditSales').value) || 0,
-      debtCash: parseNum(document.getElementById('inpDebtCash').value) || 0,
+      debtCash: debtCashVal,
       debtTransfer: parseNum(document.getElementById('inpDebtTransfer').value) || 0,
       debtTransferType: document.getElementById('selDebtTransferType').value,
       prevCash: parseNum(document.getElementById('inpPrevCash').value) || 0,
@@ -6569,10 +6635,15 @@ function initFarmSalesApp() {
       x.id !== pendingObj.id &&
       String(x.merchant || '').trim() === pendingObj.merchant &&
       String(x.carNo || '').trim() === String(pendingObj.carNo || '').trim() &&
-      Number(x.w1) === Number(pendingObj.w1)
+      Number(x.w1) === Number(pendingObj.w1) &&
+      (!isPreWeighingDeposit || (
+        Number(x.custodyCash || 0) === Number(pendingObj.custodyCash || 0) &&
+        Number(x.custodyTransfer || 0) === Number(pendingObj.custodyTransfer || 0) &&
+        Number(x.cashSales || 0) === Number(pendingObj.cashSales || 0)
+      ))
     );
     if (dupPending) {
-      showToast('⚠️ هذه السيارة محفوظة مؤقتاً بالفعل بنفس الوزنة الأولى والبيانات!', '⚠️');
+      showToast('⚠️ هذه الحركة محفوظة مؤقتاً بالفعل بنفس البيانات!', '⚠️');
       return;
     }
 
@@ -6595,7 +6666,13 @@ function initFarmSalesApp() {
     cancelOrClearCurrentSaleEntry(false);
     saveState(true);
     renderAll();
-    showToast(`تم حجز مسلسل الميزان رقم (${enteredScale}) للتاجر (${mName}) وحفظ ترتيبه في جدول حركات البيع المسجلة (وزنة أولى: ${fmtMoney(w1Val)} كجم)!`, '⏳');
+    if (isPreWeighingDeposit) {
+      showToast(`💰 تم استلام وحفظ العهدة المبدئية (${fmtMoney(totalPreWeighDeposit)} ج.م) للتاجر (${mName}) بدون رقم ميزان وتثبيتها أسفل الجدول بانتظار الميزان!`, '💰');
+    } else if (wasPreWeighingBefore) {
+      showToast(`✅ تمت ترقية حركة التاجر (${mName}) من (عهدة مبدئية) إلى (وزنة 1: ${fmtMoney(w1Val)} كجم) وتوليد رقم الميزان (${enteredScale})!`, '⏳');
+    } else {
+      showToast(`تم حجز مسلسل الميزان رقم (${enteredScale}) للتاجر (${mName}) وحفظ ترتيبه في جدول حركات البيع المسجلة (وزنة أولى: ${fmtMoney(w1Val)} كجم)!`, '⏳');
+    }
   });
 
   // استرجاع أو حذف سيارة محفوظة مؤقتاً (وزنة أولى)
@@ -8179,12 +8256,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=89',
-    './js/accounting.js?v=89',
-    './js/storage-sync.js?v=89',
-    './js/excel-engine.js?v=89',
-    './js/print-export.js?v=89',
-    './js/ui-controllers.js?v=89'
+    './js/core-state.js?v=90',
+    './js/accounting.js?v=90',
+    './js/storage-sync.js?v=90',
+    './js/excel-engine.js?v=90',
+    './js/print-export.js?v=90',
+    './js/ui-controllers.js?v=90'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8394,14 +8471,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=89');
+        scTpl.setAttribute('src', './excel-template.js?v=90');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=89');
+        lnk.setAttribute('href', './style.css?v=90');
         bundledStyleEl.replaceWith(lnk);
       }
     }
