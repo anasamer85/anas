@@ -2142,8 +2142,9 @@ body.lite-field-mode-active #btnInlineSavePendingW1 {
   }
 }
 
-/* معالجة التكدس في الشريط السفلي العائم للشاشات الصغيرة جداً (max-width: 360px):
-   تخطيط شبكي (display: grid) + إخفاء النصوص من الأزرار والمؤشرات والاكتفاء بالأيقونات التعبيرية والأرقام المالية فقط */
+/* معالجة التكدس في الشريط السفلي العائم ومنطقة الأزرار للشاشات الصغيرة جداً (max-width: 360px):
+   تخطيط شبكي رباعي (display: grid; grid-template-columns: repeat(4, 1fr)) للأزرار الأربعة (➕ | ✕ | ⏳ | 💾)
+   مع إخفاء النصوص وتكبير الأيقونات لتسهيل النقر بالإصبع */
 @media screen and (max-width: 360px) {
   #mobileWeighbridgeActionBar,
   .mobile-weighbridge-sticky-bar {
@@ -2170,25 +2171,30 @@ body.lite-field-mode-active #btnInlineSavePendingW1 {
     font-size: 10.5px !important;
     white-space: nowrap !important;
   }
-  #mobileWeighbridgeActionBar .sticky-bar-label-txt {
+  #mobileWeighbridgeActionBar .sticky-bar-label-txt,
+  #mobileWeighbridgeActionBar .action-btn-text,
+  #inlineSaleFormActionsMobile .action-btn-text {
     display: none !important;
   }
-  #mobileWeighbridgeActionBar .sticky-bar-actions-group {
+  #mobileWeighbridgeActionBar .sticky-bar-actions-group,
+  #inlineSaleFormActionsMobile .inline-bar-actions-group {
     display: grid !important;
-    grid-template-columns: auto 1fr 1fr !important;
-    gap: 4px !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 5px !important;
     width: 100% !important;
   }
-  #mobileWeighbridgeActionBar #btnCancelEditSale {
-    padding: 6px 9px !important;
-    min-height: 38px !important;
+  #mobileWeighbridgeActionBar .sticky-bar-actions-group > button,
+  #inlineSaleFormActionsMobile .inline-bar-actions-group > button {
+    padding: 7px 4px !important;
+    min-height: 42px !important;
+    justify-content: center !important;
+    align-items: center !important;
   }
-  #mobileWeighbridgeActionBar #btnSavePendingW1,
-  #mobileWeighbridgeActionBar #btnSaveSale {
-    padding: 6px 6px !important;
-    font-size: 11px !important;
-    min-height: 38px !important;
-    white-space: nowrap !important;
+  #mobileWeighbridgeActionBar .action-btn-icon,
+  #inlineSaleFormActionsMobile .action-btn-icon {
+    font-size: 16px !important;
+    line-height: 1 !important;
+    display: inline-block !important;
   }
 }
 

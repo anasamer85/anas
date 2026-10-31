@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v84)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v85)
 // =========================================================================
 
 // =========================================================================
@@ -2174,7 +2174,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
     if (vDaily) vDaily.classList.remove('hidden');
   }
 
-  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v84):
+  // 2. Inside #view-sync (Sub-Navigation Tabs Architecture v85):
   //    - Admin sees all 5 sub-tabs.
   //    - Regular delegate sees only (🗂️ المزارع والإكسيل if permitted) and (🎨 تفضيلات الواجهة), while the 3 Admin sub-tabs (🔐 المستخدمون والصلاحيات, ☁️ الربط السحابي, 🕵️ الرقابة والنسخ) are completely hidden.
   const uPerms = (activeUser && activeUser.perms) || {};
@@ -3836,7 +3836,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v84-desktop-ui';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v85-new-transaction';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3867,11 +3867,11 @@ function initFarmSalesApp() {
   const btnQuickUpdate = document.getElementById('btnQuickForceUpdate');
   if (btnQuickUpdate) btnQuickUpdate.addEventListener('click', forceAppHardReload);
 
-  // Register Offline Service Worker (v84) without automatic reload loops
+  // Register Offline Service Worker (v85) without automatic reload loops
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    if (!window.__swRegisteredOnceV84) {
-      window.__swRegisteredOnceV84 = true;
-      navigator.serviceWorker.register('./sw.js?v=84', { scope: './' }).catch(() => {});
+    if (!window.__swRegisteredOnceV85) {
+      window.__swRegisteredOnceV85 = true;
+      navigator.serviceWorker.register('./sw.js?v=85', { scope: './' }).catch(() => {});
     }
   }
 
@@ -5681,6 +5681,35 @@ function initFarmSalesApp() {
       );
     }
   }
+
+  function resetSaleForm(showToastNotification = true) {
+    cancelOrClearCurrentSaleEntry(false);
+    const merchantInp = document.getElementById('inpMerchantName');
+    if (merchantInp) {
+      merchantInp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        try {
+          merchantInp.focus({ preventScroll: true });
+          if (typeof merchantInp.select === 'function') merchantInp.select();
+        } catch (e) {
+          try { merchantInp.focus(); } catch (err2) {}
+        }
+      }, 120);
+    }
+    if (showToastNotification) {
+      showToast('➕ جاهز لتسجيل حركة جديدة — اكتب اسم التاجر للبدء فوراً', '➕');
+    }
+  }
+  window.resetSaleForm = resetSaleForm;
+
+  ['btnStickyNewSale', 'btnInlineNewSale'].forEach(btnId => {
+    const btnNewEl = document.getElementById(btnId);
+    if (btnNewEl) {
+      btnNewEl.addEventListener('click', () => {
+        resetSaleForm(true);
+      });
+    }
+  });
 
   const btnInlineCancelEl = document.getElementById('btnInlineCancelSale');
   if (btnInlineCancelEl) {
@@ -8082,14 +8111,14 @@ function initFarmSalesApp() {
     }
   });
 
-  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v84)
+  // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v85)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=84',
-    './js/accounting.js?v=84',
-    './js/storage-sync.js?v=84',
-    './js/excel-engine.js?v=84',
-    './js/print-export.js?v=84',
-    './js/ui-controllers.js?v=84'
+    './js/core-state.js?v=85',
+    './js/accounting.js?v=85',
+    './js/storage-sync.js?v=85',
+    './js/excel-engine.js?v=85',
+    './js/print-export.js?v=85',
+    './js/ui-controllers.js?v=85'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8181,7 +8210,7 @@ function initFarmSalesApp() {
     return fallbackExecCommandCopy(str);
   }
 
-  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v84)
+  // Generate clean self-contained HTML for Google Sites Embed (inlineAllAssets = true) or modular index.html for GitHub Pages (v85)
   function buildEmbeddedGoogleSitesHtml(inlineAllAssets = true) {
     window.buildEmbeddedGoogleSitesHtml = buildEmbeddedGoogleSitesHtml;
     const inpEl = document.getElementById('inpCloudWebhookUrl');
@@ -8299,14 +8328,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=84');
+        scTpl.setAttribute('src', './excel-template.js?v=85');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=84');
+        lnk.setAttribute('href', './style.css?v=85');
         bundledStyleEl.replaceWith(lnk);
       }
     }

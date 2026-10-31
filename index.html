@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=84"></script>
+  <script src="./vendor/vendor-loader.js?v=85"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
@@ -24,7 +24,7 @@
     window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=84" />
+  <link rel="stylesheet" href="./style.css?v=85" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -1050,20 +1050,24 @@
             <div id="smartAuditAlertsList" class="space-y-1 text-[11px] font-bold text-slate-800"></div>
           </div>
 
-          <!-- Inline Form Action Buttons at end of form for both Phone & Desktop -->
+          <!-- Inline Form Action Buttons at end of form for both Phone & Desktop (4 Buttons: ➕ حركة جديدة | ✕ إلغاء الإدخال | ⏳ حفظ مؤقت وزنة 1 | 💾 حفظ نهائي) -->
           <div id="inlineSaleFormActionsMobile" class="flex items-center justify-end gap-2 pt-2.5 border-t border-slate-200 flex-wrap">
-            <div class="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+            <div class="inline-bar-actions-group flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
+              <button type="button" id="btnInlineNewSale" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-950 border border-sky-300 font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1" title="بدء حركة جديدة وتفريغ الحقول مع الانتقال الفوري لخانة اسم التاجر">
+                <span class="action-btn-icon">➕</span>
+                <span class="action-btn-text">حركة جديدة</span>
+              </button>
               <button type="button" id="btnInlineCancelSale" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
-                <span>✕</span>
-                <span id="btnInlineCancelSaleText">إلغاء الإدخال</span>
+                <span class="action-btn-icon">✕</span>
+                <span id="btnInlineCancelSaleText" class="action-btn-text">إلغاء الإدخال</span>
               </button>
-              <button type="button" id="btnInlineSavePendingW1" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
-                <span>⏳</span>
-                <span>حفظ مؤقت وزنة 1</span>
+              <button type="button" id="btnInlineSavePendingW1" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition flex items-center justify-center gap-1" title="حفظ مؤقت للوزنة الأولى">
+                <span class="action-btn-icon">⏳</span>
+                <span class="action-btn-text">حفظ مؤقت وزنة 1</span>
               </button>
-              <button type="submit" id="btnInlineSaveSale" class="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
-                <span>💾</span>
-                <span id="btnInlineSaveSaleText">حفظ نهائي</span>
+              <button type="submit" id="btnInlineSaveSale" class="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition flex items-center justify-center gap-1" title="حفظ نهائي للحركة">
+                <span class="action-btn-icon">💾</span>
+                <span id="btnInlineSaveSaleText" class="action-btn-text">حفظ نهائي</span>
               </button>
             </div>
           </div>
@@ -1090,19 +1094,23 @@
                 </button>
               </div>
 
-              <!-- Pinned Action Buttons (✕ إلغاء الإدخال + ⏳ حفظ مؤقت وزنة 1 + 💾 حفظ نهائي) -->
+              <!-- Pinned Action Buttons (➕ حركة جديدة | ✕ إلغاء الإدخال | ⏳ حفظ مؤقت وزنة 1 | 💾 حفظ نهائي) -->
               <div class="sticky-bar-actions-group flex items-center gap-1.5 md:gap-2 flex-1 sm:flex-initial justify-end w-full sm:w-auto">
+                <button type="button" id="btnStickyNewSale" class="px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white border border-sky-300/60 font-extrabold text-xs md:text-sm shadow transition flex items-center justify-center gap-1 shrink-0" title="بدء حركة جديدة وتفريغ الحقول مع الانتقال الفوري لخانة اسم التاجر">
+                  <span class="action-btn-icon">➕</span>
+                  <span class="sticky-bar-label-txt action-btn-text">حركة جديدة</span>
+                </button>
                 <button type="button" id="btnCancelEditSale" class="px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-300/60 font-extrabold text-xs md:text-sm shadow transition flex items-center justify-center gap-1 shrink-0" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
-                  <span>✕</span>
-                  <span id="btnCancelEditSaleText" class="sticky-bar-label-txt">إلغاء الإدخال</span>
+                  <span class="action-btn-icon">✕</span>
+                  <span id="btnCancelEditSaleText" class="sticky-bar-label-txt action-btn-text">إلغاء الإدخال</span>
                 </button>
                 <button type="button" id="btnSavePendingW1" class="flex-1 sm:flex-initial px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1" title="حفظ مؤقت للوزنة الأولى">
-                  <span>⏳</span>
-                  <span>حفظ مؤقت <span class="sticky-bar-label-txt">وزنة 1</span></span>
+                  <span class="action-btn-icon">⏳</span>
+                  <span class="sticky-bar-label-txt action-btn-text">حفظ مؤقت وزنة 1</span>
                 </button>
                 <button type="submit" id="btnSaveSale" class="flex-1 sm:flex-initial px-3 md:px-6 py-1.5 md:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs md:text-sm shadow-lg border border-emerald-300/50 transition flex items-center justify-center gap-1.5" title="حفظ نهائي للحركة">
-                  <span>💾</span>
-                  <span id="btnSaveSaleText">حفظ نهائي</span>
+                  <span class="action-btn-icon">💾</span>
+                  <span id="btnSaveSaleText" class="sticky-bar-label-txt action-btn-text">حفظ نهائي</span>
                 </button>
               </div>
             </div>
@@ -2984,45 +2992,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=84"></script>
-  <script src="./js/core-state.js?v=84"></script>
-  <script src="./js/accounting.js?v=84"></script>
-  <script src="./js/storage-sync.js?v=84"></script>
-  <script src="./js/excel-engine.js?v=84"></script>
-  <script src="./js/print-export.js?v=84"></script>
-  <script src="./js/ui-controllers.js?v=84"></script>
+  <script src="./excel-template.js?v=85"></script>
+  <script src="./js/core-state.js?v=85"></script>
+  <script src="./js/accounting.js?v=85"></script>
+  <script src="./js/storage-sync.js?v=85"></script>
+  <script src="./js/excel-engine.js?v=85"></script>
+  <script src="./js/print-export.js?v=85"></script>
+  <script src="./js/ui-controllers.js?v=85"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v84-desktop-ui';
+      var SW_CACHE_NAME = 'farm-sales-v85-new-transaction';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=84',
+        './style.css?v=85',
         './excel-template.js',
-        './excel-template.js?v=84',
+        './excel-template.js?v=85',
         './js/core-state.js',
-        './js/core-state.js?v=84',
+        './js/core-state.js?v=85',
         './js/accounting.js',
-        './js/accounting.js?v=84',
+        './js/accounting.js?v=85',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=84',
+        './js/storage-sync.js?v=85',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=84',
+        './js/excel-engine.js?v=85',
         './js/print-export.js',
-        './js/print-export.js?v=84',
+        './js/print-export.js?v=85',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=84',
+        './js/ui-controllers.js?v=85',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=84'
+        './vendor/vendor-loader.js?v=85'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-        if (!window.__swRegisteredOnceV84) {
-          window.__swRegisteredOnceV84 = true;
-          navigator.serviceWorker.register('./sw.js?v=84', { scope: './' }).catch(function () {});
+        if (!window.__swRegisteredOnceV85) {
+          window.__swRegisteredOnceV85 = true;
+          navigator.serviceWorker.register('./sw.js?v=85', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {
