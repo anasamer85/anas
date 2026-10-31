@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v88)
+// MODULE 1: CORE STATE, TIME CALIBRATION, UUID & ENCRYPTED VAULT (js/core-state.js — v89)
 // =========================================================================
 
 // =========================================================================
@@ -368,15 +368,21 @@ function createEmptyDayObject(d) {
   };
 }
 
+function normalizeFirebaseArrayField(val) {
+  if (Array.isArray(val)) return val.filter(Boolean);
+  if (val && typeof val === 'object') return Object.values(val).filter(Boolean);
+  return [];
+}
+
 function ensureDaysSchemaIntact(daysObj) {
   const target = (daysObj && typeof daysObj === 'object') ? daysObj : {};
   for (let d = 1; d <= 10; d++) {
     if (!target[d] || typeof target[d] !== 'object') {
       target[d] = createEmptyDayObject(d);
     } else {
-      if (!Array.isArray(target[d].sales)) target[d].sales = [];
-      if (!Array.isArray(target[d].pendingSales)) target[d].pendingSales = [];
-      if (!Array.isArray(target[d].expenses)) target[d].expenses = [];
+      target[d].sales = normalizeFirebaseArrayField(target[d].sales);
+      target[d].pendingSales = normalizeFirebaseArrayField(target[d].pendingSales);
+      target[d].expenses = normalizeFirebaseArrayField(target[d].expenses);
       if (target[d].deliveredCash === undefined) target[d].deliveredCash = 0;
       if (target[d].carriedForwardCash === undefined) target[d].carriedForwardCash = 0;
       if (!target[d].dateLabel) target[d].dateLabel = `اليوم ${d}`;
@@ -867,12 +873,12 @@ function ensureDeletedIdsStructure(obj) {
   const base = { sales: [], pendingSales: [], expenses: [], merchants: [], users: [], farms: [] };
   if (!obj || typeof obj !== 'object') return base;
   return {
-    sales: Array.isArray(obj.sales) ? obj.sales : [],
-    pendingSales: Array.isArray(obj.pendingSales) ? obj.pendingSales : [],
-    expenses: Array.isArray(obj.expenses) ? obj.expenses : [],
-    merchants: Array.isArray(obj.merchants) ? obj.merchants : [],
-    users: Array.isArray(obj.users) ? obj.users : [],
-    farms: Array.isArray(obj.farms) ? obj.farms : []
+    sales: normalizeFirebaseArrayField(obj.sales),
+    pendingSales: normalizeFirebaseArrayField(obj.pendingSales),
+    expenses: normalizeFirebaseArrayField(obj.expenses),
+    merchants: normalizeFirebaseArrayField(obj.merchants),
+    users: normalizeFirebaseArrayField(obj.users),
+    farms: normalizeFirebaseArrayField(obj.farms)
   };
 }
 

@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v88)
+// MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v89)
 // =========================================================================
 
 // =========================================================================
@@ -3859,7 +3859,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v88-ui-cleanup';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v89-core-sync-fix';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -3894,7 +3894,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=88', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=89', { scope: './' }).catch(() => {});
     }
   }
 
@@ -4157,11 +4157,14 @@ function initFarmSalesApp() {
     } else {
       unlockedFromVault = unlockWebhookVaultWithCredentials(uName, uPass, true);
       if (unlockedFromVault.url) {
-        appState.webhookUrl = unlockedFromVault.url;
+        applyCloudWebhookUrlFromStartScreen(unlockedFromVault.url);
       }
     }
 
     const activeWebhookForLogin = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
+    if (activeWebhookForLogin) {
+      applyCloudWebhookUrlFromStartScreen(activeWebhookForLogin);
+    }
     if (activeWebhookForLogin && navigator.onLine) {
       const isFreshWipedBrowser = !String(appState.farmName || '').trim() && countMovementsInDays(appState.days) === 0;
       if (isFreshWipedBrowser) {
@@ -4263,6 +4266,8 @@ function initFarmSalesApp() {
     // إذا فشل تسجيل الدخول بكلمة مرور خاطئة، لا نحتفظ برابط السحابة المؤقت في الذاكرة
     if (unlockedFromVault.url && !unlockedFromVault.matchedByDirectPassword) {
       appState.webhookUrl = '';
+      appState.firebaseUrl = '';
+      appState.firebaseSecret = '';
     }
     loginErr.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة (أو تم حذف الحساب من قِبل المدير)!';
     loginErr.classList.remove('hidden');
@@ -8174,12 +8179,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=88',
-    './js/accounting.js?v=88',
-    './js/storage-sync.js?v=88',
-    './js/excel-engine.js?v=88',
-    './js/print-export.js?v=88',
-    './js/ui-controllers.js?v=88'
+    './js/core-state.js?v=89',
+    './js/accounting.js?v=89',
+    './js/storage-sync.js?v=89',
+    './js/excel-engine.js?v=89',
+    './js/print-export.js?v=89',
+    './js/ui-controllers.js?v=89'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -8389,14 +8394,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=88');
+        scTpl.setAttribute('src', './excel-template.js?v=89');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=88');
+        lnk.setAttribute('href', './style.css?v=89');
         bundledStyleEl.replaceWith(lnk);
       }
     }

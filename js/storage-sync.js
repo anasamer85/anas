@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v88)
+// MODULE 3: LOCAL STORAGE, INDEXEDDB & CLOUD SYNC ENGINE (js/storage-sync.js — v89)
 // =========================================================================
 
 function loadState() {
@@ -665,10 +665,54 @@ function renderAllPreservingActiveInputs(forceAllTabs = false) {
 }
 
 // دمج جزئي عميق للسجلات (Deep Granular Record-Level Merge) بناءً على معرف الحركة (ID) مع دعم هامش اختلاف توقيت الأجهزة (Clock Skew Buffer)
+function normalizeCloudOrLocalArray(val) {
+  if (Array.isArray(val)) return val.filter(Boolean);
+  if (val && typeof val === 'object') return Object.values(val).filter(Boolean);
+  return [];
+}
+
+function normalizeIncomingCloudPayload(data) {
+  if (!data || typeof data !== 'object') return data;
+  if (data.days && typeof data.days === 'object') {
+    data.days = ensureDaysSchemaIntact(data.days);
+  }
+  if (data.merchants !== undefined) {
+    data.merchants = normalizeCloudOrLocalArray(data.merchants);
+  }
+  if (data.users !== undefined) {
+    data.users = normalizeCloudOrLocalArray(data.users);
+  }
+  if (data.visibleDays !== undefined) {
+    const vDays = normalizeCloudOrLocalArray(data.visibleDays).map(Number).filter(d => d >= 1 && d <= 10);
+    data.visibleDays = vDays.length > 0 ? vDays : [1];
+  }
+  if (data.deletedIds && typeof data.deletedIds === 'object') {
+    data.deletedIds = ensureDeletedIdsStructure(data.deletedIds);
+  }
+  if (data.farmsArchive && typeof data.farmsArchive === 'object') {
+    Object.keys(data.farmsArchive).forEach(fKey => {
+      const fObj = data.farmsArchive[fKey];
+      if (fObj && typeof fObj === 'object') {
+        if (fObj.days && typeof fObj.days === 'object') {
+          fObj.days = ensureDaysSchemaIntact(fObj.days);
+        }
+        if (fObj.merchants !== undefined) {
+          fObj.merchants = normalizeCloudOrLocalArray(fObj.merchants);
+        }
+        if (fObj.visibleDays !== undefined) {
+          const fv = normalizeCloudOrLocalArray(fObj.visibleDays).map(Number).filter(d => d >= 1 && d <= 10);
+          fObj.visibleDays = fv.length > 0 ? fv : [1];
+        }
+      }
+    });
+  }
+  return data;
+}
+
 function mergeArraysById(localArr, cloudArr, deletedList, idKey = 'id', preferCloudItem = true, isDuplicateFn = null) {
-  const delSet = new Set((deletedList || []).map(String));
-  const safeLocal = Array.isArray(localArr) ? localArr : [];
-  const safeCloud = Array.isArray(cloudArr) ? cloudArr : [];
+  const delSet = new Set(normalizeCloudOrLocalArray(deletedList).map(String));
+  const safeLocal = normalizeCloudOrLocalArray(localArr);
+  const safeCloud = normalizeCloudOrLocalArray(cloudArr);
   const result = [];
 
   // دمج نسختين لنفس السجل (نفس الـ id) مع الاعتماد الحاسم على أحدث ختم زمني (updatedAt) أولاً، ثم رقم إصدار التعديل (editVersion) ككاسر تعادل، مع الحفاظ التام على بيانات المنشئ الأصلي (createdBy)
@@ -782,8 +826,9 @@ function mergeDaysObjects(localDays, cloudDays, deletedIds, preferCloud, localRe
   const cReset = Number(cloudResetAt) || 0;
 
   // تصفية السجلات القديمة فقط التي تفتقر لمعرف UUID وليس لها طابع زمني إذا كانت أقدم بشكل قاطع من تصفير صريح
-  const filterLegacyPreClearItems = (arr, otherSideClearTs, delCategoryList) => {
-    if (!Array.isArray(arr)) return [];
+  const filterLegacyPreClearItems = (rawArr, otherSideClearTs, delCategoryList) => {
+    const arr = normalizeCloudOrLocalArray(rawArr);
+    if (arr.length === 0) return [];
     if (!otherSideClearTs || otherSideClearTs <= 0) return arr;
     const delSet = new Set((delCategoryList || []).map(String));
     return arr.filter(item => {
@@ -1098,7 +1143,9 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
 }
 
 function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
-  if (!cloudData || !cloudData.days || !cloudData.merchants) return false;
+  if (!cloudData || typeof cloudData !== 'object') return false;
+  normalizeIncomingCloudPayload(cloudData);
+  if (!cloudData.days || !cloudData.merchants) return false;
 
   // معايرة ساعة الجهاز المحلي مع طابع وقت السحابة لتعويض أي تأخر في ساعة الهاتف (Clock Skew Calibration)
   if (cloudData.updatedAt) {
@@ -1482,7 +1529,7 @@ async function performAtomicPreFetchMerge(rawUrl) {
   }
   const preText = await preRes.text();
   if (preText && preText.trim() !== '{}' && preText.trim() !== 'null') {
-    const remoteData = JSON.parse(preText);
+    const remoteData = normalizeIncomingCloudPayload(JSON.parse(preText));
     if (remoteData && remoteData.days && remoteData.merchants) {
       // دمج ذري مع تفضيل التعديلات المحلية الحديثة (preferCloud = false) لمنع مسح أو استبدال فواتير المندوبين الآخرين
       mergeCloudDataIntoLocal(remoteData, false);
@@ -1791,8 +1838,9 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
       appState.lastDeltaSyncAt = nowMs;
     }
 
-    appState.syncOutbox = [];
-    appState.pendingChanges = 0;
+    const sentIdsFull = new Set(outboxBatch.map(ev => ev && ev.id).filter(Boolean));
+    appState.syncOutbox = (appState.syncOutbox || []).filter(ev => ev && !sentIdsFull.has(ev.id));
+    appState.pendingChanges = appState.syncOutbox.length;
     appState.lastExcelSync = `مزامنة حية مؤكدة ✓ (${new Date().toLocaleTimeString('ar-EG')})`;
     saveState(false);
     if (liveBroadcastChannel) {
@@ -1855,7 +1903,7 @@ async function pullDatabaseFromCloud(silent = false, skipPushIfEmpty = false, is
       }
       return false;
     }
-    const data = JSON.parse(text);
+    const data = normalizeIncomingCloudPayload(JSON.parse(text));
 
     // 1. معالجة رد المزامنة الجزئية (mode === 'delta_pull')
     if (data && data.mode === 'delta_pull') {

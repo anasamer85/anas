@@ -13,18 +13,18 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=88"></script>
+  <script src="./vendor/vendor-loader.js?v=89"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
   <meta id="metaEmbeddedDefaultFarmName" name="default-farm-name" content="" />
   <script id="embeddedWebhookConfigScript">
     // خزينة رابط المزامنة السحابية المشفرة والمربوطة بتسجيل الدخول (تُفك تلقائياً عند إدخال اسم المستخدم وكلمة المرور)
-    window.EMBEDDED_CLOUD_WEBHOOK_URL = 'https://farm-sales-committee-default-rtdb.europe-west1.firebasedatabase.app/';
-    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [xB2F30A9QLvE5ZhnhhSNrJKdNF78YeegkrlalTFB];
+    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
+    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=88" />
+  <link rel="stylesheet" href="./style.css?v=89" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -2992,45 +2992,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=88"></script>
-  <script src="./js/core-state.js?v=88"></script>
-  <script src="./js/accounting.js?v=88"></script>
-  <script src="./js/storage-sync.js?v=88"></script>
-  <script src="./js/excel-engine.js?v=88"></script>
-  <script src="./js/print-export.js?v=88"></script>
-  <script src="./js/ui-controllers.js?v=88"></script>
+  <script src="./excel-template.js?v=89"></script>
+  <script src="./js/core-state.js?v=89"></script>
+  <script src="./js/accounting.js?v=89"></script>
+  <script src="./js/storage-sync.js?v=89"></script>
+  <script src="./js/excel-engine.js?v=89"></script>
+  <script src="./js/print-export.js?v=89"></script>
+  <script src="./js/ui-controllers.js?v=89"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v88-ui-cleanup';
+      var SW_CACHE_NAME = 'farm-sales-v89-core-sync-fix';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=88',
+        './style.css?v=89',
         './excel-template.js',
-        './excel-template.js?v=88',
+        './excel-template.js?v=89',
         './js/core-state.js',
-        './js/core-state.js?v=88',
+        './js/core-state.js?v=89',
         './js/accounting.js',
-        './js/accounting.js?v=88',
+        './js/accounting.js?v=89',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=88',
+        './js/storage-sync.js?v=89',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=88',
+        './js/excel-engine.js?v=89',
         './js/print-export.js',
-        './js/print-export.js?v=88',
+        './js/print-export.js?v=89',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=88',
+        './js/ui-controllers.js?v=89',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=88'
+        './vendor/vendor-loader.js?v=89'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
         if (!window.__swRegisteredOnceV86) {
           window.__swRegisteredOnceV86 = true;
-          navigator.serviceWorker.register('./sw.js?v=88', { scope: './' }).catch(function () {});
+          navigator.serviceWorker.register('./sw.js?v=89', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {
