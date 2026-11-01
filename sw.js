@@ -1,30 +1,30 @@
-// Service Worker - نظام محاضر لجان بيع المزارع (Modular Architecture PWA v91)
-const CACHE_NAME = "farm-sales-v91-accordion-math";
+// Service Worker - نظام محاضر لجان بيع المزارع (Modular Architecture PWA v92)
+const CACHE_NAME = "farm-sales-v92-autocomplete-fix";
 
 const CORE_LOCAL_ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./style.css?v=91",
+  "./style.css?v=92",
   "./excel-template.js",
-  "./excel-template.js?v=91",
+  "./excel-template.js?v=92",
   "./js/core-state.js",
-  "./js/core-state.js?v=91",
+  "./js/core-state.js?v=92",
   "./js/accounting.js",
-  "./js/accounting.js?v=91",
+  "./js/accounting.js?v=92",
   "./js/storage-sync.js",
-  "./js/storage-sync.js?v=91",
+  "./js/storage-sync.js?v=92",
   "./js/excel-engine.js",
-  "./js/excel-engine.js?v=91",
+  "./js/excel-engine.js?v=92",
   "./js/print-export.js",
-  "./js/print-export.js?v=91",
+  "./js/print-export.js?v=92",
   "./js/ui-controllers.js",
-  "./js/ui-controllers.js?v=91",
+  "./js/ui-controllers.js?v=92",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
   "./vendor/vendor-loader.js",
-  "./vendor/vendor-loader.js?v=91"
+  "./vendor/vendor-loader.js?v=92"
 ];
 
 const EXTERNAL_CDN_ASSETS = [
@@ -72,15 +72,15 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
+    caches.keys().then((cacheNames) =>
       Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
           }
         })
       )
-    )
+    ).then(() => self.clients.claim())
   );
 });
 

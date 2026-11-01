@@ -13,18 +13,18 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=91"></script>
+  <script src="./vendor/vendor-loader.js?v=92"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
   <meta id="metaEmbeddedDefaultFarmName" name="default-farm-name" content="" />
   <script id="embeddedWebhookConfigScript">
     // خزينة رابط المزامنة السحابية المشفرة والمربوطة بتسجيل الدخول (تُفك تلقائياً عند إدخال اسم المستخدم وكلمة المرور)
-    window.EMBEDDED_CLOUD_WEBHOOK_URL = 'https://farm-sales-committee-default-rtdb.europe-west1.firebasedatabase.app/';
-    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [xB2F30A9QLvE5ZhnhhSNrJKdNF78YeegkrlalTFB];
+    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
+    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=91" />
+  <link rel="stylesheet" href="./style.css?v=92" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -189,15 +189,15 @@
       </div>
 
       <!-- Admin / User Login Form -->
-      <form id="gatewayLoginForm" class="space-y-3.5">
+      <form id="gatewayLoginForm" class="space-y-3.5" autocomplete="off">
         <div>
           <label class="block text-xs font-extrabold text-slate-700 mb-1">👤 اسم المستخدم</label>
-          <input id="inpLoginUsername" type="text" autocomplete="username" placeholder="أدخل اسم المستخدم..."
+          <input id="inpLoginUsername" type="text" autocomplete="off" placeholder="أدخل اسم المستخدم..."
             class="w-full px-3.5 py-2.5 text-sm font-bold border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-700" />
         </div>
         <div>
           <label class="block text-xs font-extrabold text-slate-700 mb-1">🔑 كلمة المرور</label>
-          <input id="inpLoginPassword" type="password" autocomplete="current-password" placeholder="أدخل كلمة المرور..."
+          <input id="inpLoginPassword" type="password" autocomplete="off" placeholder="أدخل كلمة المرور..."
             class="w-full px-3.5 py-2.5 text-sm font-bold border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-700" />
         </div>
 
@@ -294,7 +294,7 @@
       </div>
 
       <!-- Option 2: Create a Brand New Farm (الخيار الثاني: إنشاء مزرعة جديدة) -->
-      <form id="forceCreateFarmForm" class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50/70 border-2 border-emerald-400 space-y-3 shadow-sm">
+      <form id="forceCreateFarmForm" class="p-3.5 sm:p-4 rounded-2xl bg-emerald-50/70 border-2 border-emerald-400 space-y-3 shadow-sm" autocomplete="off">
         <div class="flex items-center justify-between gap-2">
           <label for="inpForceNewFarmName" class="block text-xs sm:text-sm font-extrabold text-emerald-950">
             🏡 الخيار 2: إنشاء مزرعة / دورة جديدة للبدء:
@@ -337,7 +337,7 @@
         </p>
       </div>
 
-      <form id="askMissingPriceForm" class="space-y-4">
+      <form id="askMissingPriceForm" class="space-y-4" autocomplete="off">
         <div>
           <label for="inpModalMissingPrice" class="block text-xs font-extrabold text-slate-800 mb-1.5">
             💵 السعر (ج.م / كجم):
@@ -378,7 +378,7 @@
             <input id="inpTopFarmName" type="text" value=""
               title="اكتب هنا اسم أي مزرعة لتغييره فوراً في قاعدة البيانات السحابية وفي شيت الإكسيل"
               placeholder="اسم المزرعة..."
-              class="md:hidden bg-transparent text-amber-300 font-extrabold text-[11px] focus:outline-none w-16 sm:w-24" />
+              class="md:hidden bg-transparent text-amber-300 font-extrabold text-[11px] focus:outline-none w-16 sm:w-24" autocomplete="off" />
             <select id="selTopCloudFarm" title="التبديل السريع بين المزارع المحفوظة في قاعدة البيانات السحابية"
               class="bg-slate-900 text-white text-[10px] md:text-[11px] font-bold rounded px-1 md:px-1.5 py-0.5 border border-white/20 focus:outline-none max-w-[85px] md:max-w-none truncate">
             </select>
@@ -581,7 +581,7 @@
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-1.5 flex-wrap">
             <span class="text-xs font-extrabold text-slate-600">التاريخ / البيان:</span>
-            <input id="currentDayDateInput" type="text" class="px-2.5 py-1 text-xs md:text-sm font-bold border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-44" placeholder="تاريخ اليوم (مثال: الإثنين 12-10)" />
+            <input id="currentDayDateInput" type="text" class="px-2.5 py-1 text-xs md:text-sm font-bold border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-44" placeholder="تاريخ اليوم (مثال: الإثنين 12-10)" autocomplete="off" />
             <span class="text-xs font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
               المزرعة: <strong id="dailyFarmNameBadge">مزرعة جديدة</strong>
             </span>
@@ -642,7 +642,7 @@
             <div class="sm:col-span-5">
               <label class="block text-[11px] font-extrabold text-slate-700 mb-1">التاريخ / اسم اليوم (اختياري):</label>
               <input id="inpDailyQuickAddLabel" type="text" placeholder="مثال: الثلاثاء 13-10-2026"
-                class="w-full px-3 py-1.5 text-xs font-bold border border-emerald-400 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600" />
+                class="w-full px-3 py-1.5 text-xs font-bold border border-emerald-400 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600" autocomplete="off" />
             </div>
             <div class="sm:col-span-3">
               <button type="button" id="btnConfirmDailyQuickAddDay" class="w-full py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition">
@@ -712,7 +712,7 @@
           </div>
         </div>
 
-        <form id="saleEntryForm" class="p-3.5 space-y-3.5">
+        <form id="saleEntryForm" class="p-3.5 space-y-3.5" autocomplete="off">
           <input type="hidden" id="editSaleId" value="" />
           <input type="hidden" id="inpSaleEntryMode" value="sale" />
 
@@ -754,13 +754,13 @@
             <div class="sm:col-span-2">
               <label id="lblScaleOrVoucherNo" class="block text-xs font-extrabold text-slate-700 mb-1" title="رقم مسلسل الميزان (أو رقم السند في وضع تحصيل المديونية)">ميزان رقم <span class="text-emerald-700 font-normal">(متسلسل تلقائي)</span></label>
               <input id="inpScaleNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="0"
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white text-center focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white text-center focus:ring-2 focus:ring-blue-600" autocomplete="off" />
             </div>
 
             <div id="wrapCarNoField" class="sm:col-span-2">
               <label id="lblCarNoField" class="block text-xs font-extrabold text-slate-700 mb-1">رقم السيارة</label>
               <input id="inpCarNo" type="number" inputmode="numeric" enterkeyhint="next" placeholder="0"
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white text-center focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white text-center focus:ring-2 focus:ring-blue-600" autocomplete="off" />
             </div>
           </div>
 
@@ -769,22 +769,22 @@
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">وزنة أولى (فارغ - كجم) <span class="text-[10px] text-blue-700 font-bold">(Enter ⬅️ وزنة 2)</span></label>
               <input id="inpW1" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" autocomplete="off" />
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">وزنة ثانية (قائم - كجم) <span class="text-[10px] text-blue-700 font-bold">(Enter ⬅️ نقدي)</span></label>
               <input id="inpW2" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" autocomplete="off" />
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">السعر (ج.م / كجم) <span class="text-emerald-700 font-normal">(ثابت وقابل للتعديل)</span></label>
               <input id="inpPrice" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" autocomplete="off" />
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">الإكرامية (ج.م) <span class="text-emerald-700 font-normal">(ثابتة وقابلة للتعديل)</span></label>
               <input id="inpTip" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
-                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" />
+                class="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-600" autocomplete="off" />
             </div>
             <div id="weightValidationAlert" class="hidden col-span-2 sm:col-span-4 p-2.5 rounded-xl bg-rose-100 border-2 border-rose-500 text-rose-900 text-xs font-extrabold flex items-center gap-2">
               <span class="text-base">⚠️</span>
@@ -848,7 +848,7 @@
                   <span class="ui-tooltip-badge" title="المبلغ النقدي المسلم مع السائق؛ يقوم النظام بتوجيهه لسداد المديونية السابقة أولاً ثم فاتورة اليوم" data-tooltip="يُوزع تلقائياً: يسدد المديونية السابقة أولاً ثم فاتورة اليوم النقدية">?</span>
                 </label>
                 <input id="inpCustodyCash" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
-                  class="w-full px-2.5 py-1.5 text-sm font-extrabold border-2 border-amber-400 rounded-lg bg-white text-emerald-900 focus:ring-2 focus:ring-amber-500" />
+                  class="w-full px-2.5 py-1.5 text-sm font-extrabold border-2 border-amber-400 rounded-lg bg-white text-emerald-900 focus:ring-2 focus:ring-amber-500" autocomplete="off" />
               </div>
               <div>
                 <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">
@@ -856,7 +856,7 @@
                   <span class="ui-tooltip-badge" title="مبلغ التحويل أو الشيك المرسل كعهدة؛ يوجه لسداد المديونية ثم الفاتورة ولا يدخل صندوق النقدية" data-tooltip="عهدة غير نقدية (بنكي/إنستا/شيك) تُخصم من حساب التاجر ولا تدخل الخزنة">?</span>
                 </label>
                 <input id="inpCustodyTransfer" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
-                  class="w-full px-2.5 py-1.5 text-sm font-extrabold border-2 border-amber-400 rounded-lg bg-white text-blue-900 focus:ring-2 focus:ring-amber-500" />
+                  class="w-full px-2.5 py-1.5 text-sm font-extrabold border-2 border-amber-400 rounded-lg bg-white text-blue-900 focus:ring-2 focus:ring-amber-500" autocomplete="off" />
               </div>
               <div>
                 <label class="block text-[11px] font-extrabold text-slate-700 mb-0.5">
@@ -918,12 +918,12 @@
                 <div>
                   <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي مبيعات (للخزنة) <span class="text-[10px] text-blue-700 font-extrabold">(Enter ⬅️ آجل ⚡)</span></label>
                   <input id="inpCashSales" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
                 </div>
                 <div>
                   <label class="block text-[11px] font-bold text-slate-700 mb-0.5">آجل فاتورة اليوم <span class="text-[10px] text-emerald-700 font-extrabold">(Enter ⬅️ حفظ)</span></label>
                   <input id="inpCreditSales" type="text" inputmode="decimal" enterkeyhint="done" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
                 </div>
                 <div>
                   <label class="block text-[11px] font-bold text-amber-900 mb-0.5">
@@ -931,7 +931,7 @@
                     <span class="ui-tooltip-badge" title="مبلغ محول لسداد فاتورة اليوم؛ يُخصم من مديونية التاجر ولا يدخل الخزنة النقدية" data-tooltip="يُخصم من حساب التاجر ويُدرج في بيان التحويلات (لا يدخل الخزنة)">?</span>
                   </label>
                   <input id="inpTransferSales" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" autocomplete="off" />
                 </div>
                 <div>
                   <label class="block text-[11px] font-bold text-amber-900 mb-0.5">
@@ -962,12 +962,12 @@
                 <div class="col-span-2">
                   <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي تحصيل مديونيات (يدخل الخزنة ويخصم من التاجر)</label>
                   <input id="inpDebtCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
                 </div>
                 <div>
                   <label class="block text-[11px] font-bold text-amber-900 mb-0.5">تحويل مديونيات (معاملة التحويل)</label>
                   <input id="inpDebtTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
+                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" autocomplete="off" />
                 </div>
                 <div>
                   <label class="block text-[11px] font-bold text-amber-900 mb-0.5">
@@ -1006,18 +1006,18 @@
                   <div>
                     <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي سابقة (للخزنة فقط)</label>
                     <input id="inpPrevCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                      class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" />
+                      class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
                   </div>
                   <div>
                     <label class="block text-[11px] font-bold text-slate-700 mb-0.5">اسم المزرعة السابقة / ملاحظات</label>
                     <input id="inpNotes" type="text" list="prevFarmsArchiveDatalist" placeholder="اختر أو اكتب اسم المزرعة السابقة..."
-                      class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+                      class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
                     <datalist id="prevFarmsArchiveDatalist"></datalist>
                   </div>
                   <div>
                     <label class="block text-[11px] font-bold text-amber-900 mb-0.5">تحويل سابقة (معاملة التحويل)</label>
                     <input id="inpPrevTransfer" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                      class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" />
+                      class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" autocomplete="off" />
                   </div>
                   <div>
                     <label class="block text-[11px] font-bold text-amber-900 mb-0.5">نوع تحويل السابقة</label>
@@ -1124,7 +1124,7 @@
               <span>⏳ سيارات محفوظة مؤقتاً (وزنة أولى فقط — اضغط "استرجاع لإكمال الوزنة الثانية" عند عودة السيارة للميزان)</span>
               <div class="flex items-center gap-1.5 flex-wrap">
                 <input id="inpFilterPendingSales" type="text" placeholder="🔍 بحث سريع في المؤقت..."
-                  class="px-2 py-0.5 text-[11px] font-bold text-slate-900 rounded-lg bg-white border border-amber-500 w-36" />
+                  class="px-2 py-0.5 text-[11px] font-bold text-slate-900 rounded-lg bg-white border border-amber-500 w-36" autocomplete="off" />
                 <button type="button" data-toggle-col-filters="pendingWeighIns" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
                   <span>🔽</span><span>تفعيل الفلاتر</span>
                 </button>
@@ -1158,7 +1158,7 @@
           <h3 class="text-sm md:text-base font-extrabold">📋 جدول حركات البيع المسجلة (<span id="tblDayTitle">يوم 1</span>)</h3>
           <div class="flex items-center gap-2 flex-wrap">
             <input id="inpFilterDailySales" type="text" placeholder="🔍 بحث سريع باسم التاجر أو السيارة..."
-              class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-48" />
+              class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-48" autocomplete="off" />
             <button type="button" data-toggle-col-filters="dailySales" class="lite-hide-el px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
               <span>🔽</span><span>تفعيل الفلاتر</span>
             </button>
@@ -1211,7 +1211,7 @@
           </div>
         </div>
 
-        <form id="expenseEntryForm" class="p-3 bg-rose-50/40 border-b border-rose-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+        <form id="expenseEntryForm" class="p-3 bg-rose-50/40 border-b border-rose-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-end" autocomplete="off">
           <input type="hidden" id="editExpenseId" value="" />
           <div class="sm:col-span-3">
             <label class="block text-xs font-extrabold text-slate-700 mb-1">بند / تصنيف المنصرف</label>
@@ -1230,17 +1230,17 @@
           <div class="sm:col-span-3">
             <label class="block text-xs font-extrabold text-slate-700 mb-1">بيان الصرف التفصيلي / السبب</label>
             <input id="inpExpDesc" type="text" required placeholder="مثال: مكافأة عمال التحميل / سولار..."
-              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white" />
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white" autocomplete="off" />
           </div>
           <div class="sm:col-span-2">
             <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم المستلم</label>
             <input id="inpExpRecipient" type="text" placeholder="اسم المستلم"
-              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white" />
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white" autocomplete="off" />
           </div>
           <div class="sm:col-span-2">
             <label class="block text-xs font-extrabold text-rose-900 mb-1">المبلغ المنصرف (ج.م)</label>
             <input id="inpExpAmount" type="text" inputmode="decimal" data-money-input="1" required placeholder="0"
-              class="w-full px-2.5 py-2 text-sm font-extrabold border border-rose-400 rounded-xl bg-white text-rose-900" />
+              class="w-full px-2.5 py-2 text-sm font-extrabold border border-rose-400 rounded-xl bg-white text-rose-900" autocomplete="off" />
           </div>
           <div class="sm:col-span-2 flex items-center gap-1.5">
             <button type="submit" id="btnSubmitExpenseForm" class="w-full py-2 px-3 rounded-xl bg-rose-800 hover:bg-rose-700 text-white font-extrabold text-xs shadow transition">
@@ -1256,7 +1256,7 @@
           <span class="text-[11px] font-extrabold text-slate-700">🔽 فلتر وفرز مصروفات اليوم (Sort &amp; Filter):</span>
           <div class="flex items-center gap-1.5">
             <input id="inpFilterDailyExpenses" type="text" placeholder="🔍 بحث سريع في مصروفات اليوم..."
-              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" />
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" autocomplete="off" />
             <button type="button" data-toggle-col-filters="dailyExpenses" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
               <span>🔽</span><span>تفعيل الفلاتر</span>
             </button>
@@ -1331,7 +1331,7 @@
                     </button>
                   </div>
                   <input id="inpDeliveredCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                    class="w-36 px-2.5 py-1.5 text-sm font-extrabold border-2 border-blue-600 rounded-lg text-left bg-white" />
+                    class="w-36 px-2.5 py-1.5 text-sm font-extrabold border-2 border-blue-600 rounded-lg text-left bg-white" autocomplete="off" />
                 </div>
                 <div class="flex items-center justify-between gap-1.5 flex-wrap bg-teal-50/70 p-1.5 rounded-lg border border-teal-200">
                   <div class="flex items-center gap-1">
@@ -1341,7 +1341,7 @@
                     </button>
                   </div>
                   <input id="inpCarriedForwardCash" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                    class="w-36 px-2.5 py-1.5 text-sm font-extrabold border-2 border-teal-600 rounded-lg text-left bg-white text-teal-950" />
+                    class="w-36 px-2.5 py-1.5 text-sm font-extrabold border-2 border-teal-600 rounded-lg text-left bg-white text-teal-950" autocomplete="off" />
                 </div>
               </div>
               <div id="tbCashDiffBox" class="p-2 rounded-lg font-extrabold flex flex-col gap-1 text-xs"></div>
@@ -1398,7 +1398,7 @@
           <div class="flex items-center gap-2 flex-wrap flex-1">
             <span class="text-xs font-extrabold text-slate-700">🔽 فلتر وفرز جدول الملخص التنفيذي (Sort &amp; Filter):</span>
             <input id="inpDashQuickSearch" type="text" placeholder="🔍 بحث سريع في جدول الملخص التنفيذي..."
-              class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" />
+              class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" autocomplete="off" />
             <span id="dashFilterStatusHint" class="text-[11px] font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
               اضغط على زر (▼) في رأس أي عمود للفرز التصاعدي/التنازلي أو الفلترة مثل الإكسيل
             </span>
@@ -1506,10 +1506,10 @@
               <strong class="text-emerald-800">الكود الموحد واسم التاجر الأساسي ثابت وموحد تلقائياً في جميع المزارع والدورات</strong> (التاجر يُكوّد مرة واحدة فقط ويظهر بنفس الكود والاسم عند فتح أو إنشاء أي مزرعة، وأي سيارة فرعية مثل <strong class="text-blue-900">كرنك 1</strong> و<strong class="text-blue-900">كرنك 2</strong> تأخذ تلقائياً نفس كود التاجر الأساسي <strong class="text-blue-900">104 - كرنك</strong>) — <strong class="text-blue-800 underline">اضغط على اسم أي تاجر في الجدول لفتح نافذة كشف حسابه التفصيلي بالحركات ومشاركته عبر واتساب</strong>.
             </p>
           </div>
-          <form id="addMerchantForm" class="flex flex-wrap items-center gap-2">
+          <form id="addMerchantForm" class="flex flex-wrap items-center gap-2" autocomplete="off">
             <input type="hidden" id="editMerchantCodeInput" value="" />
             <input id="inpNewMerchantBase" type="text" required placeholder="اسم تاجر أساسي جديد..."
-              class="px-3 py-1.5 text-xs md:text-sm font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white" />
+              class="px-3 py-1.5 text-xs md:text-sm font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white" autocomplete="off" />
             <button type="submit" id="btnSubmitMerchantForm" class="px-3.5 py-1.5 rounded-xl bg-blue-900 text-white font-extrabold text-xs md:text-sm hover:bg-blue-800">
               ➕ تكويد تاجر جديد
             </button>
@@ -1525,7 +1525,7 @@
             <div class="flex items-center gap-1.5 text-xs font-extrabold text-slate-700 flex-wrap">
               <span>🔽 فلتر وفرز كشف حساب التجار (Sort &amp; Filter):</span>
               <input id="inpMerchQuickSearch" type="text" placeholder="🔍 بحث سريع باسم التاجر أو الكود الموحد..."
-                class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" />
+                class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" autocomplete="off" />
               <span id="merchFilterStatusHint" class="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
                 اضغط على زر (▼) في رأس أي عمود للفرز أو التصفية المتعددة مثل الإكسيل
               </span>
@@ -1608,7 +1608,7 @@
           </div>
           <div class="flex items-center gap-1.5 flex-wrap">
             <input id="inpFilterTransfers" type="text" placeholder="🔍 بحث سريع في التحويلات..."
-              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" />
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" autocomplete="off" />
             <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
               <button type="button" id="btnFilterTransfersActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
                 <span>✅</span>
@@ -1656,7 +1656,7 @@
           </div>
           <div class="flex items-center gap-1.5 flex-wrap">
             <input id="inpFilterPrevFarms" type="text" placeholder="🔍 بحث سريع في المزارع السابقة..."
-              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" />
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" autocomplete="off" />
             <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
               <button type="button" id="btnFilterPrevFarmsActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
                 <span>✅</span>
@@ -1805,7 +1805,7 @@
               <div class="sm:col-span-5">
                 <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم / تاريخ اليوم المضاف (مربع التسمية):</label>
                 <input id="inpAddDayCustomLabel" type="text" placeholder="مثال: الثلاثاء 13-10-2026"
-                  class="w-full px-3 py-2 text-xs font-bold border-2 border-emerald-400 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600" />
+                  class="w-full px-3 py-2 text-xs font-bold border-2 border-emerald-400 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600" autocomplete="off" />
               </div>
               <div class="sm:col-span-3">
                 <button type="button" id="btnConfirmAddSelectedDay" class="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
@@ -1836,7 +1836,7 @@
               <div class="sm:col-span-5">
                 <label class="block text-xs font-extrabold text-blue-950 mb-1">✏️ مربع / خانة تعديل اسم أو تاريخ اليوم:</label>
                 <input id="inpEditDayCustomLabel" type="text" placeholder="اكتب اسم أو تاريخ اليوم الجديد..."
-                  class="w-full px-3 py-2 text-xs md:text-sm font-extrabold border-2 border-blue-600 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-700" />
+                  class="w-full px-3 py-2 text-xs md:text-sm font-extrabold border-2 border-blue-600 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-700" autocomplete="off" />
               </div>
               <div class="sm:col-span-3">
                 <button type="button" id="btnConfirmEditSelectedDay" class="w-full py-2 px-3 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow transition flex items-center justify-center gap-1">
@@ -1909,7 +1909,7 @@
             <div class="flex flex-wrap items-center gap-1.5">
               <input type="hidden" id="editCloudFarmOldName" value="" />
               <input id="inpNewCloudFarmName" type="text" placeholder="اسم مزرعة أو دورة جديدة..."
-                class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-44" />
+                class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-44" autocomplete="off" />
               <button type="button" id="btnAddNewCloudFarm" class="px-3 py-1 rounded-lg gold-badge text-xs font-extrabold">
                 ➕ إنشاء مزرعة جديدة بالسحابة
               </button>
@@ -1922,7 +1922,7 @@
             <span class="text-[11px] font-extrabold text-slate-700">🔽 فلتر وفرز سجل المزارع المحفوظة (Sort &amp; Filter):</span>
             <div class="flex items-center gap-1.5">
               <input id="inpFilterCloudFarms" type="text" placeholder="🔍 بحث سريع باسم المزرعة..."
-                class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" />
+                class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" autocomplete="off" />
               <button type="button" data-toggle-col-filters="cloudFarms" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
                 <span>🔽</span><span>تفعيل الفلاتر</span>
               </button>
@@ -1948,7 +1948,7 @@
             </label>
             <input id="inpSettingsFarmName" type="text" value=""
               placeholder="اكتب اسم المزرعة هنا (مثال: مزرعة 1، دورة 1...)"
-              class="w-full px-3 py-2 text-sm font-extrabold border-2 border-amber-400 rounded-xl bg-white text-slate-900" />
+              class="w-full px-3 py-2 text-sm font-extrabold border-2 border-amber-400 rounded-xl bg-white text-slate-900" autocomplete="off" />
           </div>
           <div class="md:col-span-8 flex flex-wrap items-center gap-2 pt-2 md:pt-5">
             <span class="text-xs font-bold text-slate-600">اختيار سريع لاسم المزرعة:</span>
@@ -1982,31 +1982,31 @@
           </span>
         </div>
 
-        <form id="myProfileForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 items-end bg-blue-50/40 p-3 rounded-xl border border-blue-200">
+        <form id="myProfileForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 items-end bg-blue-50/40 p-3 rounded-xl border border-blue-200" autocomplete="off">
           <div>
             <label class="block text-xs font-extrabold text-slate-700 mb-1">الاسم الكامل / الظاهر</label>
             <input id="inpProfFullName" type="text" required placeholder="الاسم الكامل..."
-              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
           </div>
           <div>
             <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم الدخول (Username)</label>
             <input id="inpProfUsername" type="text" required placeholder="اسم المستخدم للدخول..."
-              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
           </div>
           <div>
             <label class="block text-xs font-extrabold text-slate-700 mb-1">رقم الهاتف</label>
             <input id="inpProfPhone" type="text" placeholder="010xxxxxxxx"
-              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
           </div>
           <div>
             <label class="block text-xs font-extrabold text-slate-700 mb-1">المسمى الوظيفي / الصفة</label>
             <input id="inpProfJobTitle" type="text" placeholder="مثال: مدير المزرعة / محاسب..."
-              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+              class="w-full px-2.5 py-2 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
           </div>
           <div>
             <label class="block text-xs font-extrabold text-rose-900 mb-1">🔑 كلمة المرور (تعديل)</label>
             <input id="inpProfPassword" type="password" placeholder="أدخل كلمة المرور الجديدة..."
-              class="w-full px-2.5 py-2 text-xs font-extrabold border border-rose-300 rounded-lg bg-white text-rose-950" />
+              class="w-full px-2.5 py-2 text-xs font-extrabold border border-rose-300 rounded-lg bg-white text-rose-950" autocomplete="off" />
           </div>
           <div>
             <button type="submit" id="btnSaveMyProfile" class="w-full py-2 px-3 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow transition">
@@ -2263,7 +2263,7 @@
             <div class="inline-flex items-center bg-white border-2 border-slate-300 rounded-xl px-2 py-1 gap-1">
               <span class="text-[11px] font-bold text-slate-600">أو بالدقائق:</span>
               <input id="inpInactivityTimeoutMin" type="number" min="0" max="1440" value="20"
-                class="w-16 text-center text-xs font-extrabold text-blue-900 focus:outline-none" />
+                class="w-16 text-center text-xs font-extrabold text-blue-900 focus:outline-none" autocomplete="off" />
               <span class="text-[11px] font-bold text-slate-500">دقيقة</span>
             </div>
             <button type="button" id="btnSaveInactivityTimeout" class="px-3.5 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow transition">
@@ -2272,33 +2272,33 @@
           </div>
         </div>
 
-        <form id="addUserForm" class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2.5">
+        <form id="addUserForm" class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2.5" autocomplete="off">
           <input type="hidden" id="editUserIdInput" value="" />
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">الاسم الكامل للمستخدم</label>
               <input id="inpNewUserFullName" type="text" placeholder="مثال: أحمد محمد (محاسب)"
-                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم الدخول (Username)</label>
               <input id="inpNewUserName" type="text" required placeholder="مثال: accountant"
-                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">كلمة المرور</label>
               <input id="inpNewUserPassword" type="text" placeholder="كلمة المرور..." value="1234"
-                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">رقم الهاتف</label>
               <input id="inpNewUserPhone" type="text" placeholder="010xxxxxxxx"
-                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
             </div>
             <div>
               <label class="block text-xs font-extrabold text-slate-700 mb-1">المسمى الوظيفي</label>
               <input id="inpNewUserJobTitle" type="text" placeholder="مثال: مشرف الميزان"
-                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" />
+                class="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
             </div>
           </div>
 
@@ -2379,7 +2379,7 @@
           <span class="text-xs font-extrabold text-slate-700">🔽 فلتر وفرز جدول المستخدمين والصلاحيات (Sort &amp; Filter):</span>
           <div class="flex items-center gap-1.5">
             <input id="inpFilterUsersList" type="text" placeholder="🔍 بحث سريع في المستخدمين..."
-              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" />
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" autocomplete="off" />
             <button type="button" data-toggle-col-filters="usersList" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
               <span>🔽</span><span>تفعيل الفلاتر</span>
             </button>
@@ -2490,7 +2490,7 @@
               <label for="firebaseSecretInput" class="block text-xs font-extrabold text-rose-900 mb-1">
                 🔑 الرمز السري Firebase Secret (Database Secret):
               </label>
-              <input id="firebaseSecretInput" type="password" dir="ltr" autocomplete="new-password"
+              <input id="firebaseSecretInput" type="password" dir="ltr" autocomplete="off"
                 placeholder="أدخل الرمز السري لقاعدة بيانات Firebase..."
                 class="w-full px-3 py-2 text-xs font-bold border-2 border-rose-300 rounded-lg bg-white focus:border-rose-600 focus:outline-none" />
             </div>
@@ -2689,7 +2689,7 @@
             </div>
             <div class="flex items-center gap-1.5 flex-wrap">
               <input id="inpFilterAuditTrail" type="text" placeholder="🔍 ابحث باسم المندوب، التاجر، البند، أو اليوم..."
-                class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-56" />
+                class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-56" autocomplete="off" />
               <select id="selFilterAuditType" class="px-2 py-1 text-xs font-extrabold text-slate-900 rounded-lg bg-white border border-slate-300">
                 <option value="all">كل الحركات (مبيعات + مؤقت + مصروفات)</option>
                 <option value="sale">🚛 وزنات البيع المكتملة فقط</option>
@@ -2731,7 +2731,7 @@
           <h2 class="text-base md:text-lg font-extrabold text-rose-950">💸 بيان المصروفات والمكافآت المجمع (حسب البند وعلى مدار الـ 10 أيام)</h2>
           <div class="flex items-center gap-1.5 flex-wrap">
             <input id="inpFilterExpSummary" type="text" placeholder="🔍 بحث سريع ببند المصروف..."
-              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" />
+              class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" autocomplete="off" />
             <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
               <button type="button" id="btnFilterExpSummaryActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
                 <span>✅</span>
@@ -2808,14 +2808,14 @@
             <option value="contains">يحتوي على...</option>
           </select>
           <input id="inpExcelCondVal" type="text" placeholder="القيمة..."
-            class="col-span-6 px-2 py-1 text-[11px] font-bold border border-slate-300 rounded-lg bg-white" />
+            class="col-span-6 px-2 py-1 text-[11px] font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
         </div>
       </div>
 
       <!-- Value Checkboxes List (Excel style) -->
       <div class="space-y-1.5">
         <input id="inpExcelValueSearch" type="text" placeholder="🔍 بحث في قيم هذا العمود..."
-          class="w-full px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-none" />
+          class="w-full px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:outline-none" autocomplete="off" />
         <div class="border border-slate-200 rounded-xl max-h-44 overflow-y-auto p-2 bg-slate-50/50 space-y-1 custom-scrollbar">
           <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-blue-50 cursor-pointer border-b border-slate-200 pb-1.5 font-extrabold text-xs text-blue-950">
             <input type="checkbox" id="chkExcelSelectAllValues" class="rounded text-blue-900 w-3.5 h-3.5" checked />
@@ -2912,7 +2912,7 @@
             <div class="flex items-center gap-2 flex-wrap flex-1">
               <span class="text-xs font-extrabold text-slate-700">🔍 تصفية حركات التاجر:</span>
               <input id="inpFilterMerchantModal" type="text" placeholder="ابحث باليوم، رقم الميزان، رقم السيارة، نوع التحويل، أو الملاحظات..."
-                class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-64 max-w-full" />
+                class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-64 max-w-full" autocomplete="off" />
               <span id="mdlMerchMovementsCountBadge" class="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] font-extrabold">
                 0 حركة مسجلة
               </span>
@@ -2992,45 +2992,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=91"></script>
-  <script src="./js/core-state.js?v=91"></script>
-  <script src="./js/accounting.js?v=91"></script>
-  <script src="./js/storage-sync.js?v=91"></script>
-  <script src="./js/excel-engine.js?v=91"></script>
-  <script src="./js/print-export.js?v=91"></script>
-  <script src="./js/ui-controllers.js?v=91"></script>
+  <script src="./excel-template.js?v=92"></script>
+  <script src="./js/core-state.js?v=92"></script>
+  <script src="./js/accounting.js?v=92"></script>
+  <script src="./js/storage-sync.js?v=92"></script>
+  <script src="./js/excel-engine.js?v=92"></script>
+  <script src="./js/print-export.js?v=92"></script>
+  <script src="./js/ui-controllers.js?v=92"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v91-accordion-math';
+      var SW_CACHE_NAME = 'farm-sales-v92-autocomplete-fix';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=91',
+        './style.css?v=92',
         './excel-template.js',
-        './excel-template.js?v=91',
+        './excel-template.js?v=92',
         './js/core-state.js',
-        './js/core-state.js?v=91',
+        './js/core-state.js?v=92',
         './js/accounting.js',
-        './js/accounting.js?v=91',
+        './js/accounting.js?v=92',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=91',
+        './js/storage-sync.js?v=92',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=91',
+        './js/excel-engine.js?v=92',
         './js/print-export.js',
-        './js/print-export.js?v=91',
+        './js/print-export.js?v=92',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=91',
+        './js/ui-controllers.js?v=92',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=91'
+        './vendor/vendor-loader.js?v=92'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
         if (!window.__swRegisteredOnceV86) {
           window.__swRegisteredOnceV86 = true;
-          navigator.serviceWorker.register('./sw.js?v=91', { scope: './' }).catch(function () {});
+          navigator.serviceWorker.register('./sw.js?v=92', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {
