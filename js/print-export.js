@@ -1,5 +1,5 @@
 // =========================================================================
-// MODULE 5: ISOLATED PRINTING, SCALE RECEIPTS & PNG/PDF EXPORT (js/print-export.js — v91)
+// MODULE 5: ISOLATED PRINTING, SCALE RECEIPTS & PNG/PDF EXPORT (js/print-export.js — v94)
 // =========================================================================
 
 function ensureMerchantPrintDomElements() {
@@ -525,6 +525,9 @@ function renderDailyTrialBalancePrintView() {
   return true;
 }
 
+let isReceiptExportBusy = false;
+let isReceiptPrintBusy = false;
+
 function renderScaleReceiptPrintView(saleId, dayNumInput) {
   const printContainer = ensureMerchantPrintDomElements();
   if (!printContainer || !saleId) return false;
@@ -562,7 +565,6 @@ function renderScaleReceiptPrintView(saleId, dayNumInput) {
     ? { ...computeSaleRow({ ...rawRow, w2: 0 }), isPending: true }
     : { ...computeSaleRow(rawRow), isPending: false };
 
-  // حساب رصيد التاجر السابق قبل هذه الحركة والرصيد التراكمي بعدها من كشف الحساب التفصيلي
   let prevBalanceBefore = 0;
   let runningBalanceAfter = 0;
   let baseMerchantName = r.merchant || '-';
@@ -605,42 +607,37 @@ function renderScaleReceiptPrintView(saleId, dayNumInput) {
     extraInlineNotes.push(`📝 بيان/ملاحظات: ${escXmlStr(r.notes)}`);
   }
   const extraStripHtml = extraInlineNotes.length > 0
-    ? `<div style="margin-top:2px; padding:1.5px 5px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:3px; font-size:7.5px; font-weight:800; color:#1e293b; line-height:1.2;">${extraInlineNotes.join(' &nbsp;|&nbsp; ')}</div>`
+    ? `<div style="padding:4px 8px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:4px; font-size:9px; font-weight:800; color:#1e293b; line-height:1.3;">${extraInlineNotes.join(' &nbsp;|&nbsp; ')}</div>`
     : '';
 
-  const copiesMeta = [
-    { num: 1, title: 'نسخة (1): أصل التاجر / المشتري', bg: '#eff6ff', border: '#1d4ed8', color: '#1e3a8a' },
-    { num: 2, title: 'نسخة (2): السائق / بوابة الخروج والميزان', bg: '#fffbeb', border: '#b45309', color: '#78350f' },
-    { num: 3, title: 'نسخة (3): أرشيف لجنة البيع وخزينة المزرعة', bg: '#ecfdf5', border: '#047857', color: '#064e3b' }
-  ];
-
-  const buildSingleCopyHtml = (copyInfo) => `
-    <div class="scale-receipt-single-copy" style="border:1.5px solid #0f172a; border-radius:5px; padding:4px 7px; background:#ffffff; color:#0f172a; page-break-inside:avoid; break-inside:avoid;">
-      <!-- ترويسة النسخة -->
-      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid #1b365d; padding-bottom:2.5px; margin-bottom:3px; gap:4px;">
-        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-          <span style="font-size:11px; font-weight:800; color:#1b365d;">
+  // قالب موحد ومتطابق 100% للنسخ الثلاث بدون أي تمييز في العناوين (تاجر / سائق / أرشيف)
+  const buildIdenticalCopyHtml = () => `
+    <div class="scale-receipt-single-copy" style="flex: 1 1 0%; height: calc((100% - 16px) / 3); display:flex; flex-direction:column; justify-content:space-between; box-sizing:border-box; border:2px solid #0f172a; border-radius:6px; padding:8px 10px; background:#ffffff; color:#0f172a; page-break-inside:avoid; break-inside:avoid;">
+      <!-- ترويسة البون الموحدة -->
+      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:5px; gap:6px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:13px; font-weight:800; color:#1b365d;">
             ⚖️ كارتة ميزان وفاتورة بيع — مزرعة <span style="color:#b45309;">${escXmlStr(fName)}</span>
           </span>
-          <span style="font-size:8.5px; font-weight:700; color:#334155;">
+          <span style="font-size:9.5px; font-weight:700; color:#334155;">
             | يوم ${d} (${escXmlStr(dayObj.dateLabel || ('اليوم ' + d))}) — ${printDateStr} (${printTimeStr})
           </span>
         </div>
-        <div style="display:flex; align-items:center; gap:4px;">
-          <span style="padding:1.5px 6px; border-radius:4px; background:${copyInfo.bg}; color:${copyInfo.color}; border:1px solid ${copyInfo.border}; font-size:8.5px; font-weight:800;">
-            ${copyInfo.title}
+        <div style="display:flex; align-items:center; gap:5px;">
+          <span style="padding:2px 8px; border-radius:4px; background:#eff6ff; color:#1e3a8a; border:1px solid #1d4ed8; font-size:9px; font-weight:800;">
+            بون ميزان وفاتورة رسمية
           </span>
-          <span style="padding:1.5px 6px; border-radius:4px; background:${statusBadgeBg}; color:${statusBadgeColor}; border:1px solid ${statusBadgeColor}; font-size:8px; font-weight:800;">
+          <span style="padding:2px 8px; border-radius:4px; background:${statusBadgeBg}; color:${statusBadgeColor}; border:1px solid ${statusBadgeColor}; font-size:8.5px; font-weight:800;">
             ${statusBadgeTxt}
           </span>
-          <span style="padding:1.5px 8px; border-radius:4px; background:#1b365d; color:#ffffff; font-size:10px; font-weight:800;">
+          <span style="padding:2px 9px; border-radius:4px; background:#1b365d; color:#ffffff; font-size:11px; font-weight:800;">
             ${r.isDebtCollectionOnly ? 'سند' : 'بون'} #${escXmlStr((r.isDebtCollectionOnly ? (r.voucherNo || r.scaleNo) : r.scaleNo) || '-')}
           </span>
         </div>
       </div>
 
       <!-- الجدول الأول: بيانات التاجر والسيارة والأوزان وإجمالي الفاتورة -->
-      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:2.5px; text-align:center; font-size:8.5px; line-height:1.15;">
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; text-align:center; font-size:9.5px; line-height:1.25;">
         <colgroup>
           <col style="width:15%;" />
           <col style="width:11%;" />
@@ -653,35 +650,35 @@ function renderScaleReceiptPrintView(saleId, dayNumInput) {
           <col style="width:20%;" />
         </colgroup>
         <thead>
-          <tr style="background:#0c4a6e; color:#ffffff; font-weight:800; font-size:8px;">
-            <th style="border:1px solid #0f172a; padding:2px;">اسم التاجر / السيارة</th>
-            <th style="border:1px solid #0f172a; padding:2px;">الكود الموحد</th>
-            <th style="border:1px solid #0f172a; padding:2px;">رقم السيارة</th>
-            <th style="border:1px solid #0f172a; padding:2px;">وزنة 1 (فارغ)</th>
-            <th style="border:1px solid #0f172a; padding:2px;">وزنة 2 (قائم)</th>
-            <th style="border:1px solid #0f172a; padding:2px; background:#1e3a8a; color:#fde68a;">الوزن الصافي</th>
-            <th style="border:1px solid #0f172a; padding:2px;">السعر</th>
-            <th style="border:1px solid #0f172a; padding:2px;">الإكرامية</th>
-            <th style="border:1px solid #0f172a; padding:2px; background:#78350f; color:#fef3c7;">إجمالي الفاتورة بالإكرامية</th>
+          <tr style="background:#0c4a6e; color:#ffffff; font-weight:800; font-size:9px;">
+            <th style="border:1px solid #0f172a; padding:4px 2px;">اسم التاجر / السيارة</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">الكود الموحد</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">رقم السيارة</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">وزنة 1 (فارغ)</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">وزنة 2 (قائم)</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px; background:#1e3a8a; color:#fde68a;">الوزن الصافي</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">السعر</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">الإكرامية</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px; background:#78350f; color:#fef3c7;">إجمالي الفاتورة بالإكرامية</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td style="border:1px solid #0f172a; padding:2.5px; font-weight:800; font-size:9.5px; background:#f8fafc;">${escXmlStr(r.merchant)}</td>
-            <td style="border:1px solid #0f172a; padding:2.5px; font-weight:800; color:#1e3a8a;">(${r.code || '-'}) ${escXmlStr(baseMerchantName)}</td>
-            <td style="border:1px solid #0f172a; padding:2.5px; font-weight:800; font-size:9.5px;">${escXmlStr(r.carNo || '-')}</td>
-            <td style="border:1px solid #0f172a; padding:2.5px; font-weight:800;">${fmtInt(r.w1)} كجم</td>
-            <td style="border:1px solid #0f172a; padding:2.5px; font-weight:800;">${isPending ? '⏳ تحت التحميل' : `${fmtInt(r.w2)} كجم`}</td>
-            <td style="border:1.5px solid #1e3a8a; padding:2.5px; font-weight:800; font-size:10.5px; background:#eff6ff; color:#1e3a8a;">${isPending ? 'بانتظار وزنة 2' : `${fmtInt(r.netWeight)} كجم`}</td>
-            <td style="border:1px solid #0f172a; padding:2.5px; font-weight:800;">${fmtDec(r.price)}</td>
-            <td style="border:1px solid #0f172a; padding:2.5px; font-weight:800;">${fmtInt(r.tip)}</td>
-            <td style="border:1.5px solid #78350f; padding:2.5px; font-weight:800; font-size:10.5px; background:#fffbeb; color:#78350f;">${isPending ? 'تُحدد بعد الوزنة 2' : `${fmtDec(r.totalWithTip)} ج.م`}</td>
+            <td style="border:1px solid #0f172a; padding:5px 3px; font-weight:800; font-size:10.5px; background:#f8fafc;">${escXmlStr(r.merchant)}</td>
+            <td style="border:1px solid #0f172a; padding:5px 3px; font-weight:800; color:#1e3a8a;">(${r.code || '-'}) ${escXmlStr(baseMerchantName)}</td>
+            <td style="border:1px solid #0f172a; padding:5px 3px; font-weight:800; font-size:10px;">${escXmlStr(r.carNo || '-')}</td>
+            <td style="border:1px solid #0f172a; padding:5px 3px; font-weight:800;">${fmtInt(r.w1)} كجم</td>
+            <td style="border:1px solid #0f172a; padding:5px 3px; font-weight:800;">${isPending ? '⏳ تحت التحميل' : `${fmtInt(r.w2)} كجم`}</td>
+            <td style="border:1.5px solid #1e3a8a; padding:5px 3px; font-weight:800; font-size:11.5px; background:#eff6ff; color:#1e3a8a;">${isPending ? 'بانتظار وزنة 2' : `${fmtInt(r.netWeight)} كجم`}</td>
+            <td style="border:1px solid #0f172a; padding:5px 3px; font-weight:800;">${fmtDec(r.price)}</td>
+            <td style="border:1px solid #0f172a; padding:5px 3px; font-weight:800;">${fmtInt(r.tip)}</td>
+            <td style="border:1.5px solid #78350f; padding:5px 3px; font-weight:800; font-size:11.5px; background:#fffbeb; color:#78350f;">${isPending ? 'تُحدد بعد الوزنة 2' : `${fmtDec(r.totalWithTip)} ج.م`}</td>
           </tr>
         </tbody>
       </table>
 
       <!-- الجدول الثاني: السداد والتحصيلات والرصيد التراكمي للتاجر -->
-      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; text-align:center; font-size:8px; line-height:1.15;">
+      <table class="print-clean-table" dir="rtl" style="width:100%; table-layout:fixed; border-collapse:collapse; text-align:center; font-size:9px; line-height:1.25;">
         <colgroup>
           <col style="width:13%;" />
           <col style="width:16%;" />
@@ -693,52 +690,52 @@ function renderScaleReceiptPrintView(saleId, dayNumInput) {
         </colgroup>
         <thead>
           <tr style="background:#334155; color:#ffffff; font-weight:800;">
-            <th style="border:1px solid #0f172a; padding:2px;">المسدد نقداً اليوم</th>
-            <th style="border:1px solid #0f172a; padding:2px;">المسدد بتحويل اليوم</th>
-            <th style="border:1px solid #0f172a; padding:2px;">المتبقي آجل اليوم</th>
-            <th style="border:1px solid #0f172a; padding:2px;">سداد مديونية سابقة</th>
-            <th style="border:1px solid #0f172a; padding:2px; background:#065f46;">إجمالي المسدد بالحركة</th>
-            <th style="border:1px solid #0f172a; padding:2px;">الرصيد قبل الحركة</th>
-            <th style="border:1px solid #0f172a; padding:2px; background:#b45309; color:#ffffff;">الرصيد التراكمي (${balStateTxt})</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">المسدد نقداً اليوم</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">المسدد بتحويل اليوم</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">المتبقي آجل اليوم</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">سداد مديونية سابقة</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px; background:#065f46;">إجمالي المسدد بالحركة</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px;">الرصيد قبل الحركة</th>
+            <th style="border:1px solid #0f172a; padding:4px 2px; background:#b45309; color:#ffffff;">الرصيد التراكمي (${balStateTxt})</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td style="border:1px solid #0f172a; padding:2px; font-weight:800; color:#065f46;">${fmtInt(r.cashSales)} ج.م</td>
-            <td style="border:1px solid #0f172a; padding:2px; font-weight:800; color:#115e59;">${r.transferSales > 0 ? `${fmtInt(r.transferSales)} (${escXmlStr(r.transferSalesType || 'تحويل')})` : '0 ج.م'}</td>
-            <td style="border:1px solid #0f172a; padding:2px; font-weight:800; color:#9f1239;">${fmtInt(r.creditSales)} ج.م</td>
-            <td style="border:1px solid #0f172a; padding:2px; font-weight:800; color:#115e59;">${(r.debtCash + r.debtTransfer) > 0 ? `${fmtInt(r.debtCash + r.debtTransfer)} (${r.debtCash > 0 ? `نقدي ${fmtInt(r.debtCash)}` : ''}${r.debtTransfer > 0 ? ` ${escXmlStr(r.debtTransferType || 'تحويل')} ${fmtInt(r.debtTransfer)}` : ''})` : '0 ج.م'}</td>
-            <td style="border:1px solid #0f172a; padding:2px; font-weight:800; background:#ecfdf5; color:#064e3b;">${fmtInt(totalSettledTodayForFarm)} ج.م</td>
-            <td style="border:1px solid #0f172a; padding:2px; font-weight:800; background:#f8fafc;">${fmtInt(prevBalanceBefore)} ج.م</td>
-            <td style="border:1.5px solid #0f172a; padding:2px; font-weight:800; font-size:9.5px; background:#fef3c7; color:#0f172a;">${fmtInt(runningBalanceAfter)} ج.م</td>
+            <td style="border:1px solid #0f172a; padding:4px 2px; font-weight:800; color:#065f46;">${fmtInt(r.cashSales)} ج.م</td>
+            <td style="border:1px solid #0f172a; padding:4px 2px; font-weight:800; color:#115e59;">${r.transferSales > 0 ? `${fmtInt(r.transferSales)} (${escXmlStr(r.transferSalesType || 'تحويل')})` : '0 ج.م'}</td>
+            <td style="border:1px solid #0f172a; padding:4px 2px; font-weight:800; color:#9f1239;">${fmtInt(r.creditSales)} ج.م</td>
+            <td style="border:1px solid #0f172a; padding:4px 2px; font-weight:800; color:#115e59;">${(r.debtCash + r.debtTransfer) > 0 ? `${fmtInt(r.debtCash + r.debtTransfer)} (${r.debtCash > 0 ? `نقدي ${fmtInt(r.debtCash)}` : ''}${r.debtTransfer > 0 ? ` ${escXmlStr(r.debtTransferType || 'تحويل')} ${fmtInt(r.debtTransfer)}` : ''})` : '0 ج.م'}</td>
+            <td style="border:1px solid #0f172a; padding:4px 2px; font-weight:800; background:#ecfdf5; color:#064e3b;">${fmtInt(totalSettledTodayForFarm)} ج.م</td>
+            <td style="border:1px solid #0f172a; padding:4px 2px; font-weight:800; background:#f8fafc;">${fmtInt(prevBalanceBefore)} ج.م</td>
+            <td style="border:1.5px solid #0f172a; padding:4px 2px; font-weight:800; font-size:10.5px; background:#fef3c7; color:#0f172a;">${fmtInt(runningBalanceAfter)} ج.م</td>
           </tr>
         </tbody>
       </table>
 
       ${extraStripHtml}
 
-      <!-- شريط التوقيعات المختصر للنسخة -->
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:3px; padding-top:2px; border-top:1px dotted #64748b; font-size:8px; font-weight:800; color:#1e293b;">
+      <!-- شريط التوقيعات الموحد -->
+      <div style="display:flex; align-items:center; justify-content:space-between; padding-top:5px; border-top:1px dotted #64748b; font-size:9px; font-weight:800; color:#1e293b;">
         <span>✍️ القائم بالوزن (الميزان): ....................................</span>
-        <span>✍️ توقيع السائق / التاجر المستلم: ....................................</span>
+        <span>✍️ توقيع المستلم: ....................................</span>
         <span>✍️ محاسب الموقع / لجنة البيع: ....................................</span>
       </div>
     </div>
   `;
 
   const cutLineHtml = `
-    <div style="margin:3px 0; border-top:1.5px dashed #475569; text-align:center; font-size:8px; font-weight:800; color:#334155; line-height:1; letter-spacing:0.3px;">
-      ✂️ — — — — — — — — — — — — خط قص وفصل الكارتة — — — — — — — — — — — — ✂️
+    <div style="flex:0 0 auto; border-top:1.5px dashed #475569; text-align:center; font-size:8.5px; font-weight:800; color:#334155; line-height:1; letter-spacing:0.3px;">
+      ✂️ — — — — — — — — — — — — خط قص وفصل البون — — — — — — — — — — — — ✂️
     </div>
   `;
 
   printContainer.innerHTML = `
-    <div class="scale-receipt-print-sheet" style="width:100%; max-width:100%; margin:0 auto; padding:0; background:#ffffff; color:#0f172a; font-family:'Cairo',sans-serif; direction:rtl; page-break-inside:avoid; break-inside:avoid;">
-      ${buildSingleCopyHtml(copiesMeta[0])}
+    <div class="scale-receipt-print-sheet" style="width:100%; height:285mm; min-height:285mm; max-height:285mm; box-sizing:border-box; margin:0 auto; padding:2mm; display:flex; flex-direction:column; justify-content:space-between; gap:6px; background:#ffffff; color:#0f172a; font-family:'Cairo',sans-serif; direction:rtl; page-break-inside:avoid; break-inside:avoid;">
+      ${buildIdenticalCopyHtml()}
       ${cutLineHtml}
-      ${buildSingleCopyHtml(copiesMeta[1])}
+      ${buildIdenticalCopyHtml()}
       ${cutLineHtml}
-      ${buildSingleCopyHtml(copiesMeta[2])}
+      ${buildIdenticalCopyHtml()}
     </div>
   `;
   return true;
@@ -1245,16 +1242,93 @@ function deactivateMerchantPrintMode() {
 }
 
 function triggerTablePrint(tableKey) {
-  if (!tableKey) return;
-  if (activateIsolatedPrintMode(tableKey)) {
+  if (!tableKey || isReceiptPrintBusy) return;
+  isReceiptPrintBusy = true;
+
+  const isScaleReceipt = String(tableKey).startsWith('scaleReceipt:');
+  if (!renderGenericTablePrintView(tableKey)) {
+    isReceiptPrintBusy = false;
+    return;
+  }
+
+  const printContainer = ensureMerchantPrintDomElements();
+  if (!printContainer) {
+    isReceiptPrintBusy = false;
+    return;
+  }
+
+  // ضمان أن عنصر البون مرئي في DOM قبل النقل إلى نافذة الطباعة المعزولة
+  printContainer.style.setProperty('display', 'block', 'important');
+
+  let printIframe = document.getElementById('isolatedPrintIframe');
+  if (printIframe) {
+    try { printIframe.remove(); } catch (e) {}
+  }
+  printIframe = document.createElement('iframe');
+  printIframe.id = 'isolatedPrintIframe';
+  printIframe.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0; visibility:hidden;';
+  document.body.appendChild(printIframe);
+
+  const pageOrientationCss = isScaleReceipt
+    ? '@page { size: A4 portrait; margin: 6mm; }'
+    : '@page { size: A4 landscape; margin: 5mm 4mm; }';
+
+  const doc = printIframe.contentWindow.document;
+  doc.open();
+  doc.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>طباعة مستند — نظام محاضر لجان بيع المزارع</title>
+  <link rel="stylesheet" href="./style.css?v=94" />
+  <style>
+    ${pageOrientationCss}
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      color: #0f172a !important;
+      font-family: 'Cairo', system-ui, -apple-system, sans-serif !important;
+      direction: rtl !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    #merchantPrintOnlyContainer {
+      display: block !important;
+      width: 100% !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="merchantPrintOnlyContainer" dir="rtl" style="display:block !important;">${printContainer.innerHTML}</div>
+</body>
+</html>`);
+  doc.close();
+
+  let printedOnce = false;
+  const executeIframePrint = () => {
+    if (printedOnce) return;
+    printedOnce = true;
     setTimeout(() => {
       try {
-        window.print();
+        printIframe.contentWindow.focus();
+        printIframe.contentWindow.print();
+      } catch (err) {
+        if (activateIsolatedPrintMode(tableKey)) {
+          window.print();
+          setTimeout(deactivateMerchantPrintMode, 800);
+        }
       } finally {
-        setTimeout(deactivateMerchantPrintMode, 250);
+        printContainer.style.removeProperty('display');
+        setTimeout(() => {
+          isReceiptPrintBusy = false;
+        }, 600);
       }
-    }, 60);
-  }
+    }, 180);
+  };
+
+  printIframe.onload = executeIframePrint;
+  setTimeout(executeIframePrint, 450);
 }
 
 function triggerMerchantStatementPrint() {
@@ -1277,19 +1351,20 @@ async function capturePrintContainerCanvas(targetKey) {
     return null;
   }
 
-  // عرض حاوية الطباعة مؤقتاً خارج الشاشة المرئية بدقة قياسية (1120px عرض A4 Landscape) لالتقاطها عبر html2canvas مع دعم كامل للخط العربي RTL
+  const isScaleReceipt = String(targetKey).startsWith('scaleReceipt:');
+  const targetWidthPx = isScaleReceipt ? 794 : 1120;
   const prevCssText = printContainer.style.cssText;
-  printContainer.style.cssText = 'display:block !important; position:fixed !important; top:0 !important; left:-9999px !important; width:1120px !important; max-width:1120px !important; padding:12px !important; background:#ffffff !important; color:#0f172a !important; direction:rtl !important; z-index:-10 !important;';
+  printContainer.style.cssText = `display:block !important; position:fixed !important; top:0 !important; left:-9999px !important; width:${targetWidthPx}px !important; max-width:${targetWidthPx}px !important; padding:${isScaleReceipt ? '8px' : '12px'} !important; background:#ffffff !important; color:#0f172a !important; direction:rtl !important; z-index:-10 !important;`;
 
   try {
-    await new Promise(r => setTimeout(r, 90));
+    await new Promise(r => setTimeout(r, 100));
     const canvas = await html2canvas(printContainer, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
-      windowWidth: 1160
+      windowWidth: targetWidthPx + 40
     });
     return canvas;
   } catch (err) {
@@ -1301,74 +1376,84 @@ async function capturePrintContainerCanvas(targetKey) {
 }
 
 async function exportPrintTargetAsImageOrPdf(targetKey, format = 'png', customFileBaseName = 'مستند') {
-  const cleanBaseName = String(customFileBaseName || 'مستند').replace(/[\/:*?"<>|\s]+/g, '_');
-  const dateSlug = new Date().toISOString().slice(0, 10);
-  showToast(format === 'pdf' ? '⏳ جاري تجهيز ملف الـ PDF بدقة عالية...' : '⏳ جاري تجهيز الصورة عالية الدقة (PNG)...', '⏳');
+  if (isReceiptExportBusy) return false;
+  isReceiptExportBusy = true;
 
-  const canvas = await capturePrintContainerCanvas(targetKey);
-  if (!canvas) return false;
+  try {
+    const cleanBaseName = String(customFileBaseName || 'مستند').replace(/[\/:*?"<>|\s]+/g, '_');
+    const dateSlug = new Date().toISOString().slice(0, 10);
+    showToast(format === 'pdf' ? '⏳ جاري تجهيز ملف الـ PDF بدقة عالية...' : '⏳ جاري تجهيز الصورة عالية الدقة (PNG)...', '⏳');
 
-  if (format === 'png') {
-    try {
-      const dataUrl = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = `${cleanBaseName}_${dateSlug}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      showToast(`🖼️ تم حفظ وتنزيل الصورة (${cleanBaseName}_${dateSlug}.png) بنجاح!`, '✅');
-      return true;
-    } catch (e) {
-      showToast('⚠️ تعذر حفظ ملف الصورة (.png)', '⚠️');
-      return false;
-    }
-  } else if (format === 'pdf') {
-    try {
-      const jsPDFConstructor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-      if (!jsPDFConstructor) {
-        showToast('⚠️ مكتبة توليد الـ PDF (jsPDF) غير محملة حالياً — تأكد من الاتصال بالإنترنت لأول مرة.', '⚠️');
+    const canvas = await capturePrintContainerCanvas(targetKey);
+    if (!canvas) return false;
+
+    const isScaleReceipt = String(targetKey).startsWith('scaleReceipt:');
+
+    if (format === 'png') {
+      try {
+        const dataUrl = canvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `${cleanBaseName}_${dateSlug}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast(`🖼️ تم حفظ وتنزيل الصورة (${cleanBaseName}_${dateSlug}.png) بنجاح!`, '✅');
+        return true;
+      } catch (e) {
+        showToast('⚠️ تعذر حفظ ملف الصورة (.png)', '⚠️');
         return false;
       }
-      const imgData = canvas.toDataURL('image/png');
-      const isLandscape = canvas.width >= canvas.height;
-      const pdf = new jsPDFConstructor({
-        orientation: isLandscape ? 'landscape' : 'portrait',
-        unit: 'mm',
-        format: 'a4',
-        compress: true
-      });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const marginMm = 6;
-      const usableW = pageWidth - (marginMm * 2);
-      const usableH = pageHeight - (marginMm * 2);
-      const imgHeightMm = (canvas.height * usableW) / canvas.width;
+    } else if (format === 'pdf') {
+      try {
+        const jsPDFConstructor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+        if (!jsPDFConstructor) {
+          showToast('⚠️ مكتبة توليد الـ PDF (jsPDF) غير محملة حالياً — تأكد من الاتصال بالإنترنت لأول مرة.', '⚠️');
+          return false;
+        }
+        const imgData = canvas.toDataURL('image/png');
+        const isLandscape = isScaleReceipt ? false : (canvas.width >= canvas.height);
+        const pdf = new jsPDFConstructor({
+          orientation: isLandscape ? 'landscape' : 'portrait',
+          unit: 'mm',
+          format: 'a4',
+          compress: true
+        });
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const marginMm = 5;
+        const usableW = pageWidth - (marginMm * 2);
+        const usableH = pageHeight - (marginMm * 2);
+        const imgHeightMm = (canvas.height * usableW) / canvas.width;
 
-      if (imgHeightMm <= usableH + 2) {
-        pdf.addImage(imgData, 'PNG', marginMm, marginMm, usableW, Math.min(imgHeightMm, usableH), undefined, 'FAST');
-      } else {
-        // تقسيم المستند الطويل إلى صفحات A4 متتالية تلقائياً بدون قص الصفوف
-        let heightLeft = imgHeightMm;
-        let positionMm = marginMm;
-        pdf.addImage(imgData, 'PNG', marginMm, positionMm, usableW, imgHeightMm, undefined, 'FAST');
-        heightLeft -= usableH;
-        while (heightLeft > 2) {
-          positionMm = heightLeft - imgHeightMm + marginMm;
-          pdf.addPage();
+        if (isScaleReceipt || imgHeightMm <= usableH + 2) {
+          pdf.addImage(imgData, 'PNG', marginMm, marginMm, usableW, Math.min(imgHeightMm, usableH), undefined, 'FAST');
+        } else {
+          let heightLeft = imgHeightMm;
+          let positionMm = marginMm;
           pdf.addImage(imgData, 'PNG', marginMm, positionMm, usableW, imgHeightMm, undefined, 'FAST');
           heightLeft -= usableH;
+          while (heightLeft > 2) {
+            positionMm = heightLeft - imgHeightMm + marginMm;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', marginMm, positionMm, usableW, imgHeightMm, undefined, 'FAST');
+            heightLeft -= usableH;
+          }
         }
+        pdf.save(`${cleanBaseName}_${dateSlug}.pdf`);
+        showToast(`📄 تم حفظ وتنزيل ملف الـ PDF (${cleanBaseName}_${dateSlug}.pdf) بنجاح!`, '✅');
+        return true;
+      } catch (e) {
+        showToast('⚠️ تعذر إنشاء ملف الـ PDF!', '⚠️');
+        return false;
       }
-      pdf.save(`${cleanBaseName}_${dateSlug}.pdf`);
-      showToast(`📄 تم حفظ وتنزيل ملف الـ PDF (${cleanBaseName}_${dateSlug}.pdf) بنجاح!`, '✅');
-      return true;
-    } catch (e) {
-      showToast('⚠️ تعذر إنشاء ملف الـ PDF!', '⚠️');
-      return false;
     }
+    return false;
+  } finally {
+    setTimeout(() => {
+      isReceiptExportBusy = false;
+    }, 400);
   }
-  return false;
 }
 
 async function exportMerchantStatementAsImageOrPdf(format = 'png') {

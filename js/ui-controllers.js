@@ -4155,7 +4155,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v91-accordion-math';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v94-receipt-fix';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -6360,6 +6360,8 @@ function initFarmSalesApp() {
       if (!targetBtn) return;
       const printRecBtn = e.target.closest('[data-print-receipt]');
       if (printRecBtn) {
+        e.preventDefault();
+        e.stopPropagation();
         const sId = printRecBtn.getAttribute('data-print-receipt');
         const sDay = Number(printRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
         if (sId) triggerTablePrint(`scaleReceipt:${sDay}:${sId}`);
@@ -6367,9 +6369,20 @@ function initFarmSalesApp() {
       }
       const expImgRecBtn = e.target.closest('[data-export-receipt-img]');
       if (expImgRecBtn) {
+        e.preventDefault();
+        e.stopPropagation();
         const sId = expImgRecBtn.getAttribute('data-export-receipt-img');
         const sDay = Number(expImgRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
         if (sId) exportScaleReceiptAsImageOrPdf(sId, sDay, 'png');
+        return;
+      }
+      const expPdfRecBtn = e.target.closest('[data-export-receipt-pdf]');
+      if (expPdfRecBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const sId = expPdfRecBtn.getAttribute('data-export-receipt-pdf');
+        const sDay = Number(expPdfRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
+        if (sId) exportScaleReceiptAsImageOrPdf(sId, sDay, 'pdf');
         return;
       }
       if (!hasPermission('sales') || isDayLocked(appState.currentDay)) {
@@ -7183,6 +7196,7 @@ function initFarmSalesApp() {
     const printRecBtn = e.target.closest('[data-print-receipt]');
     if (printRecBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const sId = printRecBtn.getAttribute('data-print-receipt');
       const sDay = Number(printRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
       if (sId) triggerTablePrint(`scaleReceipt:${sDay}:${sId}`);
@@ -7191,6 +7205,7 @@ function initFarmSalesApp() {
     const expImgRecBtn = e.target.closest('[data-export-receipt-img]');
     if (expImgRecBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const sId = expImgRecBtn.getAttribute('data-export-receipt-img');
       const sDay = Number(expImgRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
       if (sId) exportScaleReceiptAsImageOrPdf(sId, sDay, 'png');
@@ -7199,6 +7214,7 @@ function initFarmSalesApp() {
     const expPdfRecBtn = e.target.closest('[data-export-receipt-pdf]');
     if (expPdfRecBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const sId = expPdfRecBtn.getAttribute('data-export-receipt-pdf');
       const sDay = Number(expPdfRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
       if (sId) exportScaleReceiptAsImageOrPdf(sId, sDay, 'pdf');
@@ -8185,6 +8201,7 @@ function initFarmSalesApp() {
     const printRecBtn = e.target.closest('[data-print-receipt]');
     if (printRecBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const sId = printRecBtn.getAttribute('data-print-receipt');
       const sDay = Number(printRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
       if (sId) triggerTablePrint(`scaleReceipt:${sDay}:${sId}`);
@@ -8193,6 +8210,7 @@ function initFarmSalesApp() {
     const expImgRecBtn = e.target.closest('[data-export-receipt-img]');
     if (expImgRecBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const sId = expImgRecBtn.getAttribute('data-export-receipt-img');
       const sDay = Number(expImgRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
       if (sId) exportScaleReceiptAsImageOrPdf(sId, sDay, 'png');
@@ -8201,6 +8219,7 @@ function initFarmSalesApp() {
     const expPdfRecBtn = e.target.closest('[data-export-receipt-pdf]');
     if (expPdfRecBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const sId = expPdfRecBtn.getAttribute('data-export-receipt-pdf');
       const sDay = Number(expPdfRecBtn.getAttribute('data-receipt-day')) || appState.currentDay || 1;
       if (sId) exportScaleReceiptAsImageOrPdf(sId, sDay, 'pdf');
@@ -8209,6 +8228,7 @@ function initFarmSalesApp() {
     const printTblBtn = e.target.closest('[data-print-table]');
     if (printTblBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const tblKey = printTblBtn.getAttribute('data-print-table');
       if (tblKey) triggerTablePrint(tblKey);
     }
@@ -8522,7 +8542,7 @@ function initFarmSalesApp() {
     './js/accounting.js?v=90',
     './js/storage-sync.js?v=90',
     './js/excel-engine.js?v=90',
-    './js/print-export.js?v=90',
+    './js/print-export.js?v=94',
     './js/ui-controllers.js?v=90'
   ];
 
@@ -9170,3 +9190,379 @@ if (document.readyState === 'loading') {
   initFarmSalesApp();
 }
 
+
+
+// =========================================================================
+// UNIVERSAL TABLE EXPORT ENGINE & DROPDOWN CONTROLLER (v93: Excel, PDF, Image)
+// =========================================================================
+const UNIVERSAL_EXPORT_TABLE_META = {
+  dailySalesTable: {
+    titleFn: () => `جدول_حركات_البيع_يوم_${appState.currentDay || 1}_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `📋 جدول حركات البيع المسجلة — يوم ${appState.currentDay || 1} — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: true
+  },
+  pendingWeighInsTable: {
+    titleFn: () => `السيارات_المحفوظة_مؤقتاً_يوم_${appState.currentDay || 1}_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `⏳ السيارات المحفوظة مؤقتاً (وزنة 1) — يوم ${appState.currentDay || 1} — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: true
+  },
+  dailyExpensesTable: {
+    titleFn: () => `مصروفات_ومكافآت_يوم_${appState.currentDay || 1}_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `💸 بيان المصروفات والمكافآت — يوم ${appState.currentDay || 1} — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: true
+  },
+  dashSummaryTable: {
+    titleFn: () => `الملخص_التنفيذي_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `📊 الملخص التنفيذي للأيام النشطة — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: false
+  },
+  merchantsLedgerTable: {
+    titleFn: () => `كشف_حساب_التجار_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `👥 تكويد التجار وكشف حساب مديونيات المزرعة — ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: true
+  },
+  transfersTable: {
+    titleFn: () => `بيان_التحويلات_والشيكات_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `💳 بيان التحويلات والشيكات الشامل — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: false
+  },
+  prevFarmsTable: {
+    titleFn: () => `تحصيلات_المزارع_السابقة_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `🏦 بيان تحصيلات المواقع والمزارع السابقة — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: false
+  },
+  expSummaryTable: {
+    titleFn: () => `بيان_المصروفات_المجمع_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `💸 بيان المصروفات والمكافآت المجمع (10 أيام) — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: false
+  },
+  usersListTable: {
+    titleFn: () => `جدول_المستخدمين_والصلاحيات_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `🔐 جدول المستخدمين والصلاحيات — نظام محاضر لجان بيع المزارع`,
+    excludeLastActionCol: true
+  },
+  cloudFarmsTable: {
+    titleFn: () => `سجل_أرشيف_المزارع_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `🗂️ سجل المزارع والدورات المحفوظة في قاعدة البيانات`,
+    excludeLastActionCol: true
+  },
+  auditTrailTable: {
+    titleFn: () => `سجل_الرقابة_الزمني_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `🕵️ سجل الرقابة الزمني لحركات المندوبين (Audit Trail) — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: false
+  }
+};
+
+function closeAllUniversalExportDropdowns() {
+  document.querySelectorAll('[data-export-dropdown-menu]').forEach(menu => {
+    menu.classList.add('hidden');
+  });
+}
+
+async function universalExportTable(tableId, format = 'excel') {
+  closeAllUniversalExportDropdowns();
+  const tableEl = document.getElementById(tableId);
+  if (!tableEl) {
+    showToast('⚠️ لم يتم العثور على الجدول المطلوب تصديره!', '⚠️');
+    return false;
+  }
+
+  const meta = UNIVERSAL_EXPORT_TABLE_META[tableId] || {
+    titleFn: () => `تصدير_${tableId}_${appState.farmName || 'مزرعة'}`,
+    headerTitleFn: () => `تقرير جدول — مزرعة ${appState.farmName || 'مزرعة جديدة'}`,
+    excludeLastActionCol: false
+  };
+  const cleanBaseName = String(meta.titleFn()).replace(/[\/:*?"<>|\s]+/g, '_');
+  const dateSlug = new Date().toISOString().slice(0, 10);
+  const fileNameBase = `${cleanBaseName}_${dateSlug}`;
+  const fmt = String(format || 'excel').toLowerCase();
+
+  // -----------------------------------------------------------------------
+  // 1) تصدير Excel (.xlsx) عبر SheetJS
+  // -----------------------------------------------------------------------
+  if (fmt === 'excel' || fmt === 'xlsx') {
+    if (typeof XLSX === 'undefined') {
+      showToast('⚠️ مكتبة الإكسيل (SheetJS) غير محملة حالياً — تأكد من الاتصال بالإنترنت.', '⚠️');
+      return false;
+    }
+    try {
+      const clonedTable = tableEl.cloneNode(true);
+      clonedTable.querySelectorAll('[data-excel-filter-btn], .print-hide-col, .audit-metadata-badge').forEach(el => el.remove());
+
+      if (meta.excludeLastActionCol) {
+        clonedTable.querySelectorAll('thead tr, tbody tr').forEach(tr => {
+          if (tr.children.length > 2) {
+            tr.lastElementChild.remove();
+          }
+        });
+      }
+
+      const aoa = [
+        [meta.headerTitleFn()],
+        [`تاريخ التصدير: ${new Date().toLocaleDateString('ar-EG')} — ${new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}`],
+        []
+      ];
+
+      const extractRowCells = (tr) => {
+        const rowArr = [];
+        Array.from(tr.children).forEach(cell => {
+          const txt = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+          const span = Math.max(1, Number(cell.getAttribute('colspan')) || 1);
+          rowArr.push(txt);
+          for (let s = 1; s < span; s++) rowArr.push('');
+        });
+        return rowArr;
+      };
+
+      clonedTable.querySelectorAll('thead tr').forEach(tr => aoa.push(extractRowCells(tr)));
+      clonedTable.querySelectorAll('tbody tr').forEach(tr => aoa.push(extractRowCells(tr)));
+      clonedTable.querySelectorAll('tfoot tr').forEach(tr => aoa.push(extractRowCells(tr)));
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!views'] = [{ rightToLeft: true }];
+      const maxCols = aoa.reduce((m, r) => Math.max(m, r.length), 1);
+      ws['!cols'] = Array.from({ length: maxCols }, (_, i) => ({ wch: i <= 2 ? 20 : 15 }));
+
+      const wb = XLSX.utils.book_new();
+      wb.Workbook = { Views: [{ RTL: true }] };
+      const sheetName = cleanBaseName.slice(0, 31) || 'جدول_البيانات';
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      XLSX.writeFile(wb, `${fileNameBase}.xlsx`);
+      showToast(`📥 تم تصدير الجدول إلى ملف إكسيل (${fileNameBase}.xlsx) بنجاح!`, '✅');
+      return true;
+    } catch (err) {
+      showToast('⚠️ حدث خطأ أثناء تصدير ملف الإكسيل!', '⚠️');
+      return false;
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // 2) تصدير صورة عالية الدقة (PNG) أو ملف PDF متعدد الصفحات بتوجيه تلقائي
+  // -----------------------------------------------------------------------
+  if (typeof html2canvas !== 'function') {
+    showToast('⚠️ مكتبة تصوير الجداول (html2canvas) غير محملة حالياً — تأكد من الاتصال بالإنترنت.', '⚠️');
+    return false;
+  }
+
+  showToast(
+    fmt === 'pdf'
+      ? '⏳ جاري تجهيز ملف الـ PDF وضبط أبعاد وتوجيه الصفحات تلقائياً...'
+      : '⏳ جاري التقاط صورة الجدول بالكامل بدقة عالية (PNG)...',
+    '⏳'
+  );
+
+  // حفظ خصائص التمرير والارتفاع الأصلية وإزالتها مؤقتاً لالتقاط الجدول بالكامل بدون أي شرائط تمرير
+  const scrollWrapper = tableEl.closest('.table-scroll-wrapper') || tableEl.parentElement;
+  const savedBodyClasses = {
+    headers: document.body.classList.contains('sticky-headers-on'),
+    footers: document.body.classList.contains('sticky-footers-on'),
+    rightCols: document.body.classList.contains('sticky-right-cols-on'),
+    leftCols: document.body.classList.contains('sticky-left-cols-on')
+  };
+
+  // بناء حاوية تصوير معزولة ونظيفة بدون أي شرائط تمرير وبخلفية بيضاء صريحة
+  const captureStage = document.createElement('div');
+  captureStage.setAttribute('dir', 'rtl');
+  const colCount = tableEl.querySelector('thead tr') ? tableEl.querySelector('thead tr').children.length : 8;
+  const isWideTable = colCount >= 8 || (tableEl.scrollWidth > 820);
+  const stageWidthPx = isWideTable ? Math.max(1180, tableEl.scrollWidth + 48) : Math.max(820, tableEl.scrollWidth + 48);
+
+  captureStage.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: -12000px !important;
+    width: ${stageWidthPx}px !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    padding: 18px 20px !important;
+    font-family: 'Cairo', sans-serif !important;
+    z-index: -9999 !important;
+    box-sizing: border-box !important;
+  `;
+
+  const printDateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+  const printTimeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+
+  const headerBanner = document.createElement('div');
+  headerBanner.style.cssText = 'display:flex; align-items:center; justify-content:space-between; border-bottom:2.5px solid #1b365d; padding-bottom:8px; margin-bottom:12px; background:#ffffff;';
+  headerBanner.innerHTML = `
+    <div>
+      <div style="font-size:16px; font-weight:800; color:#1b365d;">${escXmlStr(meta.headerTitleFn())}</div>
+      <div style="font-size:11px; font-weight:700; color:#475569; margin-top:2px;">نظام محاضر لجان بيع المزارع — تقرير مستخرج بالكامل</div>
+    </div>
+    <div style="text-align:left; font-size:11px; font-weight:700; color:#334155;">
+      <div>تاريخ الاستخراج: ${printDateStr} (${printTimeStr})</div>
+    </div>
+  `;
+  captureStage.appendChild(headerBanner);
+
+  const tableClone = tableEl.cloneNode(true);
+  tableClone.querySelectorAll('[data-excel-filter-btn], .print-hide-col').forEach(el => el.remove());
+  if (meta.excludeLastActionCol) {
+    tableClone.querySelectorAll('thead tr, tbody tr').forEach(tr => {
+      if (tr.children.length > 2) {
+        tr.lastElementChild.remove();
+      }
+    });
+  }
+  tableClone.style.cssText = 'width:100% !important; max-width:100% !important; border-collapse:collapse !important; overflow:visible !important; background:#ffffff !important;';
+  tableClone.querySelectorAll('th, td').forEach(cell => {
+    cell.style.position = 'static';
+    cell.style.boxShadow = 'none';
+    cell.style.whiteSpace = 'normal';
+    cell.style.wordBreak = 'break-word';
+  });
+  captureStage.appendChild(tableClone);
+  document.body.appendChild(captureStage);
+
+  let prevWrapperCss = '';
+  if (scrollWrapper) {
+    prevWrapperCss = scrollWrapper.style.cssText;
+    scrollWrapper.style.maxHeight = 'none';
+    scrollWrapper.style.overflow = 'visible';
+  }
+  document.body.classList.remove('sticky-headers-on', 'sticky-footers-on', 'sticky-right-cols-on', 'sticky-left-cols-on');
+
+  try {
+    await new Promise(r => setTimeout(r, 90));
+    const canvas = await html2canvas(captureStage, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      width: captureStage.scrollWidth,
+      height: captureStage.scrollHeight,
+      windowWidth: captureStage.scrollWidth + 60,
+      windowHeight: captureStage.scrollHeight + 60
+    });
+
+    if (fmt === 'image' || fmt === 'png') {
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `${fileNameBase}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast(`📸 تم حفظ صورة الجدول بالكامل (${fileNameBase}.png) بنجاح!`, '✅');
+      return true;
+    }
+
+    if (fmt === 'pdf') {
+      const jsPDFConstructor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (!jsPDFConstructor) {
+        showToast('⚠️ مكتبة توليد الـ PDF (jsPDF) غير محملة حالياً — تأكد من الاتصال بالإنترنت.', '⚠️');
+        return false;
+      }
+
+      // تحديد اتجاه الصفحة تلقائياً بناءً على أبعاد الجدول وعدد أعمدته (Landscape للجداول العريضة، و Portrait للجداول الطولية)
+      const orientation = (isWideTable || canvas.width > canvas.height * 0.95) ? 'landscape' : 'portrait';
+      const pdf = new jsPDFConstructor({
+        orientation,
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      const pageWidthMm = pdf.internal.pageSize.getWidth();
+      const pageHeightMm = pdf.internal.pageSize.getHeight();
+      const marginMm = 7;
+      const usableWidthMm = pageWidthMm - (marginMm * 2);
+      const usableHeightMm = pageHeightMm - (marginMm * 2);
+
+      // حساب نسبة التحويل بين البيكسل في الـ Canvas والمليمتر في صفحة A4
+      const pxPerMm = canvas.width / usableWidthMm;
+      const pageSliceHeightPx = Math.floor(usableHeightMm * pxPerMm);
+
+      if (canvas.height <= pageSliceHeightPx * 1.04) {
+        // الجدول يناسب صفحة واحدة بالكامل
+        const imgData = canvas.toDataURL('image/png');
+        const renderedHeightMm = Math.min(usableHeightMm, (canvas.height / canvas.width) * usableWidthMm);
+        pdf.addImage(imgData, 'PNG', marginMm, marginMm, usableWidthMm, renderedHeightMm, undefined, 'FAST');
+      } else {
+        // تقسيم الجدول الطويل بانتظام على عدة صفحات (Multi-page PDF) عبر شرائح Canvas متتالية دون ضغط أو تشويه
+        let offsetYPx = 0;
+        let pageIndex = 0;
+        while (offsetYPx < canvas.height) {
+          const sliceHeightPx = Math.min(pageSliceHeightPx, canvas.height - offsetYPx);
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = sliceHeightPx;
+          const ctx = sliceCanvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+          ctx.drawImage(
+            canvas,
+            0, offsetYPx, canvas.width, sliceHeightPx,
+            0, 0, canvas.width, sliceHeightPx
+          );
+
+          const sliceImgData = sliceCanvas.toDataURL('image/png');
+          const sliceHeightMm = (sliceHeightPx / canvas.width) * usableWidthMm;
+          if (pageIndex > 0) {
+            pdf.addPage();
+          }
+          pdf.addImage(sliceImgData, 'PNG', marginMm, marginMm, usableWidthMm, sliceHeightMm, undefined, 'FAST');
+          offsetYPx += sliceHeightPx;
+          pageIndex++;
+        }
+      }
+
+      pdf.save(`${fileNameBase}.pdf`);
+      showToast(`📄 تم حفظ ملف الـ PDF (${fileNameBase}.pdf) بنجاح!`, '✅');
+      return true;
+    }
+  } catch (err) {
+    showToast('⚠️ حدث خطأ أثناء تصدير الجدول!', '⚠️');
+    return false;
+  } finally {
+    if (captureStage && captureStage.parentElement) {
+      captureStage.parentElement.removeChild(captureStage);
+    }
+    if (scrollWrapper) {
+      scrollWrapper.style.cssText = prevWrapperCss;
+    }
+    if (savedBodyClasses.headers) document.body.classList.add('sticky-headers-on');
+    if (savedBodyClasses.footers) document.body.classList.add('sticky-footers-on');
+    if (savedBodyClasses.rightCols) document.body.classList.add('sticky-right-cols-on');
+    if (savedBodyClasses.leftCols) document.body.classList.add('sticky-left-cols-on');
+  }
+  return false;
+}
+
+window.universalExportTable = universalExportTable;
+
+document.addEventListener('click', (e) => {
+  const toggleBtn = e.target.closest('[data-export-dropdown-toggle]');
+  if (toggleBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const targetId = toggleBtn.getAttribute('data-export-dropdown-toggle');
+    const targetMenu = document.querySelector(`[data-export-dropdown-menu="${targetId}"]`);
+    const wasHidden = targetMenu ? targetMenu.classList.contains('hidden') : true;
+    closeAllUniversalExportDropdowns();
+    if (targetMenu && wasHidden) {
+      targetMenu.classList.remove('hidden');
+    }
+    return;
+  }
+
+  const exportItemBtn = e.target.closest('[data-universal-export]');
+  if (exportItemBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const tblId = exportItemBtn.getAttribute('data-universal-export');
+    const fmt = exportItemBtn.getAttribute('data-export-format') || 'excel';
+    universalExportTable(tblId, fmt);
+    return;
+  }
+
+  if (!e.target.closest('.universal-export-dropdown')) {
+    closeAllUniversalExportDropdowns();
+  }
+});

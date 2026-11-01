@@ -13,18 +13,21 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <script src="https://cdn.tailwindcss.com/3.4.17" defer></script>
-  <script src="./vendor/vendor-loader.js?v=92"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
+  <script src="./vendor/vendor-loader.js?v=94"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
   <meta id="metaEmbeddedDefaultFarmName" name="default-farm-name" content="" />
   <script id="embeddedWebhookConfigScript">
     // خزينة رابط المزامنة السحابية المشفرة والمربوطة بتسجيل الدخول (تُفك تلقائياً عند إدخال اسم المستخدم وكلمة المرور)
-    window.EMBEDDED_CLOUD_WEBHOOK_URL = 'https://farm-sales-committee-default-rtdb.europe-west1.firebasedatabase.app/';
-    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [xB2F30A9QLvE5ZhnhhSNrJKdNF78YeegkrlalTFB];
+    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
+    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=92" />
+  <link rel="stylesheet" href="./style.css?v=94" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -1125,6 +1128,22 @@
               <div class="flex items-center gap-1.5 flex-wrap">
                 <input id="inpFilterPendingSales" type="text" placeholder="🔍 بحث سريع في المؤقت..."
                   class="px-2 py-0.5 text-[11px] font-bold text-slate-900 rounded-lg bg-white border border-amber-500 w-36" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="pendingWeighInsTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="pendingWeighInsTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="pendingWeighInsTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="pendingWeighInsTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="pendingWeighInsTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
                 <button type="button" data-toggle-col-filters="pendingWeighIns" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
                   <span>🔽</span><span>تفعيل الفلاتر</span>
                 </button>
@@ -1159,6 +1178,22 @@
           <div class="flex items-center gap-2 flex-wrap">
             <input id="inpFilterDailySales" type="text" placeholder="🔍 بحث سريع باسم التاجر أو السيارة..."
               class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-48" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown lite-hide-el">
+              <button type="button" data-export-dropdown-toggle="dailySalesTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="dailySalesTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="dailySalesTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="dailySalesTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="dailySalesTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
             <button type="button" data-toggle-col-filters="dailySales" class="lite-hide-el px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
               <span>🔽</span><span>تفعيل الفلاتر</span>
             </button>
@@ -1257,6 +1292,22 @@
           <div class="flex items-center gap-1.5">
             <input id="inpFilterDailyExpenses" type="text" placeholder="🔍 بحث سريع في مصروفات اليوم..."
               class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="dailyExpensesTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="dailyExpensesTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="dailyExpensesTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="dailyExpensesTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="dailyExpensesTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
             <button type="button" data-toggle-col-filters="dailyExpenses" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
               <span>🔽</span><span>تفعيل الفلاتر</span>
             </button>
@@ -1399,6 +1450,22 @@
             <span class="text-xs font-extrabold text-slate-700">🔽 فلتر وفرز جدول الملخص التنفيذي (Sort &amp; Filter):</span>
             <input id="inpDashQuickSearch" type="text" placeholder="🔍 بحث سريع في جدول الملخص التنفيذي..."
               class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="dashSummaryTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="dashSummaryTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="dashSummaryTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="dashSummaryTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="dashSummaryTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
             <span id="dashFilterStatusHint" class="text-[11px] font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
               اضغط على زر (▼) في رأس أي عمود للفرز التصاعدي/التنازلي أو الفلترة مثل الإكسيل
             </span>
@@ -1526,6 +1593,22 @@
               <span>🔽 فلتر وفرز كشف حساب التجار (Sort &amp; Filter):</span>
               <input id="inpMerchQuickSearch" type="text" placeholder="🔍 بحث سريع باسم التاجر أو الكود الموحد..."
                 class="px-3 py-1.5 text-xs font-bold border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="merchantsLedgerTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="merchantsLedgerTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="merchantsLedgerTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="merchantsLedgerTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="merchantsLedgerTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
               <span id="merchFilterStatusHint" class="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
                 اضغط على زر (▼) في رأس أي عمود للفرز أو التصفية المتعددة مثل الإكسيل
               </span>
@@ -1609,6 +1692,22 @@
           <div class="flex items-center gap-1.5 flex-wrap">
             <input id="inpFilterTransfers" type="text" placeholder="🔍 بحث سريع في التحويلات..."
               class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="transfersTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="transfersTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="transfersTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="transfersTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="transfersTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
             <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
               <button type="button" id="btnFilterTransfersActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
                 <span>✅</span>
@@ -1657,6 +1756,22 @@
           <div class="flex items-center gap-1.5 flex-wrap">
             <input id="inpFilterPrevFarms" type="text" placeholder="🔍 بحث سريع في المزارع السابقة..."
               class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="prevFarmsTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="prevFarmsTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="prevFarmsTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="prevFarmsTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="prevFarmsTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
             <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
               <button type="button" id="btnFilterPrevFarmsActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
                 <span>✅</span>
@@ -1923,6 +2038,22 @@
             <div class="flex items-center gap-1.5">
               <input id="inpFilterCloudFarms" type="text" placeholder="🔍 بحث سريع باسم المزرعة..."
                 class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" autocomplete="off" />
+              <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="cloudFarmsTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="cloudFarmsTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="cloudFarmsTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="cloudFarmsTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="cloudFarmsTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
               <button type="button" data-toggle-col-filters="cloudFarms" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
                 <span>🔽</span><span>تفعيل الفلاتر</span>
               </button>
@@ -2380,6 +2511,22 @@
           <div class="flex items-center gap-1.5">
             <input id="inpFilterUsersList" type="text" placeholder="🔍 بحث سريع في المستخدمين..."
               class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-lg bg-white w-44" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="usersListTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="usersListTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="usersListTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="usersListTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="usersListTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
             <button type="button" data-toggle-col-filters="usersList" class="px-2.5 py-1 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-blue-700">
               <span>🔽</span><span>تفعيل الفلاتر</span>
             </button>
@@ -2690,6 +2837,22 @@
             <div class="flex items-center gap-1.5 flex-wrap">
               <input id="inpFilterAuditTrail" type="text" placeholder="🔍 ابحث باسم المندوب، التاجر، البند، أو اليوم..."
                 class="px-2.5 py-1 text-xs font-bold text-slate-900 rounded-lg bg-white border border-slate-300 w-56" autocomplete="off" />
+              <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="auditTrailTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="auditTrailTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="auditTrailTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="auditTrailTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="auditTrailTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
               <select id="selFilterAuditType" class="px-2 py-1 text-xs font-extrabold text-slate-900 rounded-lg bg-white border border-slate-300">
                 <option value="all">كل الحركات (مبيعات + مؤقت + مصروفات)</option>
                 <option value="sale">🚛 وزنات البيع المكتملة فقط</option>
@@ -2732,6 +2895,22 @@
           <div class="flex items-center gap-1.5 flex-wrap">
             <input id="inpFilterExpSummary" type="text" placeholder="🔍 بحث سريع ببند المصروف..."
               class="px-2.5 py-1 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50 focus:bg-white w-44" autocomplete="off" />
+            <div class="relative inline-block universal-export-dropdown ">
+              <button type="button" data-export-dropdown-toggle="expSummaryTable" class="px-2.5 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow-sm transition inline-flex items-center gap-1 border border-emerald-400" title="تصدير الجدول (Excel / PDF / صورة PNG)">
+                <span>📥</span><span>تصدير</span><span class="text-[10px]">▾</span>
+              </button>
+              <div data-export-dropdown-menu="expSummaryTable" class="hidden absolute left-0 mt-1.5 w-44 bg-white text-slate-900 rounded-xl shadow-2xl border-2 border-slate-200 py-1.5 z-50 text-right">
+                <button type="button" data-universal-export="expSummaryTable" data-export-format="excel" class="w-full px-3 py-1.5 text-xs font-extrabold text-emerald-900 hover:bg-emerald-50 flex items-center gap-2 transition text-right">
+                  <span>📥</span><span>تصدير Excel (.xlsx)</span>
+                </button>
+                <button type="button" data-universal-export="expSummaryTable" data-export-format="pdf" class="w-full px-3 py-1.5 text-xs font-extrabold text-rose-900 hover:bg-rose-50 flex items-center gap-2 transition text-right">
+                  <span>📄</span><span>تصدير PDF (.pdf)</span>
+                </button>
+                <button type="button" data-universal-export="expSummaryTable" data-export-format="image" class="w-full px-3 py-1.5 text-xs font-extrabold text-teal-900 hover:bg-teal-50 flex items-center gap-2 transition text-right">
+                  <span>📸</span><span>حفظ كصورة (.png)</span>
+                </button>
+              </div>
+            </div>
             <div class="inline-flex items-center rounded-xl bg-slate-200/80 p-1 gap-1">
               <button type="button" id="btnFilterExpSummaryActive" class="px-2.5 py-1 rounded-lg text-xs font-extrabold transition flex items-center gap-1 text-slate-700 hover:bg-white/60">
                 <span>✅</span>
@@ -2992,45 +3171,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=92"></script>
-  <script src="./js/core-state.js?v=92"></script>
-  <script src="./js/accounting.js?v=92"></script>
-  <script src="./js/storage-sync.js?v=92"></script>
-  <script src="./js/excel-engine.js?v=92"></script>
-  <script src="./js/print-export.js?v=92"></script>
-  <script src="./js/ui-controllers.js?v=92"></script>
+  <script src="./excel-template.js?v=94"></script>
+  <script src="./js/core-state.js?v=94"></script>
+  <script src="./js/accounting.js?v=94"></script>
+  <script src="./js/storage-sync.js?v=94"></script>
+  <script src="./js/excel-engine.js?v=94"></script>
+  <script src="./js/print-export.js?v=94"></script>
+  <script src="./js/ui-controllers.js?v=94"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v92-autocomplete-fix';
+      var SW_CACHE_NAME = 'farm-sales-v94-receipt-fix';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=92',
+        './style.css?v=94',
         './excel-template.js',
-        './excel-template.js?v=92',
+        './excel-template.js?v=94',
         './js/core-state.js',
-        './js/core-state.js?v=92',
+        './js/core-state.js?v=94',
         './js/accounting.js',
-        './js/accounting.js?v=92',
+        './js/accounting.js?v=94',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=92',
+        './js/storage-sync.js?v=94',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=92',
+        './js/excel-engine.js?v=94',
         './js/print-export.js',
-        './js/print-export.js?v=92',
+        './js/print-export.js?v=94',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=92',
+        './js/ui-controllers.js?v=94',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=92'
+        './vendor/vendor-loader.js?v=94'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
         if (!window.__swRegisteredOnceV86) {
           window.__swRegisteredOnceV86 = true;
-          navigator.serviceWorker.register('./sw.js?v=92', { scope: './' }).catch(function () {});
+          navigator.serviceWorker.register('./sw.js?v=94', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {

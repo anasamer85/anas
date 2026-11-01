@@ -1,30 +1,30 @@
-// Service Worker - نظام محاضر لجان بيع المزارع (Modular Architecture PWA v92)
-const CACHE_NAME = "farm-sales-v92-autocomplete-fix";
+// Service Worker - نظام محاضر لجان بيع المزارع (Modular Architecture PWA v94)
+const CACHE_NAME = "farm-sales-v94-receipt-fix";
 
 const CORE_LOCAL_ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./style.css?v=92",
+  "./style.css?v=94",
   "./excel-template.js",
-  "./excel-template.js?v=92",
+  "./excel-template.js?v=94",
   "./js/core-state.js",
-  "./js/core-state.js?v=92",
+  "./js/core-state.js?v=94",
   "./js/accounting.js",
-  "./js/accounting.js?v=92",
+  "./js/accounting.js?v=94",
   "./js/storage-sync.js",
-  "./js/storage-sync.js?v=92",
+  "./js/storage-sync.js?v=94",
   "./js/excel-engine.js",
-  "./js/excel-engine.js?v=92",
+  "./js/excel-engine.js?v=94",
   "./js/print-export.js",
-  "./js/print-export.js?v=92",
+  "./js/print-export.js?v=94",
   "./js/ui-controllers.js",
-  "./js/ui-controllers.js?v=92",
+  "./js/ui-controllers.js?v=94",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
   "./vendor/vendor-loader.js",
-  "./vendor/vendor-loader.js?v=92"
+  "./vendor/vendor-loader.js?v=94"
 ];
 
 const EXTERNAL_CDN_ASSETS = [
@@ -75,7 +75,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((cacheNames) =>
       Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName !== CACHE_NAME || !cacheName.includes("v94")) {
             return caches.delete(cacheName);
           }
         })
