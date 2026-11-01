@@ -2593,3 +2593,22 @@ body:not(.lite-field-mode-active) #liteScrollNavFloatingBtns,
   }
 }
 
+
+
+/* =========================================================================
+   PROGRESSIVE DISCLOSURE ACCORDIONS (v91 - Balance & Debt Reconciliation)
+   ========================================================================= */
+details.acc-balance-card > summary {
+  list-style: none;
+}
+details.acc-balance-card > summary::-webkit-details-marker {
+  display: none;
+}
+details.acc-balance-card .acc-chevron {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 0.2s ease-in-out;
+}
+details.acc-balance-card[open] > summary .acc-chevron {
+  transform: rotate(-90deg);
+}
