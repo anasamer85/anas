@@ -1,7 +1,7 @@
 # 📘 وثيقة التسليم التقنية الشاملة (Comprehensive Technical Handover Document)
 
 **المشروع:** نظام محاضر لجان بيع المزارع (Offline-First PWA + Two-Way Excel Sync + Cloud Sync)
-**الإصدار المرجعي الحالي:** `v95` (`farm-sales-v95-receipt-dropdown-and-safety` — Performance, QA Fortification & Enterprise Delta Sync) (Modular Architecture & Client-Side Delta Outbox Engine)
+**الإصدار المرجعي الحالي:** `v96` (`farm-sales-v96-sync-engine` — Performance, QA Fortification & Enterprise Delta Sync) (Modular Architecture & Client-Side Delta Outbox Engine)
 **الهدف القادم المباشر:** تنفيذ المرحلة الرابعة والأخيرة (`v75`: End-to-End Cloud Delta Sync & GAS LockService)
 
 ---
@@ -17,7 +17,7 @@
 | `style.css` | التنسيقات المخصصة، قواعد الطباعة الحرجة (`@media print` بحجم A4 Landscape)، فئات التثبيت الاختياري للجداول الـ 12 (`sticky-headers-on`, `sticky-footers-on`, `sticky-right-cols-on`, `sticky-left-cols-on`)، وقواعد إخفاء العناصر غير الضرورية عند تفعيل وضع المندوب (`body.lite-field-mode-active`). |
 | `excel-template.js` | القالب الهيكلي ومحرك بناء وتنسيق شيتات الإكسيل الـ 15 بالمعادلات الحية والألوان والحدود الرسمية. |
 | `vendor/vendor-loader.js` | **محرك التحميل المحلي الذكي للمكتبات + درع منع التحديث اللانهائي:** يحمل المكتبات الـ 4 (`XLSX`, `Chart`, `html2canvas`, `jspdf`) بترتيب (`CacheStorage -> CDN -> Local Fallback`)، ويوفر دالة `downloadAndBundleVendorPackagesLocally()` لتنزيلها محلياً للعمل أوفلاين بنسبة 100%، كما يعترض `navigator.serviceWorker.register` وحدث `controllerchange` لمنع دخول الصفحة في حلقة تحديث لا نهائية (Infinite Reload Loop). |
-| `sw.js` | عامل الخدمة (Service Worker) بإصدار كاش `farm-sales-v95-receipt-dropdown-and-safety`؛ يدير التخزين المسبق للأصول المحلية والـ CDN ودالة المطابقة الذكية `matchFromCacheSmart`. |
+| `sw.js` | عامل الخدمة (Service Worker) بإصدار كاش `farm-sales-v96-sync-engine`؛ يدير التخزين المسبق للأصول المحلية والـ CDN ودالة المطابقة الذكية `matchFromCacheSmart`. |
 | `manifest.json` & Icons | إعدادات تطبيق الـ PWA (`icon-192.png`, `icon-512.png`) لدعم التثبيت المباشر على شاشة الهاتف والكمبيوتر. |
 
 ### ب. الوحدات البرمجية الـ 6 داخل مجلد `./js/` (تُحمّل بهذا الترتيب):
@@ -321,7 +321,7 @@
 
 ---
 
-## 7. ✅ سجل إنجازات وترقيات الإصدار `v95` (`farm-sales-v95-receipt-dropdown-and-safety`)
+## 7. ✅ سجل إنجازات وترقيات الإصدار `v96` (`farm-sales-v96-sync-engine`)
 
 تم في الإصدار **`v86`** إغلاق كافة ملاحظات الفحص التقني والجودة الشاملة (QA Audit) واعتماد التحسينات المعمارية والمحاسبية التالية:
 1. **إحكام طابور المزامنة الجزئية (`syncOutbox`):** إدراج أحداث تعديل أسماء التجار (`UPSERT_MERCHANT`) وإضافة/تعديل المستخدمين وتحديث الملف الشخصي (`UPSERT_USER`) في طابور `syncOutbox` لضمان مزامنتها اللحظية عبر بروتوكول `delta_sync`.
@@ -386,30 +386,37 @@
 18. **تحديثات الإصدار `v89` (`farm-sales-v89-core-sync-fix`):**
    - إصلاح حالة تسابق الإقلاع، ومعالجة تحول المصفوفات في فايربيز، وحماية طابور المزامنة من المسح الأعمى.
 
-19. **تحديثات الإصدار `v95` (`farm-sales-v95-receipt-dropdown-and-safety`):**
+19. **تحديثات الإصدار `v96` (`farm-sales-v96-sync-engine`):**
    - تفعيل ميزة استلام العهدة المبدئية عبر الزر الذكي المؤقت دون التأثير على تسلسل الميزان، مع تثبيت الحركات أسفل الجداول.
 
 
 ---
-### تحديث الإصدار `v95` (`farm-sales-v95-receipt-dropdown-and-safety`)
+### تحديث الإصدار `v96` (`farm-sales-v96-sync-engine`)
 - استخراج المتغيرات المحاسبية الدقيقة داخل دوال العرض وبناء ميزان تفصيلي لليوم وللمزرعة بنظام القوائم المطوية (Progressive Disclosure)
 
 
 ---
-### تحديث الإصدار `v95` (`farm-sales-v95-receipt-dropdown-and-safety`)
+### تحديث الإصدار `v96` (`farm-sales-v96-sync-engine`)
 - إيقاف خاصية المتصفح للاقتراحات التلقائية (Autocomplete) في حقول الإدخال، وتفعيل روتين الحذف التلقائي لنسخ الكاش القديمة من هواتف المستخدمين
 
 
 ---
-### تحديث الإصدار `v95` (`farm-sales-v95-receipt-dropdown-and-safety`)
+### تحديث الإصدار `v96` (`farm-sales-v96-sync-engine`)
 - تضمين مكتبات التصدير الشامل، برمجة دالة تصدير مركزية تدعم التوجيه التلقائي Portrait/Landscape وتقسيم الصفحات للـ PDF، دمج الخيارات في قائمة منسدلة، وتفعيل حذف الكاش القديم إجبارياً
 
 
 ---
-### تحديث الإصدار `v95` (`farm-sales-v95-receipt-dropdown-and-safety`)
+### تحديث الإصدار `v96` (`farm-sales-v96-sync-engine`)
 - إصلاح التنزيل المزدوج لصور الـ PDF/Image، إصلاح مشكلة نافذة الطباعة البيضاء، وتوحيد قالب البون ليكون 3 نسخ متطابقة موزعة بالتساوي على مقاس A4 Portrait، مع تحديث وحذف الكاش القديم
 
 
 ---
-### تحديث الإصدار `v95` (`farm-sales-v95-receipt-dropdown-and-safety`)
+### تحديث الإصدار `v96` (`farm-sales-v96-sync-engine`)
 - دمج أزرار البون في قائمة منسدلة (⚙️ تصدير) محمية من الاقتصاص، وتأمين الموقع بنظام تأكيد حذف مدمج (DOM Modal) لمنع الحذف بالخطأ بديلاً عن الدوال الافتراضية المحظورة، مع تفعيل الحذف التلقائي للكاش القديم.
+
+
+---
+### تحديث الإصدار `v96` (`farm-sales-v96-sync-engine`)
+- المرحلة الأولى: إصلاح الواجهة وتجربة المستخدم (UI/UX) - تطبيق التموضع الثابت العائم الذكي (Fixed Position) للقوائم المنسدلة لمنع قفز الجداول، بناء مصائد تركيز للنوافذ المنبثقة (Focus Traps) مع دعم زر Escape ومنع التمرير الخلفي، وضبط طبقات Z-Index للرسائل.
+- المرحلة الثانية: سد الثغرات الأمنية وإدارة الذاكرة - حذف المفتاح السري المكشوف لمنع تسريب رابط Firebase، توفير 50% من مساحة LocalStorage بإلغاء تخزين المزرعة النشطة المزدوج، تطبيق كابح (Debounce) لمنع سيل الحفظ المتكرر عند إدخال العهدة، وإغلاق منافذ XSS في ملفات الطباعة.
+- المرحلة الثالثة والأخيرة: ترقية محرك المزامنة (Sync Engine) - تطبيق طابور متسلسل لـ IndexedDB، تحويل رفع Firebase إلى Granular PATCH لمنع مسح بيانات المندوبين الآخرين، إضافة نظام Trailing Retry لمنع سقوط التعديلات المتلاحقة، وضبط استهلاك البث الحي.

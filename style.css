@@ -2615,8 +2615,16 @@ details.acc-balance-card[open] > summary .acc-chevron {
 
 
 /* =========================================================================
-   11. RECEIPT EXPORT DROPDOWN & GLOBAL DELETE MODAL (v95)
+   11. RECEIPT EXPORT DROPDOWN (FIXED POSITIONING), FOCUS TRAPS & TOAST Z-INDEX (v96)
    ========================================================================= */
+#toastContainer {
+  z-index: 100050 !important;
+}
+
+body.modal-scroll-locked {
+  overflow: hidden !important;
+}
+
 .receipt-dropdown-container {
   position: relative;
   display: inline-flex;
@@ -2647,10 +2655,8 @@ details.acc-balance-card[open] > summary .acc-chevron {
 
 .receipt-dropdown-menu {
   display: none;
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 152px;
+  position: fixed !important;
+  min-width: 156px;
   background-color: #ffffff;
   border: 1.5px solid #cbd5e1;
   border-radius: 12px;
@@ -2685,19 +2691,8 @@ details.acc-balance-card[open] > summary .acc-chevron {
   transition: background-color 0.12s ease;
 }
 
-.receipt-dropdown-item:hover {
+.receipt-dropdown-item:hover,
+.receipt-dropdown-item:focus {
   background-color: #f1f5f9;
-}
-
-.receipt-dropdown-open-cell,
-.receipt-dropdown-open-row,
-body.sticky-left-cols-on #dailySalesTable > tbody > tr > td.receipt-dropdown-open-cell:last-child:not([colspan]),
-body.sticky-left-cols-on #pendingWeighInsTable > tbody > tr > td.receipt-dropdown-open-cell:last-child:not([colspan]),
-body.sticky-left-cols-on #merchantDrillDownTable > tbody > tr > td.receipt-dropdown-open-cell:last-child:not([colspan]) {
-  overflow: visible !important;
-  z-index: 1000 !important;
-}
-
-.table-scroll-wrapper.receipt-dropdown-active-wrapper {
-  overflow: visible !important;
+  outline: none;
 }

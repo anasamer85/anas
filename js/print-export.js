@@ -178,8 +178,8 @@ const UNIVERSAL_PRINT_TABLE_CONFIGS = {
         const lbl = divs[0] ? divs[0].textContent.trim() : '';
         const val = divs[1] ? divs[1].textContent.trim() : '';
         return `<td style="border:1px solid #94a3b8; padding:3px 4px; background:#f8fafc;">
-          <div style="font-size:7.5px; color:#475569; font-weight:700;">${lbl}</div>
-          <div style="font-size:9px; font-weight:800; color:#0f172a;">${val}</div>
+          <div style="font-size:7.5px; color:#475569; font-weight:700;">${escXmlStr(lbl)}</div>
+          <div style="font-size:9px; font-weight:800; color:#0f172a;">${escXmlStr(val)}</div>
         </td>`;
       }).join('');
       return `<table style="width:100%; table-layout:fixed; border-collapse:collapse; margin-bottom:4px; text-align:center;"><tbody><tr>${cells}</tr></tbody></table>`;
@@ -408,7 +408,7 @@ function renderDailyTrialBalancePrintView() {
       <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:5px; margin-bottom:8px;">
         <div>
           <div style="font-size:14px; font-weight:800; color:#1b365d;">
-            ⚖️ ميزان مراجعة وتصفية اليوم (يوم ${d} — ${s.dateLabel}) — مزرعة <span style="color:#b45309;">${fName}</span>
+            ⚖️ ميزان مراجعة وتصفية اليوم (يوم ${d} — ${escXmlStr(s.dateLabel)}) — مزرعة <span style="color:#b45309;">${escXmlStr(fName)}</span>
           </div>
           <div style="font-size:9.5px; font-weight:700; color:#475569; margin-top:2px;">
             المطابقة الوزنية والمحاسبية والنقدية الشاملة (الركائز الثلاث لليوم)
@@ -599,10 +599,10 @@ function renderScaleReceiptPrintView(saleId, dayNumInput) {
 
   const extraInlineNotes = [];
   if (r.totalCustody > 0) {
-    extraInlineNotes.push(`💼 عهدة التاجر: ${fmtInt(r.totalCustody)} ج.م (نقدي: ${fmtInt(r.custodyCash)}${r.custodyTransfer > 0 ? ` + ${r.custodyTransferType || 'تحويل'}: ${fmtInt(r.custodyTransfer)}` : ''} | متبقي العهدة: ${fmtInt(r.netCustodyRemaining)} ج.م)`);
+    extraInlineNotes.push(`💼 عهدة التاجر: ${fmtInt(r.totalCustody)} ج.م (نقدي: ${fmtInt(r.custodyCash)}${r.custodyTransfer > 0 ? ` + ${escXmlStr(r.custodyTransferType || 'تحويل')}: ${fmtInt(r.custodyTransfer)}` : ''} | متبقي العهدة: ${fmtInt(r.netCustodyRemaining)} ج.م)`);
   }
   if ((r.prevCash + r.prevTransfer) > 0) {
-    extraInlineNotes.push(`🏦 مزارع سابقة: ${fmtInt(r.prevCash + r.prevTransfer)} ج.م (نقدي: ${fmtInt(r.prevCash)}${r.prevTransfer > 0 ? ` + ${r.prevTransferType || 'تحويل'}: ${fmtInt(r.prevTransfer)}` : ''})${r.notes ? ` [${escXmlStr(r.notes)}]` : ''}`);
+    extraInlineNotes.push(`🏦 مزارع سابقة: ${fmtInt(r.prevCash + r.prevTransfer)} ج.م (نقدي: ${fmtInt(r.prevCash)}${r.prevTransfer > 0 ? ` + ${escXmlStr(r.prevTransferType || 'تحويل')}: ${fmtInt(r.prevTransfer)}` : ''})${r.notes ? ` [${escXmlStr(r.notes)}]` : ''}`);
   } else if (r.notes) {
     extraInlineNotes.push(`📝 بيان/ملاحظات: ${escXmlStr(r.notes)}`);
   }
@@ -1156,10 +1156,10 @@ function renderGenericTablePrintView(tableKey) {
       <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:4px; margin-bottom:5px;">
         <div>
           <div style="font-size:13px; font-weight:800; color:#1b365d;">
-            ${reportTitle} — مزرعة <span style="color:#b45309;">${fName}</span>
+            ${escXmlStr(reportTitle)} — مزرعة <span style="color:#b45309;">${escXmlStr(fName)}</span>
           </div>
           <div style="font-size:9px; font-weight:700; color:#475569; margin-top:1px;">
-            ${reportSubTitle}
+            ${escXmlStr(reportSubTitle)}
           </div>
         </div>
         <div style="text-align:left; font-size:9px; font-weight:700; color:#334155;">
@@ -1280,7 +1280,7 @@ function triggerTablePrint(tableKey) {
 <head>
   <meta charset="UTF-8" />
   <title>طباعة مستند — نظام محاضر لجان بيع المزارع</title>
-  <link rel="stylesheet" href="./style.css?v=95" />
+  <link rel="stylesheet" href="./style.css?v=9622" />
   <style>
     ${pageOrientationCss}
     html, body {
@@ -1555,10 +1555,10 @@ function renderMerchantPrintOnlyContainer(ledger, filteredMovements) {
       <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #1b365d; padding-bottom:4px; margin-bottom:5px;">
         <div>
           <div style="font-size:13px; font-weight:800; color:#1b365d;">
-            📋 كشف حساب تفصيلي للتاجر: <span style="color:#b45309;">${ledger.name}</span> (الكود الموحد: ${ledger.code}) — مزرعة ${fName}
+            📋 كشف حساب تفصيلي للتاجر: <span style="color:#b45309;">${escXmlStr(ledger.name)}</span> (الكود الموحد: ${ledger.code}) — مزرعة ${escXmlStr(fName)}
           </div>
           <div style="font-size:9px; font-weight:700; color:#475569; margin-top:1px;">
-            ${subCarsTxt} &nbsp;|&nbsp; عدد الحركات المعروضة: ${filteredMovements.length} حركة
+            ${escXmlStr(subCarsTxt)} &nbsp;|&nbsp; عدد الحركات المعروضة: ${filteredMovements.length} حركة
           </div>
         </div>
         <div style="text-align:left; font-size:9px; font-weight:700; color:#334155;">
@@ -1648,7 +1648,7 @@ function renderMerchantPrintOnlyContainer(ledger, filteredMovements) {
         </tbody>
         <tfoot>
           <tr style="background:#fbbf24; color:#0f172a; font-weight:800; text-align:center;">
-            <td colspan="5" style="text-align:center;">إجمالي التاجر (${ledger.name} — ${ledger.totalCompletedCars} حركة)</td>
+            <td colspan="5" style="text-align:center;">إجمالي التاجر (${escXmlStr(ledger.name)} — ${ledger.totalCompletedCars} حركة)</td>
             <td>${fmtInt(ledger.sumW1)}</td>
             <td>${fmtInt(ledger.sumW2)}</td>
             <td>${fmtInt(ledger.sumNetWeight)}</td>

@@ -1,5 +1,5 @@
 // =========================================================================
-// RECEIPT EXPORT DROPDOWN & GLOBAL DELETE CONFIRMATION MODAL (v95)
+// RECEIPT EXPORT DROPDOWN (FIXED POSITIONING), MODAL SCROLL LOCK & FOCUS TRAP (v96)
 // =========================================================================
 function buildScaleReceiptDropdownHtml(safeId, dayNum, extraContainerCls = 'ml-1') {
   return `<div class="receipt-dropdown-container ${extraContainerCls}">
@@ -27,17 +27,70 @@ function buildScaleReceiptDropdownHtml(safeId, dayNum, extraContainerCls = 'ml-1
 function closeAllReceiptDropdownMenus() {
   document.querySelectorAll('.receipt-dropdown-menu.open').forEach(menu => {
     menu.classList.remove('open');
-  });
-  document.querySelectorAll('.receipt-dropdown-open-cell').forEach(el => {
-    el.classList.remove('receipt-dropdown-open-cell');
-  });
-  document.querySelectorAll('.receipt-dropdown-open-row').forEach(el => {
-    el.classList.remove('receipt-dropdown-open-row');
-  });
-  document.querySelectorAll('.receipt-dropdown-active-wrapper').forEach(el => {
-    el.classList.remove('receipt-dropdown-active-wrapper');
+    menu.style.top = '';
+    menu.style.bottom = '';
+    menu.style.left = '';
+    menu.style.minWidth = '';
   });
 }
+
+function positionAndOpenReceiptDropdownMenu(toggleBtn, menu) {
+  if (!toggleBtn || !menu) return;
+  const rect = toggleBtn.getBoundingClientRect();
+  const minW = Math.max(156, Math.round(rect.width));
+  menu.style.minWidth = `${minW}px`;
+  menu.classList.add('open');
+
+  const menuWidth = menu.offsetWidth || minW;
+  const viewportW = window.innerWidth || document.documentElement.clientWidth || 360;
+  const viewportH = window.innerHeight || document.documentElement.clientHeight || 640;
+
+  let leftPx = Math.round(rect.left);
+  if (leftPx + menuWidth > viewportW - 8) {
+    leftPx = Math.max(8, viewportW - menuWidth - 8);
+  }
+  if (leftPx < 8) leftPx = 8;
+  menu.style.left = `${leftPx}px`;
+
+  const remainingSpaceBelow = viewportH - rect.bottom;
+  if (remainingSpaceBelow < 150) {
+    menu.style.top = 'auto';
+    menu.style.bottom = `${Math.max(8, Math.round(viewportH - rect.top + 4))}px`;
+  } else {
+    menu.style.bottom = 'auto';
+    menu.style.top = `${Math.max(8, Math.round(rect.bottom + 4))}px`;
+  }
+}
+
+function getTopmostOpenModalElement() {
+  const modalOrder = [
+    'globalDeleteConfirmModal',
+    'askMissingPriceModal',
+    'merchantDrillDownModal',
+    'forceCreateFarmOverlay',
+    'loginGatewayOverlay'
+  ];
+  for (const id of modalOrder) {
+    const el = document.getElementById(id);
+    if (el && !el.classList.contains('hidden')) {
+      return el;
+    }
+  }
+  return null;
+}
+
+function syncBodyModalScrollLock() {
+  if (typeof document === 'undefined' || !document.body) return;
+  const openModal = getTopmostOpenModalElement();
+  if (openModal) {
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-scroll-locked');
+  } else {
+    document.body.style.overflow = '';
+    document.body.classList.remove('modal-scroll-locked');
+  }
+}
+window.syncBodyModalScrollLock = syncBodyModalScrollLock;
 
 let pendingGlobalDeleteCallback = null;
 
@@ -71,9 +124,11 @@ function closeGlobalDeleteConfirmModal() {
   pendingGlobalDeleteCallback = null;
   const modal = document.getElementById('globalDeleteConfirmModal');
   if (modal) modal.classList.add('hidden');
+  syncBodyModalScrollLock();
 }
 
 function openGlobalDeleteConfirmModal(itemDescription, onConfirm, customTitle = '⚠️ تأكيد الحذف') {
+  closeAllReceiptDropdownMenus();
   const modal = ensureGlobalDeleteConfirmModalExists();
   const titleEl = document.getElementById('globalDeleteConfirmTitle');
   const msgEl = document.getElementById('globalDeleteConfirmMessage');
@@ -81,9 +136,29 @@ function openGlobalDeleteConfirmModal(itemDescription, onConfirm, customTitle = 
   if (msgEl) msgEl.textContent = itemDescription || 'هل أنت متأكد من حذف هذا العنصر نهائياً؟';
   pendingGlobalDeleteCallback = typeof onConfirm === 'function' ? onConfirm : null;
   modal.classList.remove('hidden');
+  syncBodyModalScrollLock();
+  const cancelBtn = document.getElementById('btnCancelGlobalDeleteModal');
+  if (cancelBtn) {
+    setTimeout(() => {
+      try { cancelBtn.focus(); } catch (e) {}
+    }, 25);
+  }
 }
 window.openGlobalDeleteConfirmModal = openGlobalDeleteConfirmModal;
 window.closeGlobalDeleteConfirmModal = closeGlobalDeleteConfirmModal;
+
+function debounce(fn, delayMs = 400) {
+  let timerId = null;
+  return function (...args) {
+    if (timerId) clearTimeout(timerId);
+    timerId = setTimeout(() => {
+      timerId = null;
+      fn.apply(this, args);
+    }, delayMs);
+  };
+}
+const debouncedSaveState = debounce(() => saveState(true), 400);
+window.debouncedSaveState = debouncedSaveState;
 
 // =========================================================================
 // MODULE 6: UI RENDERING, TABLE FILTERS, LITE MODE & CONTROLLERS (js/ui-controllers.js — v91)
@@ -1958,6 +2033,7 @@ function renderMerchantsAndStatements(scopeTab = 'all') {
 function openMerchantDrillDownModal(merchantCode) {
   const code = Number(merchantCode) || 0;
   if (!code) return;
+  closeAllReceiptDropdownMenus();
   activeDrillDownMerchantCode = code;
   const searchInp = document.getElementById('inpFilterMerchantModal');
   if (searchInp) searchInp.value = '';
@@ -1965,14 +2041,23 @@ function openMerchantDrillDownModal(merchantCode) {
   const modal = document.getElementById('merchantDrillDownModal');
   if (modal) modal.classList.remove('hidden');
   document.body.classList.add('printing-merchant-modal');
+  syncBodyModalScrollLock();
+  setTimeout(() => {
+    try {
+      const closeBtn = document.getElementById('btnCloseMerchantModal');
+      if (closeBtn) closeBtn.focus();
+    } catch (e) {}
+  }, 30);
 }
 
 function closeMerchantDrillDownModal() {
+  closeAllReceiptDropdownMenus();
   deactivateMerchantPrintMode();
   activeDrillDownMerchantCode = 0;
   const modal = document.getElementById('merchantDrillDownModal');
   if (modal) modal.classList.add('hidden');
   document.body.classList.remove('printing-merchant-modal');
+  syncBodyModalScrollLock();
 }
 
 function renderMerchantDrillDownModal() {
@@ -3333,6 +3418,7 @@ function checkAndEnforceNewFarmCreationModal() {
   const hasActiveFarm = Boolean(String(appState.farmName ?? '').trim());
   const shouldForceCreate = Boolean(appState.isLoggedIn && !hasActiveFarm && !isInitialCloudPullPending);
   overlay.classList.toggle('hidden', !shouldForceCreate);
+  syncBodyModalScrollLock();
   if (shouldForceCreate) {
     const inpUrl = document.getElementById('inpForceCloudWebhookUrl');
     const savedUrl = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
@@ -4223,7 +4309,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v95-receipt-dropdown-and-safety';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v96-security-memory';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -4258,7 +4344,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=95', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=962', { scope: './' }).catch(() => {});
     }
   }
 
@@ -4333,7 +4419,12 @@ function initFarmSalesApp() {
     const now = Date.now();
     if (!appState.lastActivityAt || (now - appState.lastActivityAt > 5000)) {
       appState.lastActivityAt = now;
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); } catch (e) {}
+      try {
+        const stateToStore = typeof buildCompactStateForLocalStorage === 'function'
+          ? buildCompactStateForLocalStorage(appState)
+          : appState;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToStore));
+      } catch (e) {}
     }
   }
 
@@ -4511,61 +4602,117 @@ function initFarmSalesApp() {
     const btnLoginSubmitEl = document.getElementById('btnLoginAdminSubmit');
     const origBtnHtml = btnLoginSubmitEl ? btnLoginSubmitEl.innerHTML : '';
 
+    const verifyUserCredentialsAgainstState = (userLower, rawPass) => {
+      const adminObj = (appState.users || []).find(u => u.id === 'admin') || { id: 'admin', username: 'admin', password: 'admin', name: 'مدير الموقع' };
+      const adminUsername = String(adminObj.username || 'admin').trim().toLowerCase();
+      const adminPassword = String(adminObj.password || 'admin').trim();
+      if ((userLower === adminUsername || userLower === 'admin') && rawPass === adminPassword) {
+        return { isAdmin: true, userObj: adminObj };
+      }
+      const matchedUser = (appState.users || []).find(u =>
+        u.id !== 'admin' && u.id !== 'visitor' &&
+        (String(u.username || u.name).trim().toLowerCase() === userLower || String(u.name).trim().toLowerCase() === userLower) &&
+        String(u.password || '1234').trim() === rawPass
+      );
+      if (matchedUser) {
+        return { isAdmin: false, userObj: matchedUser };
+      }
+      return null;
+    };
+
+    const wipeWebhookTracesFromMemory = () => {
+      appState.webhookUrl = '';
+      appState.firebaseUrl = '';
+      appState.firebaseSecret = '';
+      window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
+      const liveMeta = document.getElementById('metaEmbeddedCloudWebhookUrl');
+      if (liveMeta) liveMeta.setAttribute('content', '');
+    };
+
     const loginWebhookInp = document.getElementById('inpLoginCloudWebhookUrl');
     const enteredLoginWebhook = (loginWebhookInp ? loginWebhookInp.value : '').trim();
 
-    let unlockedFromVault = { url: '', matchedByDirectPassword: false };
-    if (enteredLoginWebhook && enteredLoginWebhook.startsWith('http')) {
-      applyCloudWebhookUrlFromStartScreen(enteredLoginWebhook);
-      unlockedFromVault = { url: enteredLoginWebhook, matchedByDirectPassword: true };
-    } else {
-      unlockedFromVault = unlockWebhookVaultWithCredentials(uName, uPass, true);
-      if (unlockedFromVault.url) {
-        applyCloudWebhookUrlFromStartScreen(unlockedFromVault.url);
-      }
-    }
+    // 1. فحص صحة اسم المستخدم وكلمة المرور أولاً قبل أي حفظ لرابط السحابة في localStorage أو window.EMBEDDED_CLOUD_WEBHOOK_URL
+    let verifiedAuth = verifyUserCredentialsAgainstState(uName, uPass);
+    const unlockedFromVault = unlockWebhookVaultWithCredentials(uName, uPass);
+    const candidateWebhookUrl = (
+      (enteredLoginWebhook && enteredLoginWebhook.startsWith('http'))
+        ? enteredLoginWebhook
+        : (unlockedFromVault.matchedByDirectPassword ? unlockedFromVault.url : (appState.webhookUrl || getEmbeddedWebhookUrl() || ''))
+    ).trim();
 
-    const activeWebhookForLogin = (appState.webhookUrl || getEmbeddedWebhookUrl() || '').trim();
-    if (activeWebhookForLogin) {
-      applyCloudWebhookUrlFromStartScreen(activeWebhookForLogin);
-    }
-    if (activeWebhookForLogin && navigator.onLine) {
-      const isFreshWipedBrowser = !String(appState.farmName || '').trim() && countMovementsInDays(appState.days) === 0;
-      if (isFreshWipedBrowser) {
-        appState.hasLocalEdits = false;
-        appState.factoryZeroWipeAt = 0;
-        appState.farmResetAt = 0;
-        isInitialCloudPullPending = true;
-      }
+    // إذا كان المتصفح جديداً وتم فك تشفير الخزينة بكلمة مرور صحيحة لمستخدم مسجل على السحابة (أو تم إدخال الرابط يدوياً)، نجلب قائمة المستخدمين في الذاكرة فقط دون حفظ الرابط في localStorage إلا بعد التحقق 100%
+    if (!verifiedAuth && candidateWebhookUrl && (unlockedFromVault.matchedByDirectPassword || enteredLoginWebhook) && navigator.onLine) {
+      const prevWebhookInMemory = appState.webhookUrl;
+      appState.webhookUrl = candidateWebhookUrl;
       if (btnLoginSubmitEl) {
         btnLoginSubmitEl.disabled = true;
-        btnLoginSubmitEl.innerHTML = '<span>🔐⏳</span><span>جاري فك تشفير السحابة واسترجاع المزرعة...</span>';
+        btnLoginSubmitEl.innerHTML = '<span>🔐⏳</span><span>جاري التحقق من الحساب عبر السحابة...</span>';
       }
       try {
         await pullDatabaseFromCloud(true, true);
       } catch (err) {}
-      isInitialCloudPullPending = false;
       if (btnLoginSubmitEl) {
         btnLoginSubmitEl.disabled = false;
         btnLoginSubmitEl.innerHTML = origBtnHtml;
       }
+      verifiedAuth = verifyUserCredentialsAgainstState(uName, uPass);
+      if (!verifiedAuth) {
+        appState.webhookUrl = prevWebhookInMemory || '';
+      }
     }
 
-    // Check Admin user (supports updated username/password from Profile or default admin/admin)
-    const adminObj = (appState.users || []).find(u => u.id === 'admin') || { username: 'admin', password: 'admin' };
-    const adminUsername = String(adminObj.username || 'admin').trim().toLowerCase();
-    const adminPassword = String(adminObj.password || 'admin').trim();
+    // 2. إذا كانت بيانات الدخول خاطئة، نمسح أي أثر للرابط من الذاكرة فوراً ونرفض الدخول
+    if (!verifiedAuth) {
+      wipeWebhookTracesFromMemory();
+      loginErr.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة (أو تم حذف الحساب من قِبل المدير)!';
+      loginErr.classList.remove('hidden');
+      return;
+    }
 
-    if ((uName === adminUsername || uName === 'admin') && uPass === adminPassword) {
-      if (activeWebhookForLogin) {
-        applyCloudWebhookUrlFromStartScreen(activeWebhookForLogin);
+    // 3. بعد التأكد 100% من صحة اسم المستخدم وكلمة المرور، نقوم الآن فقط بحفظ رابط السحابة في localStorage و window.EMBEDDED_CLOUD_WEBHOOK_URL واسترجاع المزرعة
+    const finalWebhookUrl = (
+      candidateWebhookUrl ||
+      unlockWebhookVaultWithCredentials(uName, uPass).url ||
+      appState.webhookUrl ||
+      getEmbeddedWebhookUrl() ||
+      ''
+    ).trim();
+
+    if (finalWebhookUrl && finalWebhookUrl.startsWith('http')) {
+      applyCloudWebhookUrlFromStartScreen(finalWebhookUrl);
+      if (navigator.onLine) {
+        const isFreshWipedBrowser = !String(appState.farmName || '').trim() && countMovementsInDays(appState.days) === 0;
+        if (isFreshWipedBrowser) {
+          appState.hasLocalEdits = false;
+          appState.factoryZeroWipeAt = 0;
+          appState.farmResetAt = 0;
+          isInitialCloudPullPending = true;
+        }
+        if (btnLoginSubmitEl) {
+          btnLoginSubmitEl.disabled = true;
+          btnLoginSubmitEl.innerHTML = '<span>🔐⏳</span><span>جاري فك تشفير السحابة واسترجاع المزرعة...</span>';
+        }
+        try {
+          await pullDatabaseFromCloud(true, true);
+        } catch (err) {}
+        isInitialCloudPullPending = false;
+        if (btnLoginSubmitEl) {
+          btnLoginSubmitEl.disabled = false;
+          btnLoginSubmitEl.innerHTML = origBtnHtml;
+        }
       }
+    }
+
+    if (verifiedAuth.isAdmin) {
+      const adminObj = verifiedAuth.userObj;
       appState.activeUserId = 'admin';
       appState.activeSyncSubTab = 'farms_excel';
       appState.isLoggedIn = true;
       appState.lastActivityAt = Date.now();
       loginErr.classList.add('hidden');
       loginOverlay.classList.add('hidden');
+      syncBodyModalScrollLock();
       unifyGlobalMerchantsRegistry();
       if (window.innerWidth <= 768) {
         appState.liteFieldMode = true;
@@ -4589,52 +4736,34 @@ function initFarmSalesApp() {
       return;
     }
 
-    const matchedUser = (appState.users || []).find(u =>
-      u.id !== 'admin' && u.id !== 'visitor' &&
-      (String(u.username || u.name).trim().toLowerCase() === uName || String(u.name).trim().toLowerCase() === uName) &&
-      String(u.password || '1234').trim() === uPass
-    );
-    if (matchedUser) {
-      if (activeWebhookForLogin) {
-        applyCloudWebhookUrlFromStartScreen(activeWebhookForLogin);
+    const matchedUser = verifiedAuth.userObj;
+    appState.activeUserId = matchedUser.id;
+    appState.activeSyncSubTab = (matchedUser.perms && (matchedUser.perms.admin || matchedUser.perms.showSyncExcel || matchedUser.perms.showSyncCloud)) ? 'farms_excel' : 'ui_prefs';
+    appState.isLoggedIn = true;
+    appState.lastActivityAt = Date.now();
+    loginErr.classList.add('hidden');
+    loginOverlay.classList.add('hidden');
+    syncBodyModalScrollLock();
+    unifyGlobalMerchantsRegistry();
+    if (window.innerWidth <= 768) {
+      appState.liteFieldMode = true;
+      appState.activeTab = 'daily';
+      try { localStorage.setItem(STORAGE_KEY + '_lite_field_mode', '1'); } catch (e) {}
+      document.body.classList.add('lite-field-mode-active');
+      if (document.getElementById('liteFieldModeActiveBanner')) {
+        document.getElementById('liteFieldModeActiveBanner').classList.remove('hidden');
+        document.getElementById('liteFieldModeActiveBanner').style.display = 'flex';
       }
-      appState.activeUserId = matchedUser.id;
-      appState.activeSyncSubTab = (matchedUser.perms && (matchedUser.perms.admin || matchedUser.perms.showSyncExcel || matchedUser.perms.showSyncCloud)) ? 'farms_excel' : 'ui_prefs';
-      appState.isLoggedIn = true;
-      appState.lastActivityAt = Date.now();
-      loginErr.classList.add('hidden');
-      loginOverlay.classList.add('hidden');
-      unifyGlobalMerchantsRegistry();
-      if (window.innerWidth <= 768) {
-        appState.liteFieldMode = true;
-        appState.activeTab = 'daily';
-        try { localStorage.setItem(STORAGE_KEY + '_lite_field_mode', '1'); } catch (e) {}
-        document.body.classList.add('lite-field-mode-active');
-        if (document.getElementById('liteFieldModeActiveBanner')) {
-          document.getElementById('liteFieldModeActiveBanner').classList.remove('hidden');
-          document.getElementById('liteFieldModeActiveBanner').style.display = 'flex';
-        }
-      }
-      applyAutoLiteFieldModeOnLoginOrSwitch(true);
-      switchActiveTabUI(appState.activeTab || 'daily');
-      updateEncryptedWebhookVaultUI();
-      saveState(false);
-      checkAndEnforceNewFarmCreationModal();
-      renderAll(true);
-      startLiveRealtimeSyncEngine();
-      const farmReadyMsg = appState.farmName ? ` — مزرعة (${appState.farmName})` : '';
-      showToast(`مرحباً بك (${matchedUser.name})! تم تسجيل الدخول بنجاح${farmReadyMsg}`, '👤');
-      return;
     }
-
-    // إذا فشل تسجيل الدخول بكلمة مرور خاطئة، لا نحتفظ برابط السحابة المؤقت في الذاكرة
-    if (unlockedFromVault.url && !unlockedFromVault.matchedByDirectPassword) {
-      appState.webhookUrl = '';
-      appState.firebaseUrl = '';
-      appState.firebaseSecret = '';
-    }
-    loginErr.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة (أو تم حذف الحساب من قِبل المدير)!';
-    loginErr.classList.remove('hidden');
+    applyAutoLiteFieldModeOnLoginOrSwitch(true);
+    switchActiveTabUI(appState.activeTab || 'daily');
+    updateEncryptedWebhookVaultUI();
+    saveState(false);
+    checkAndEnforceNewFarmCreationModal();
+    renderAll(true);
+    startLiveRealtimeSyncEngine();
+    const farmReadyMsg = appState.farmName ? ` — مزرعة (${appState.farmName})` : '';
+    showToast(`مرحباً بك (${matchedUser.name})! تم تسجيل الدخول بنجاح${farmReadyMsg}`, '👤');
   });
 
 
@@ -4646,14 +4775,36 @@ function initFarmSalesApp() {
   });
 
   // Dynamic Farm Name Inputs (Top Header + Settings Panel + Quick Presets)
-  document.getElementById('inpTopFarmName').addEventListener('input', (e) => {
-    setFarmName(e.target.value);
-    renderDailyView();
-  });
-  document.getElementById('inpSettingsFarmName').addEventListener('input', (e) => {
-    setFarmName(e.target.value);
-    renderDailyView();
-  });
+  const inpTopFarmEl = document.getElementById('inpTopFarmName');
+  if (inpTopFarmEl) {
+    inpTopFarmEl.addEventListener('input', (e) => {
+      setFarmName(e.target.value, true);
+      debouncedSaveState();
+      renderDailyView();
+    });
+    inpTopFarmEl.addEventListener('change', (e) => {
+      setFarmName(e.target.value, false);
+      renderDailyView();
+    });
+    inpTopFarmEl.addEventListener('blur', (e) => {
+      setFarmName(e.target.value, false);
+    });
+  }
+  const inpSettingsFarmEl = document.getElementById('inpSettingsFarmName');
+  if (inpSettingsFarmEl) {
+    inpSettingsFarmEl.addEventListener('input', (e) => {
+      setFarmName(e.target.value, true);
+      debouncedSaveState();
+      renderDailyView();
+    });
+    inpSettingsFarmEl.addEventListener('change', (e) => {
+      setFarmName(e.target.value, false);
+      renderDailyView();
+    });
+    inpSettingsFarmEl.addEventListener('blur', (e) => {
+      setFarmName(e.target.value, false);
+    });
+  }
   document.querySelectorAll('[data-quick-farm]').forEach(btn => {
     btn.addEventListener('click', () => {
       const name = btn.getAttribute('data-quick-farm');
@@ -5635,26 +5786,35 @@ function initFarmSalesApp() {
   });
 
   // Delivered Cash & Carried-Forward Cash Inputs + Quick Settlement Buttons in Trial Balance
-  document.getElementById('inpDeliveredCash').addEventListener('input', (e) => {
-    if (isDayLocked(appState.currentDay)) {
-      showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل النقدية المسلمة إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+  const inpDeliveredCashEl = document.getElementById('inpDeliveredCash');
+  if (inpDeliveredCashEl) {
+    inpDeliveredCashEl.addEventListener('input', (e) => {
+      if (isDayLocked(appState.currentDay)) {
+        showToast('🔒 هذا اليوم مقفل ومعتمد محاسبياً — لا يمكن تعديل النقدية المسلمة إلا بعد فك القفل بواسطة مدير الموقع!', '🔒');
+        renderDailyView();
+        return;
+      }
+      const curD = appState.days[appState.currentDay];
+      curD.deliveredCash = parseNum(e.target.value) || 0;
+      curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
+      if (typeof enqueueDeltaSyncEvent === 'function') {
+        enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+          farmName: appState.farmName,
+          dayNum: appState.currentDay,
+          deliveredCash: curD.deliveredCash,
+          deliveredCashUpdatedAt: curD.deliveredCashUpdatedAt
+        });
+      }
+      debouncedSaveState();
       renderDailyView();
-      return;
-    }
-    const curD = appState.days[appState.currentDay];
-    curD.deliveredCash = parseNum(e.target.value) || 0;
-    curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
-    if (typeof enqueueDeltaSyncEvent === 'function') {
-      enqueueDeltaSyncEvent('UPDATE_DAY_META', {
-        farmName: appState.farmName,
-        dayNum: appState.currentDay,
-        deliveredCash: curD.deliveredCash,
-        deliveredCashUpdatedAt: curD.deliveredCashUpdatedAt
-      });
-    }
-    saveState(true);
-    renderDailyView();
-  });
+    });
+    inpDeliveredCashEl.addEventListener('change', () => {
+      if (!isDayLocked(appState.currentDay)) saveState(true);
+    });
+    inpDeliveredCashEl.addEventListener('blur', () => {
+      if (!isDayLocked(appState.currentDay)) saveState(true);
+    });
+  }
 
   const inpCarryForwardEl = document.getElementById('inpCarriedForwardCash');
   if (inpCarryForwardEl) {
@@ -5675,8 +5835,14 @@ function initFarmSalesApp() {
           carriedForwardCashUpdatedAt: curD.carriedForwardCashUpdatedAt
         });
       }
-      saveState(true);
+      debouncedSaveState();
       renderDailyView();
+    });
+    inpCarryForwardEl.addEventListener('change', () => {
+      if (!isDayLocked(appState.currentDay)) saveState(true);
+    });
+    inpCarryForwardEl.addEventListener('blur', () => {
+      if (!isDayLocked(appState.currentDay)) saveState(true);
     });
   }
 
@@ -6905,6 +7071,7 @@ function initFarmSalesApp() {
     }
     if (modal) {
       modal.classList.remove('hidden');
+      syncBodyModalScrollLock();
       if (inpModalPrice) {
         inpModalPrice.value = Number(appState.defaultPrice) > 0 ? fmtMoney(appState.defaultPrice) : '';
         setTimeout(() => {
@@ -6923,6 +7090,7 @@ function initFarmSalesApp() {
   function closeAskMissingPriceModal(focusMainPriceInput = false) {
     const modal = document.getElementById('askMissingPriceModal');
     if (modal) modal.classList.add('hidden');
+    syncBodyModalScrollLock();
     if (focusMainPriceInput) {
       const inpPriceEl = document.getElementById('inpPrice');
       if (inpPriceEl) {
@@ -8304,8 +8472,80 @@ function initFarmSalesApp() {
     btnCloseMdl.addEventListener('click', closeMerchantDrillDownModal);
   }
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && activeDrillDownMerchantCode > 0) {
-      closeMerchantDrillDownModal();
+    if (e.key === 'Escape') {
+      let handledEsc = false;
+
+      // 1. إغلاق أي قوائم منسدلة مفتوحة أولاً
+      if (document.querySelector('.receipt-dropdown-menu.open')) {
+        closeAllReceiptDropdownMenus();
+        handledEsc = true;
+      }
+      if (document.querySelector('[data-export-dropdown-menu]:not(.hidden)')) {
+        if (typeof closeAllUniversalExportDropdowns === 'function') closeAllUniversalExportDropdowns();
+        handledEsc = true;
+      }
+      const userDd = document.getElementById('headerUserDropdownMenu');
+      if (userDd && !userDd.classList.contains('hidden')) {
+        userDd.classList.add('hidden');
+        handledEsc = true;
+      }
+      const excelPop = document.getElementById('excelFilterPopover');
+      if (excelPop && !excelPop.classList.contains('hidden')) {
+        excelPop.classList.add('hidden');
+        handledEsc = true;
+      }
+      const merchSug = document.getElementById('merchantSuggestBox');
+      if (merchSug && !merchSug.classList.contains('hidden')) {
+        merchSug.classList.add('hidden');
+        handledEsc = true;
+      }
+
+      // 2. إغلاق النوافذ المنبثقة المفتوحة حسب الأولوية
+      const delModal = document.getElementById('globalDeleteConfirmModal');
+      if (delModal && !delModal.classList.contains('hidden')) {
+        e.preventDefault();
+        closeGlobalDeleteConfirmModal();
+        return;
+      }
+      const priceModal = document.getElementById('askMissingPriceModal');
+      if (priceModal && !priceModal.classList.contains('hidden')) {
+        e.preventDefault();
+        closeAskMissingPriceModal(true);
+        return;
+      }
+      const merchModal = document.getElementById('merchantDrillDownModal');
+      if ((merchModal && !merchModal.classList.contains('hidden')) || activeDrillDownMerchantCode > 0) {
+        e.preventDefault();
+        closeMerchantDrillDownModal();
+        return;
+      }
+      if (handledEsc) {
+        e.preventDefault();
+      }
+      return;
+    }
+
+    // مصيدة التركيز (Focus Trap) بمفتاح Tab داخل النوافذ المنبثقة النشطة لمنع التفاعل مع الخلفية
+    if (e.key === 'Tab') {
+      const activeModal = getTopmostOpenModalElement();
+      if (!activeModal) return;
+      const focusables = Array.from(
+        activeModal.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      ).filter(el => el.offsetParent !== null && !el.classList.contains('hidden'));
+      if (focusables.length === 0) return;
+      const firstEl = focusables[0];
+      const lastEl = focusables[focusables.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === firstEl || !activeModal.contains(document.activeElement)) {
+          e.preventDefault();
+          lastEl.focus();
+        }
+      } else {
+        if (document.activeElement === lastEl || !activeModal.contains(document.activeElement)) {
+          e.preventDefault();
+          firstEl.focus();
+        }
+      }
     }
   });
   const selMdlSwitch = document.getElementById('selModalMerchantSwitcher');
@@ -8387,6 +8627,19 @@ function initFarmSalesApp() {
     });
   }
 
+  // إغلاق القائمة المنسدلة للبون فوراً عند تمرير الشاشة أو الجداول أو تغيير حجم النافذة
+  window.addEventListener('scroll', () => {
+    if (document.querySelector('.receipt-dropdown-menu.open')) {
+      closeAllReceiptDropdownMenus();
+    }
+  }, { capture: true, passive: true });
+
+  window.addEventListener('resize', () => {
+    if (document.querySelector('.receipt-dropdown-menu.open')) {
+      closeAllReceiptDropdownMenus();
+    }
+  }, { passive: true });
+
   document.addEventListener('click', (e) => {
     const toggleRecDropBtn = e.target.closest('[data-toggle-receipt-dropdown]');
     if (toggleRecDropBtn) {
@@ -8397,13 +8650,7 @@ function initFarmSalesApp() {
       const isAlreadyOpen = Boolean(menu && menu.classList.contains('open'));
       closeAllReceiptDropdownMenus();
       if (menu && !isAlreadyOpen) {
-        menu.classList.add('open');
-        const parentCell = toggleRecDropBtn.closest('td, th');
-        const parentRow = toggleRecDropBtn.closest('tr, .rounded-2xl, .lite-pending-card');
-        const scrollWrap = toggleRecDropBtn.closest('.table-scroll-wrapper');
-        if (parentCell) parentCell.classList.add('receipt-dropdown-open-cell');
-        if (parentRow) parentRow.classList.add('receipt-dropdown-open-row');
-        if (scrollWrap) scrollWrap.classList.add('receipt-dropdown-active-wrapper');
+        positionAndOpenReceiptDropdownMenu(toggleRecDropBtn, menu);
       }
       return;
     }
@@ -8951,14 +9198,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=90');
+        scTpl.setAttribute('src', './excel-template.js?v=962');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=90');
+        lnk.setAttribute('href', './style.css?v=962');
         bundledStyleEl.replaceWith(lnk);
       }
     }

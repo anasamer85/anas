@@ -8,7 +8,6 @@
 const STORAGE_KEY = 'farm_sales_committee_v70_clean_slate_state';
 const LEGACY_STORAGE_KEYS = ['farm_sales_committee_v68_clean_slate_state', 'farm_sales_committee_v67_clean_slate_state'];
 const ENCRYPTED_VAULT_STORAGE_KEY = 'farm_sales_encrypted_webhook_vault_v70';
-const GATEWAY_HANDSHAKE_VAULT_KEY = '__gateway_auth_handshake_v70__';
 const EMBEDDED_CLOUD_WEBHOOK_URL = '';
 const EMBEDDED_DEFAULT_FARM_NAME = '';
 let isInitialCloudPullPending = false;
@@ -122,7 +121,6 @@ function buildEncryptedWebhookVaultForUsers(plainUrl, usersList) {
   });
   passphrases.add(`u:admin|p:admin`);
   passphrases.add(`p:admin`);
-  passphrases.add(GATEWAY_HANDSHAKE_VAULT_KEY);
 
   const tokens = [];
   passphrases.forEach(pk => {
@@ -170,29 +168,21 @@ function hasEncryptedWebhookVaultAvailable() {
   return getEmbeddedEncryptedVaultList().length > 0;
 }
 
-function unlockWebhookVaultWithCredentials(usernameInput, passwordInput, allowGatewayHandshake = false) {
+function unlockWebhookVaultWithCredentials(usernameInput, passwordInput) {
   const vaultTokens = getEmbeddedEncryptedVaultList();
   if (vaultTokens.length === 0) return { url: '', matchedByDirectPassword: false };
   const uClean = String(usernameInput || '').trim().toLowerCase();
   const pClean = String(passwordInput || '').trim();
+  if (!pClean) return { url: '', matchedByDirectPassword: false };
   const candidateKeys = [];
   if (uClean && pClean) candidateKeys.push(`u:${uClean}|p:${pClean}`);
-  if (pClean) candidateKeys.push(`p:${pClean}`);
+  candidateKeys.push(`p:${pClean}`);
 
   for (const key of candidateKeys) {
     for (const tok of vaultTokens) {
       const dec = decryptWebhookWithPassphrase(tok, key);
       if (dec && dec.startsWith('http')) {
         return { url: dec, matchedByDirectPassword: true };
-      }
-    }
-  }
-
-  if (allowGatewayHandshake && uClean && pClean) {
-    for (const tok of vaultTokens) {
-      const dec = decryptWebhookWithPassphrase(tok, GATEWAY_HANDSHAKE_VAULT_KEY);
-      if (dec && dec.startsWith('http')) {
-        return { url: dec, matchedByDirectPassword: false };
       }
     }
   }
@@ -1027,6 +1017,9 @@ function applyParsedStateObject(parsed) {
   }
   deduplicateAllDaysInState(appState);
   unifyGlobalMerchantsRegistry();
+  if (typeof syncActiveFarmIntoArchive === 'function') {
+    syncActiveFarmIntoArchive();
+  }
   return true;
 }
 
