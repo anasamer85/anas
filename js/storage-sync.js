@@ -704,6 +704,9 @@ function isUserActivelyTypingInForm() {
 }
 
 function renderAllPreservingActiveInputs(forceAllTabs = false) {
+  if (typeof document !== 'undefined' && document.querySelector('.receipt-dropdown-menu:not(.hidden), .receipt-dropdown-menu.open, [data-export-dropdown-menu]:not(.hidden), #globalDeleteConfirmModal:not(.hidden)')) {
+    return; // تأجيل إعادة الرسم لحين إغلاق القوائم
+  }
   if (!verifyActiveUserSession()) return;
   if (isUserActivelyTypingInForm()) {
     renderAll(forceAllTabs, true);
@@ -1801,7 +1804,7 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
           patchObj[`merchantsRegistry/${mc}`] = activeMerchMap[mc];
         });
 
-        // تحويل أحداث syncOutbox إلى مسارات سجلات فردية دقيقة (Granular Record-Path) لمنع مسح حركات المندوبين الآخرين
+        // بعد إتمام الدمج الذري المسبق (performAtomicPreFetchMerge)، يتم رفع مصفوفة القسم بالكامل لليوم المتأثر لمنع تضارب فهارس Firebase (Array vs Object)
         outboxBatch.forEach(ev => {
           if (!ev || !ev.action) return;
           const p = ev.payload || {};
@@ -1811,35 +1814,20 @@ async function pushDatabaseToCloud(silent = false, forcePush = false, skipPreFet
             const cat = ev.action === 'UPSERT_SALE'
               ? 'sales'
               : (ev.action === 'UPSERT_PENDING' ? 'pendingSales' : 'expenses');
-            const recId = p.record && p.record.id ? String(p.record.id) : '';
-            if (recId && dNum >= 1 && dNum <= 10) {
-              const liveArr = (appState.days && appState.days[dNum] && appState.days[dNum][cat]) || [];
-              const latestRec = liveArr.find(x => x && String(x.id) === recId) || p.record;
-              const recKey = resolveFirebaseRecordCollectionKey(lastFetchedRawCloudDays, dNum, cat, recId);
-              patchObj[`days/${dNum}/${cat}/${recKey}`] = latestRec;
-              if (appState.days && appState.days[dNum]) {
-                buildGranularDayMetaPatchPaths(patchObj, dNum, appState.days[dNum]);
-              }
+            if (dNum >= 1 && dNum <= 10 && appState.days && appState.days[dNum]) {
+              patchObj[`days/${dNum}/${cat}`] = appState.days[dNum][cat];
+              buildGranularDayMetaPatchPaths(patchObj, dNum, appState.days[dNum]);
               if (ev.action === 'UPSERT_SALE') {
-                const pendKey = resolveFirebaseRecordCollectionKey(lastFetchedRawCloudDays, dNum, 'pendingSales', recId);
-                const stillInPending = ((appState.days && appState.days[dNum] && appState.days[dNum].pendingSales) || []).some(x => x && String(x.id) === recId);
-                if (!stillInPending && lastFetchedRawCloudDays && lastFetchedRawCloudDays[dNum] && lastFetchedRawCloudDays[dNum].pendingSales && lastFetchedRawCloudDays[dNum].pendingSales[pendKey] !== undefined) {
-                  patchObj[`days/${dNum}/pendingSales/${pendKey}`] = null;
-                }
+                patchObj[`days/${dNum}/pendingSales`] = appState.days[dNum].pendingSales;
               }
             }
           } else if (ev.action === 'DELETE_SALE' || ev.action === 'DELETE_PENDING' || ev.action === 'DELETE_EXPENSE') {
             const cat = ev.action === 'DELETE_SALE'
               ? 'sales'
               : (ev.action === 'DELETE_PENDING' ? 'pendingSales' : 'expenses');
-            const delId = String(p.id || '');
-            if (delId && dNum >= 1 && dNum <= 10) {
-              const recKey = resolveFirebaseRecordCollectionKey(lastFetchedRawCloudDays, dNum, cat, delId);
-              const safeIdKey = sanitizeFirebasePathKey(delId);
-              patchObj[`days/${dNum}/${cat}/${recKey}`] = null;
-              if (safeIdKey !== recKey) {
-                patchObj[`days/${dNum}/${cat}/${safeIdKey}`] = null;
-              }
+            if (dNum >= 1 && dNum <= 10 && appState.days && appState.days[dNum]) {
+              patchObj[`days/${dNum}/${cat}`] = appState.days[dNum][cat];
+              buildGranularDayMetaPatchPaths(patchObj, dNum, appState.days[dNum]);
             }
           } else if (ev.action === 'UPDATE_DAY_META' && dNum >= 1 && dNum <= 10) {
             if (appState.days && appState.days[dNum]) {

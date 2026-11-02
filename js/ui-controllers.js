@@ -7,7 +7,7 @@ function buildScaleReceiptDropdownHtml(safeId, dayNum, extraContainerCls = 'ml-1
       <span>⚙️ تصدير</span>
       <span class="text-[9px]">▾</span>
     </button>
-    <div class="receipt-dropdown-menu" role="menu">
+    <div class="receipt-dropdown-menu hidden" role="menu">
       <button type="button" class="receipt-dropdown-item" data-print-receipt="${safeId}" data-receipt-day="${dayNum}">
         <span>🖨️</span>
         <span>طباعة بون (3 نسخ)</span>
@@ -25,8 +25,9 @@ function buildScaleReceiptDropdownHtml(safeId, dayNum, extraContainerCls = 'ml-1
 }
 
 function closeAllReceiptDropdownMenus() {
-  document.querySelectorAll('.receipt-dropdown-menu.open').forEach(menu => {
+  document.querySelectorAll('.receipt-dropdown-menu.open, .receipt-dropdown-menu:not(.hidden)').forEach(menu => {
     menu.classList.remove('open');
+    menu.classList.add('hidden');
     menu.style.top = '';
     menu.style.bottom = '';
     menu.style.left = '';
@@ -39,6 +40,7 @@ function positionAndOpenReceiptDropdownMenu(toggleBtn, menu) {
   const rect = toggleBtn.getBoundingClientRect();
   const minW = Math.max(156, Math.round(rect.width));
   menu.style.minWidth = `${minW}px`;
+  menu.classList.remove('hidden');
   menu.classList.add('open');
 
   const menuWidth = menu.offsetWidth || minW;
@@ -4309,7 +4311,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v96-security-memory';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v97-final';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -4344,7 +4346,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=962', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=97', { scope: './' }).catch(() => {});
     }
   }
 
@@ -5860,6 +5862,16 @@ function initFarmSalesApp() {
       curD.deliveredCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.deliveredCashUpdatedAt) || 0) + 10);
       const inpEl = document.getElementById('inpDeliveredCash');
       if (inpEl) inpEl.value = fmtMoney(targetDeliver);
+      if (typeof enqueueDeltaSyncEvent === 'function') {
+        enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+          farmName: appState.farmName,
+          dayNum: appState.currentDay,
+          deliveredCash: curD.deliveredCash,
+          deliveredCashUpdatedAt: curD.deliveredCashUpdatedAt,
+          carriedForwardCash: curD.carriedForwardCash,
+          carriedForwardCashUpdatedAt: curD.carriedForwardCashUpdatedAt
+        });
+      }
       saveState(true);
       renderDailyView();
       showToast(`⚡ تم تسجيل توريد المتاح بالخزنة (${fmtInt(targetDeliver)} ج.م) ومطابقة الصندوق بنجاح!`, '✅');
@@ -5880,6 +5892,16 @@ function initFarmSalesApp() {
       curD.carriedForwardCashUpdatedAt = Math.max(getSyncedNow(), (Number(curD.carriedForwardCashUpdatedAt) || 0) + 10);
       const inpEl = document.getElementById('inpCarriedForwardCash');
       if (inpEl) inpEl.value = fmtMoney(remToCarry);
+      if (typeof enqueueDeltaSyncEvent === 'function') {
+        enqueueDeltaSyncEvent('UPDATE_DAY_META', {
+          farmName: appState.farmName,
+          dayNum: appState.currentDay,
+          deliveredCash: curD.deliveredCash,
+          deliveredCashUpdatedAt: curD.deliveredCashUpdatedAt,
+          carriedForwardCash: curD.carriedForwardCash,
+          carriedForwardCashUpdatedAt: curD.carriedForwardCashUpdatedAt
+        });
+      }
       saveState(true);
       renderDailyView();
       showToast(`🔄 تم ترحيل باقي النقدية بالخزنة (${fmtInt(remToCarry)} ج.م) تلقائياً لليوم التالي ومطابقة الصندوق!`, '✅');
@@ -8983,12 +9005,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=90',
-    './js/accounting.js?v=90',
-    './js/storage-sync.js?v=90',
-    './js/excel-engine.js?v=90',
-    './js/print-export.js?v=94',
-    './js/ui-controllers.js?v=90'
+    './js/core-state.js?v=97',
+    './js/accounting.js?v=97',
+    './js/storage-sync.js?v=97',
+    './js/excel-engine.js?v=97',
+    './js/print-export.js?v=97',
+    './js/ui-controllers.js?v=97'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -9046,7 +9068,6 @@ function initFarmSalesApp() {
       }
     } catch (e) {}
   }
-  preloadExternalAssetsForGoogleSitesEmbed();
 
   function fallbackExecCommandCopy(text) {
     try {
@@ -9198,14 +9219,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=962');
+        scTpl.setAttribute('src', './excel-template.js?v=97');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=962');
+        lnk.setAttribute('href', './style.css?v=97');
         bundledStyleEl.replaceWith(lnk);
       }
     }

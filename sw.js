@@ -1,30 +1,30 @@
-// Service Worker - نظام محاضر لجان بيع المزارع (Modular Architecture PWA v96)
-const CACHE_NAME = "farm-sales-v96-sync-engine";
+// Service Worker - نظام محاضر لجان بيع المزارع (Modular Architecture PWA v97)
+const CACHE_NAME = "farm-sales-v97-final";
 
 const CORE_LOCAL_ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./style.css?v=963",
+  "./style.css?v=97",
   "./excel-template.js",
-  "./excel-template.js?v=963",
+  "./excel-template.js?v=97",
   "./js/core-state.js",
-  "./js/core-state.js?v=963",
+  "./js/core-state.js?v=97",
   "./js/accounting.js",
-  "./js/accounting.js?v=963",
+  "./js/accounting.js?v=97",
   "./js/storage-sync.js",
-  "./js/storage-sync.js?v=963",
+  "./js/storage-sync.js?v=97",
   "./js/excel-engine.js",
-  "./js/excel-engine.js?v=963",
+  "./js/excel-engine.js?v=97",
   "./js/print-export.js",
-  "./js/print-export.js?v=963",
+  "./js/print-export.js?v=97",
   "./js/ui-controllers.js",
-  "./js/ui-controllers.js?v=963",
+  "./js/ui-controllers.js?v=97",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
   "./vendor/vendor-loader.js",
-  "./vendor/vendor-loader.js?v=963"
+  "./vendor/vendor-loader.js?v=97"
 ];
 
 const EXTERNAL_CDN_ASSETS = [
