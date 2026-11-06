@@ -184,7 +184,7 @@ window.debouncedSaveState = debouncedSaveState;
 // =========================================================================
 
 // =========================================================================
-// VIRTUAL POS CALCULATOR NUMPAD ENGINE (v101 — Auto-Mount & Touch Guard)
+// VIRTUAL POS CALCULATOR NUMPAD ENGINE (v102 — Strip Header, Action-Dock & UI Prefs)
 // =========================================================================
 const VIRTUAL_NUMPAD_PREF_KEY = 'pref_virtual_pos_numpad_v99';
 let activeNumpadInputEl = null;
@@ -192,71 +192,59 @@ let isFirstNumpadKeystroke = false;
 let isVirtualPosNumpadOpen = false;
 let lastNumpadOpenedAt = 0;
 
-const VIRTUAL_NUMPAD_FIELD_LABELS = {
-  inpScaleNo: '🔢 مسلسل الميزان / رقم السند',
-  inpCarNo: '🚛 رقم السيارة',
-  inpW1: '⚖️ الوزنة الأولى (فارغ - كجم)',
-  inpW2: '⚖️ الوزنة الثانية (قائم - كجم)',
-  inpPrice: '💰 السعر (ج.م / كجم)',
-  inpTip: '🎁 الإكرامية (ج.م)',
-  inpCustodyCash: '💼 عهدة نقدية دفعها التاجر',
-  inpCustodyTransfer: '💳 عهدة تحويل دفعها التاجر',
-  inpCashSales: '💵 نقدي مبيعات (للخزنة)',
-  inpCreditSales: '📌 آجل فاتورة اليوم',
-  inpTransferSales: '🏦 تحويل مبيعات (يخصم من التاجر)',
-  inpSupplementalBoostAmount: '➕ مبلغ إضافي تكميلي للنقدي',
-  inpDebtCash: '💵 نقدي تحصيل مديونيات سابقة',
-  inpDebtTransfer: '💳 تحويل تحصيل مديونيات سابقة',
-  inpPrevCash: '🏦 نقدي مزارع سابقة (للخزنة فقط)',
-  inpPrevTransfer: '🏦 تحويل مزارع سابقة',
-  inpExpAmount: '💸 المبلغ المنصرف (ج.م)',
-  inpDeliveredCash: '🏦 النقدية المسلمة فعلياً من الخزينة',
-  inpCarriedForwardCash: '🔄 نقدية مرحّلة بالخزنة لليوم التالي',
-  inpModalMissingPrice: '💰 سعر الكيلو لإتمام الحفظ (ج.م / كجم)'
-};
-
 function ensureVirtualPosNumpadMounted() {
   if (typeof document === 'undefined' || !document.body) return null;
 
-  // 1. حقن زر التبديل #btnToggleVirtualPosNumpad في ترويسة نموذج البيع إذا لم يكن موجوداً
-  if (!document.getElementById('btnToggleVirtualPosNumpad')) {
-    const debtLabel = document.querySelector('label[for="chkShowDebtCollectionOptions"]');
-    if (debtLabel && debtLabel.parentElement) {
-      const btnWrap = document.createElement('div');
-      btnWrap.innerHTML = `
-        <button type="button" id="btnToggleVirtualPosNumpad" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 border border-amber-200 text-xs font-extrabold cursor-pointer transition select-none shadow-sm" title="تفعيل أو إيقاف لوحة مفاتيح الآلة الحاسبة المدمجة (7-8-9 في الأعلى) أو العودة لكيبورد الهاتف الافتراضي">
-          <span>🖩</span>
-          <span id="lblToggleVirtualPosNumpad">لوحة الحاسبة: مفعلة ✓</span>
-        </button>
+  // 1. ضمان عدم وجود أي زر قديم في الشاشة الرئيسية وإبقاء التحكم حصرياً في (🎨 تفضيلات الواجهة)
+  const legacyHeaderBtn = document.querySelector('#saleFormCardHeader #btnToggleVirtualPosNumpad');
+  if (legacyHeaderBtn) {
+    legacyHeaderBtn.remove();
+  }
+
+  // 2. حقن بطاقة إعداد اللوحة داخل قسم (🎨 تفضيلات الواجهة) إذا لم تكن موجودة في DOM
+  if (!document.getElementById('virtualNumpadControlBox')) {
+    const floatCtrlBox = document.getElementById('floatingBarControlBox');
+    if (floatCtrlBox && floatCtrlBox.parentElement) {
+      const prefWrap = document.createElement('div');
+      prefWrap.innerHTML = `
+        <div id="virtualNumpadControlBox" class="bg-emerald-50/90 p-3.5 rounded-xl border-2 border-emerald-400 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-lg">🖩</span>
+            <div>
+              <div class="text-xs md:text-sm font-extrabold text-slate-900">
+                لوحة المفاتيح المحاسبية المدمجة (POS Calculator Numpad — 7-8-9 في الأعلى)
+              </div>
+              <p class="text-[11px] font-bold text-slate-600">
+                تفتح تلقائياً عند لمس أي خانة رقمية أو مالية بتخطيط الآلة الحاسبة القياسي مع دمج شريط الإجراءات العائم (Action-Dock) فوقها مباشرة، أو يمكنك إيقافها للعودة لكيبورد الهاتف الافتراضي.
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <span id="virtualNumpadStatusBadge" class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold">
+              ✅ مفعلة (تخطيط الآلة الحاسبة 7-8-9)
+            </span>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-extrabold text-slate-900 bg-white px-3 py-1.5 rounded-xl border-2 border-emerald-500 shadow-sm">
+              <input type="checkbox" id="chkEnableVirtualPosNumpad" class="rounded text-emerald-700 w-4 h-4" checked />
+              <span>تفعيل لوحة مفاتيح الآلة الحاسبة المدمجة</span>
+            </label>
+            <button type="button" id="btnToggleVirtualPosNumpad" class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-xs shadow transition flex items-center gap-1.5">
+              <span>🖩</span>
+              <span id="lblToggleVirtualPosNumpad">إيقاف اللوحة (كيبورد الهاتف)</span>
+            </button>
+          </div>
+        </div>
       `;
-      debtLabel.parentElement.insertBefore(btnWrap.firstElementChild, debtLabel);
+      floatCtrlBox.insertAdjacentElement('afterend', prefWrap.firstElementChild);
     }
   }
 
-  // 2. حقن درج لوحة المفاتيح المحاسبية #virtualPosNumpadDrawer في document.body إذا لم يكن موجوداً
+  // 3. حقن درج لوحة المفاتيح المحاسبية #virtualPosNumpadDrawer (شبكة الأزرار فقط بدون ترويسة علوية)
   let drawer = document.getElementById('virtualPosNumpadDrawer');
   if (!drawer) {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = `
       <div id="virtualPosNumpadDrawer" class="hidden fixed inset-x-0 bottom-0 z-50 bg-slate-950/98 text-white border-t-4 border-amber-400 shadow-2xl select-none" style="z-index: 99990 !important;" dir="rtl" role="region" aria-label="لوحة مفاتيح الآلة الحاسبة المحاسبية">
-        <div class="max-w-lg mx-auto px-2.5 pt-2 pb-3 space-y-2">
-          <div class="flex items-center justify-between gap-2 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 shadow-inner">
-            <div class="flex flex-col min-w-0 flex-1">
-              <div class="flex items-center gap-1.5">
-                <span class="text-amber-400 text-xs">🖩</span>
-                <span id="virtualNumpadFieldName" class="text-[11px] font-extrabold text-amber-300 truncate">الخانة النشطة</span>
-              </div>
-              <div id="virtualNumpadValuePreview" dir="ltr" class="text-base sm:text-lg font-black text-emerald-300 tracking-wider text-left truncate font-mono">0</div>
-            </div>
-            <div class="flex items-center gap-1.5 shrink-0">
-              <button type="button" id="btnSwitchToNativeMobileKeyboard" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-[10px] font-extrabold transition whitespace-nowrap" title="إيقاف اللوحة المدمجة واستخدام كيبورد الهاتف العادي">
-                ⌨️ كيبورد الهاتف
-              </button>
-              <button type="button" id="btnCloseVirtualPosNumpad" class="w-8 h-8 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white font-extrabold text-sm flex items-center justify-center shadow transition" title="إغلاق لوحة المفاتيح (Esc)">
-                ✕
-              </button>
-            </div>
-          </div>
+        <div class="max-w-lg mx-auto px-2.5 py-2">
           <div id="virtualPosNumpadGrid" class="grid grid-cols-4 gap-1.5 sm:gap-2" dir="ltr">
             <button type="button" data-numpad-key="7" class="v-numpad-btn v-numpad-digit">7</button>
             <button type="button" data-numpad-key="8" class="v-numpad-btn v-numpad-digit">8</button>
@@ -280,6 +268,14 @@ function ensureVirtualPosNumpadMounted() {
     `;
     document.body.appendChild(wrapper.firstElementChild);
     drawer = document.getElementById('virtualPosNumpadDrawer');
+  } else {
+    // إذا كان الدرج موجوداً من HTML قديم يحتوي على الترويسة، نزيل الترويسة ونبقي شبكة الأزرار فقط
+    const gridEl = drawer.querySelector('#virtualPosNumpadGrid');
+    if (gridEl && gridEl.parentElement) {
+      Array.from(gridEl.parentElement.children).forEach(child => {
+        if (child.id !== 'virtualPosNumpadGrid') child.remove();
+      });
+    }
   }
   return drawer;
 }
@@ -332,15 +328,29 @@ function syncVirtualNumpadInputModesAndToggleUI() {
     }
   });
 
+  const chkEl = document.getElementById('chkEnableVirtualPosNumpad');
+  if (chkEl) chkEl.checked = enabled;
+
+  const badgeEl = document.getElementById('virtualNumpadStatusBadge');
+  if (badgeEl) {
+    if (enabled) {
+      badgeEl.textContent = '✅ مفعلة (تخطيط الآلة الحاسبة 7-8-9)';
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold';
+    } else {
+      badgeEl.textContent = '⌨️ متوقفة (يعمل كيبورد الهاتف العادي)';
+      badgeEl.className = 'px-2.5 py-1 rounded-lg bg-slate-200 text-slate-800 border border-slate-300 text-xs font-extrabold';
+    }
+  }
+
   const toggleBtn = document.getElementById('btnToggleVirtualPosNumpad');
   const toggleLbl = document.getElementById('lblToggleVirtualPosNumpad');
   if (toggleBtn && toggleLbl) {
     if (enabled) {
-      toggleLbl.textContent = 'لوحة الحاسبة: مفعلة ✓';
-      toggleBtn.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 border border-amber-200 text-xs font-extrabold cursor-pointer transition select-none shadow-sm';
+      toggleLbl.textContent = 'إيقاف اللوحة (كيبورد الهاتف)';
+      toggleBtn.className = 'px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-xs shadow transition flex items-center gap-1.5';
     } else {
-      toggleLbl.textContent = 'لوحة الحاسبة: متوقفة (كيبورد الهاتف)';
-      toggleBtn.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-xs font-extrabold text-slate-200 cursor-pointer transition select-none';
+      toggleLbl.textContent = 'تفعيل لوحة الحاسبة المدمجة';
+      toggleBtn.className = 'px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-xs shadow transition flex items-center gap-1.5';
     }
   }
   if (!enabled && isVirtualPosNumpadOpen) {
@@ -348,17 +358,25 @@ function syncVirtualNumpadInputModesAndToggleUI() {
   }
 }
 
-function updateVirtualNumpadPreviewUI() {
-  if (!activeNumpadInputEl) return;
-  const lblEl = document.getElementById('virtualNumpadFieldName');
-  const valEl = document.getElementById('virtualNumpadValuePreview');
-  if (lblEl) {
-    const customLabel = VIRTUAL_NUMPAD_FIELD_LABELS[activeNumpadInputEl.id];
-    lblEl.textContent = customLabel || activeNumpadInputEl.placeholder || 'إدخال رقمي';
-  }
-  if (valEl) {
-    const rawVal = String(activeNumpadInputEl.value || '').trim();
-    valEl.textContent = rawVal !== '' ? rawVal : '0';
+function syncActionDockPositionAboveNumpad() {
+  const floatBar = document.getElementById('mobileWeighbridgeActionBar');
+  const drawer = document.getElementById('virtualPosNumpadDrawer');
+  if (!floatBar) return;
+
+  if (isVirtualPosNumpadOpen && drawer && !drawer.classList.contains('hidden')) {
+    const numpadHeight = Math.max(204, drawer.offsetHeight || 214);
+    if (appState.showFloatingActionBar !== false) {
+      floatBar.classList.remove('hidden');
+      floatBar.style.display = 'block';
+    }
+    floatBar.style.setProperty('bottom', `${numpadHeight + 4}px`, 'important');
+    floatBar.style.setProperty('z-index', '99991', 'important');
+    const barHeight = floatBar.offsetHeight || 88;
+    document.body.style.paddingBottom = `${numpadHeight + barHeight + 24}px`;
+  } else {
+    floatBar.style.removeProperty('bottom');
+    floatBar.style.removeProperty('z-index');
+    document.body.style.paddingBottom = '';
   }
 }
 
@@ -396,16 +414,12 @@ function openVirtualPosNumpadForInput(inputEl) {
 
   drawer.classList.remove('hidden');
   document.body.classList.add('virtual-numpad-open');
-  document.body.style.paddingBottom = '310px';
 
-  // إخفاء الشريط السفلي العائم مؤقتاً أثناء فتح اللوحة لمنع التكدس وحجب الشاشة
-  const floatBar = document.getElementById('mobileWeighbridgeActionBar');
-  if (floatBar) {
-    floatBar.classList.add('hidden');
-    floatBar.style.display = 'none';
-  }
-
-  updateVirtualNumpadPreviewUI();
+  // دمج ورفع شريط الإجراءات السفلي العائم (Action-Dock) ليجلس مباشرة فوق اللوحة الافتراضية المفتوحة
+  syncActionDockPositionAboveNumpad();
+  requestAnimationFrame(() => {
+    if (isVirtualPosNumpadOpen) syncActionDockPositionAboveNumpad();
+  });
 
   setTimeout(() => {
     try {
@@ -430,9 +444,9 @@ function closeVirtualPosNumpad(blurActiveInput = true) {
   isVirtualPosNumpadOpen = false;
 
   document.body.classList.remove('virtual-numpad-open');
-  document.body.style.paddingBottom = '';
 
-  // إعادة إظهار الشريط السفلي العائم حسب إعدادات المستخدم
+  // إعادة الشريط العائم لمكانه الطبيعي أسفل الشاشة
+  syncActionDockPositionAboveNumpad();
   if (typeof updateFloatingActionBarVisibilityUI === 'function') {
     updateFloatingActionBarVisibilityUI();
   }
@@ -448,11 +462,12 @@ function setVirtualPosNumpadPreference(enable, showMsg = true) {
     showToast(
       nextState
         ? '🖩 تم تفعيل لوحة مفاتيح الآلة الحاسبة المدمجة (7-8-9 في الأعلى) وإيقاف كيبورد الهاتف العشوائي!'
-        : '⌨️ تم التحويل إلى كيبورد الهاتف الافتراضي (يمكنك إعادة تفعيل لوحة الحاسبة في أي وقت).',
+        : '⌨️ تم التحويل إلى كيبورد الهاتف الافتراضي (يمكنك إعادة تفعيل لوحة الحاسبة من تفضيلات الواجهة).',
       nextState ? '🖩' : '⌨️'
     );
   }
 }
+window.setVirtualPosNumpadPreference = setVirtualPosNumpadPreference;
 
 function handleVirtualNumpadKeyPress(keyAction) {
   if (!activeNumpadInputEl || activeNumpadInputEl.disabled) return;
@@ -495,7 +510,6 @@ function handleVirtualNumpadKeyPress(keyAction) {
       if (expForm) expForm.requestSubmit ? expForm.requestSubmit() : expForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       closeVirtualPosNumpad(true);
     }
-    updateVirtualNumpadPreviewUI();
     return;
   }
 
@@ -503,7 +517,6 @@ function handleVirtualNumpadKeyPress(keyAction) {
     isFirstNumpadKeystroke = false;
     el.value = '';
     el.dispatchEvent(new Event('input', { bubbles: true }));
-    updateVirtualNumpadPreviewUI();
     return;
   }
 
@@ -514,7 +527,6 @@ function handleVirtualNumpadKeyPress(keyAction) {
     }
     el.value = rawCurrent;
     el.dispatchEvent(new Event('input', { bubbles: true }));
-    updateVirtualNumpadPreviewUI();
     return;
   }
 
@@ -528,7 +540,6 @@ function handleVirtualNumpadKeyPress(keyAction) {
     }
     el.value = rawCurrent;
     el.dispatchEvent(new Event('input', { bubbles: true }));
-    updateVirtualNumpadPreviewUI();
     return;
   }
 
@@ -552,7 +563,6 @@ function handleVirtualNumpadKeyPress(keyAction) {
     }
     el.value = rawCurrent;
     el.dispatchEvent(new Event('input', { bubbles: true }));
-    updateVirtualNumpadPreviewUI();
     return;
   }
 
@@ -574,49 +584,27 @@ function handleVirtualNumpadKeyPress(keyAction) {
 
   el.value = rawCurrent;
   el.dispatchEvent(new Event('input', { bubbles: true }));
-  updateVirtualNumpadPreviewUI();
 }
 
 function initVirtualPosNumpadController() {
   ensureVirtualPosNumpadMounted();
   syncVirtualNumpadInputModesAndToggleUI();
 
-  const btnToggleHeader = document.getElementById('btnToggleVirtualPosNumpad');
-  if (btnToggleHeader && !btnToggleHeader.dataset.numpadBound) {
-    btnToggleHeader.dataset.numpadBound = '1';
-    btnToggleHeader.addEventListener('click', (e) => {
+  const chkPref = document.getElementById('chkEnableVirtualPosNumpad');
+  if (chkPref && !chkPref.dataset.numpadBound) {
+    chkPref.dataset.numpadBound = '1';
+    chkPref.addEventListener('change', (e) => {
+      setVirtualPosNumpadPreference(Boolean(e.target.checked), true);
+    });
+  }
+
+  const btnTogglePref = document.getElementById('btnToggleVirtualPosNumpad');
+  if (btnTogglePref && !btnTogglePref.dataset.numpadBound) {
+    btnTogglePref.dataset.numpadBound = '1';
+    btnTogglePref.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       setVirtualPosNumpadPreference(!isVirtualPosNumpadEnabled(), true);
-    });
-  }
-
-  const btnSwitchNative = document.getElementById('btnSwitchToNativeMobileKeyboard');
-  if (btnSwitchNative && !btnSwitchNative.dataset.numpadBound) {
-    btnSwitchNative.dataset.numpadBound = '1';
-    btnSwitchNative.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const targetToRefocus = activeNumpadInputEl;
-      setVirtualPosNumpadPreference(false, true);
-      if (targetToRefocus) {
-        setTimeout(() => {
-          try {
-            targetToRefocus.blur();
-            targetToRefocus.focus();
-          } catch (err) {}
-        }, 40);
-      }
-    });
-  }
-
-  const btnCloseDrawer = document.getElementById('btnCloseVirtualPosNumpad');
-  if (btnCloseDrawer && !btnCloseDrawer.dataset.numpadBound) {
-    btnCloseDrawer.dataset.numpadBound = '1';
-    btnCloseDrawer.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      closeVirtualPosNumpad(true);
     });
   }
 
@@ -636,7 +624,7 @@ function initVirtualPosNumpadController() {
     });
   }
 
-  // التقاط أحداث اللمس والتركيز (pointerdown / touchstart / focusin / click) على الخانات الرقمية والمالية
+  // منع فقدان التركيز عند الضغط على أزرار الشريط الإجرائي المدمج (Action-Dock) فوق اللوحة
   document.addEventListener('pointerdown', (e) => {
     const target = e.target;
     if (isTargetVirtualNumpadInput(target) && isVirtualPosNumpadEnabled()) {
@@ -668,15 +656,12 @@ function initVirtualPosNumpadController() {
     if (isVirtualPosNumpadOpen) {
       if (Date.now() - lastNumpadOpenedAt < 250) return;
       const drawer = document.getElementById('virtualPosNumpadDrawer');
-      if (drawer && !drawer.contains(target) && !target.closest('#btnToggleVirtualPosNumpad')) {
+      const floatBar = document.getElementById('mobileWeighbridgeActionBar');
+      const insideDrawer = Boolean(drawer && drawer.contains(target));
+      const insideActionDock = Boolean(floatBar && floatBar.contains(target));
+      if (!insideDrawer && !insideActionDock && !target.closest('#virtualNumpadControlBox')) {
         closeVirtualPosNumpad(true);
       }
-    }
-  });
-
-  document.addEventListener('input', (e) => {
-    if (isVirtualPosNumpadOpen && e.target === activeNumpadInputEl) {
-      updateVirtualNumpadPreviewUI();
     }
   });
 }
@@ -3280,11 +3265,14 @@ function renderUsersAndPermissionsUI(renderTable = true) {
 }
 
 function updateFloatingActionBarVisibilityUI() {
-  const isVisible = (appState.showFloatingActionBar !== false) && !isVirtualPosNumpadOpen;
+  const isVisible = appState.showFloatingActionBar !== false;
   const barEl = document.getElementById('mobileWeighbridgeActionBar');
   if (barEl) {
     barEl.classList.toggle('hidden', !isVisible);
     barEl.style.display = isVisible ? 'block' : 'none';
+    if (isVirtualPosNumpadOpen && isVisible) {
+      syncActionDockPositionAboveNumpad();
+    }
   }
   const inlineActionsEl = document.getElementById('inlineSaleFormActionsMobile');
   if (inlineActionsEl) {
@@ -5055,7 +5043,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v101-numpad-fix';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v102-numpad-dock';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -5090,7 +5078,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=101', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=102', { scope: './' }).catch(() => {});
     }
   }
 
@@ -6149,6 +6137,7 @@ function initFarmSalesApp() {
         updateStickyTablesOptionsUI();
         updateAuditMetadataVisibilityUI();
         updateLiteFieldModeUI();
+        syncVirtualNumpadInputModesAndToggleUI();
       } else if (targetSub === 'cloud_link') {
         syncFirebaseAdminInputsUI();
       }
@@ -7026,6 +7015,7 @@ function initFarmSalesApp() {
     const wasEditing = Boolean((document.getElementById('editSaleId') && document.getElementById('editSaleId').value) || activeRecalledPendingId);
     activeRecalledPendingId = '';
     resetSupplementalPaymentBoosters();
+    if (isVirtualPosNumpadOpen) closeVirtualPosNumpad(true);
     const formEl = document.getElementById('saleEntryForm');
     if (formEl) formEl.reset();
     const editIdEl = document.getElementById('editSaleId');
@@ -9773,12 +9763,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=101',
-    './js/accounting.js?v=101',
-    './js/storage-sync.js?v=101',
-    './js/excel-engine.js?v=101',
-    './js/print-export.js?v=101',
-    './js/ui-controllers.js?v=101'
+    './js/core-state.js?v=102',
+    './js/accounting.js?v=102',
+    './js/storage-sync.js?v=102',
+    './js/excel-engine.js?v=102',
+    './js/print-export.js?v=102',
+    './js/ui-controllers.js?v=102'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -9987,14 +9977,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=101');
+        scTpl.setAttribute('src', './excel-template.js?v=102');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=101');
+        lnk.setAttribute('href', './style.css?v=102');
         bundledStyleEl.replaceWith(lnk);
       }
     }

@@ -1,7 +1,7 @@
 // Local Vendor Loader + Service Worker Infinite-Reload Loop Guard (v91 Modular Architecture)
 (function () {
-  var VENDOR_CACHE_NAME = 'farm-sales-v101-numpad-fix';
-  var UNIFIED_SW_URL = './sw.js?v=101';
+  var VENDOR_CACHE_NAME = 'farm-sales-v102-numpad-dock';
+  var UNIFIED_SW_URL = './sw.js?v=102';
 
   // 1. درع الحماية ضد التحديث المستمر للصفحة (Infinite Reload Loop Guard)
   if ('serviceWorker' in navigator) {

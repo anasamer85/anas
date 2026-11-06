@@ -2956,16 +2956,18 @@ body.modal-scroll-locked {
 }
 
 body.virtual-numpad-open {
-  padding-bottom: 310px !important;
+  padding-bottom: 320px !important;
 }
 
-body.virtual-numpad-open #mobileWeighbridgeActionBar {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
+body:not(.floating-bar-hidden).virtual-numpad-open #mobileWeighbridgeActionBar {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 99991 !important;
+  transition: bottom 0.12s ease-out;
 }
 
 body.virtual-numpad-open #toastContainer {
-  bottom: 278px !important;
+  bottom: 315px !important;
 }
