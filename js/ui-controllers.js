@@ -184,12 +184,13 @@ window.debouncedSaveState = debouncedSaveState;
 // =========================================================================
 
 // =========================================================================
-// VIRTUAL POS CALCULATOR NUMPAD ENGINE (v99 — 7-8-9 Top Calculator Layout)
+// VIRTUAL POS CALCULATOR NUMPAD ENGINE (v101 — Auto-Mount & Touch Guard)
 // =========================================================================
 const VIRTUAL_NUMPAD_PREF_KEY = 'pref_virtual_pos_numpad_v99';
 let activeNumpadInputEl = null;
 let isFirstNumpadKeystroke = false;
 let isVirtualPosNumpadOpen = false;
+let lastNumpadOpenedAt = 0;
 
 const VIRTUAL_NUMPAD_FIELD_LABELS = {
   inpScaleNo: '🔢 مسلسل الميزان / رقم السند',
@@ -213,6 +214,76 @@ const VIRTUAL_NUMPAD_FIELD_LABELS = {
   inpCarriedForwardCash: '🔄 نقدية مرحّلة بالخزنة لليوم التالي',
   inpModalMissingPrice: '💰 سعر الكيلو لإتمام الحفظ (ج.م / كجم)'
 };
+
+function ensureVirtualPosNumpadMounted() {
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  // 1. حقن زر التبديل #btnToggleVirtualPosNumpad في ترويسة نموذج البيع إذا لم يكن موجوداً
+  if (!document.getElementById('btnToggleVirtualPosNumpad')) {
+    const debtLabel = document.querySelector('label[for="chkShowDebtCollectionOptions"]');
+    if (debtLabel && debtLabel.parentElement) {
+      const btnWrap = document.createElement('div');
+      btnWrap.innerHTML = `
+        <button type="button" id="btnToggleVirtualPosNumpad" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 border border-amber-200 text-xs font-extrabold cursor-pointer transition select-none shadow-sm" title="تفعيل أو إيقاف لوحة مفاتيح الآلة الحاسبة المدمجة (7-8-9 في الأعلى) أو العودة لكيبورد الهاتف الافتراضي">
+          <span>🖩</span>
+          <span id="lblToggleVirtualPosNumpad">لوحة الحاسبة: مفعلة ✓</span>
+        </button>
+      `;
+      debtLabel.parentElement.insertBefore(btnWrap.firstElementChild, debtLabel);
+    }
+  }
+
+  // 2. حقن درج لوحة المفاتيح المحاسبية #virtualPosNumpadDrawer في document.body إذا لم يكن موجوداً
+  let drawer = document.getElementById('virtualPosNumpadDrawer');
+  if (!drawer) {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `
+      <div id="virtualPosNumpadDrawer" class="hidden fixed inset-x-0 bottom-0 z-50 bg-slate-950/98 text-white border-t-4 border-amber-400 shadow-2xl select-none" style="z-index: 99990 !important;" dir="rtl" role="region" aria-label="لوحة مفاتيح الآلة الحاسبة المحاسبية">
+        <div class="max-w-lg mx-auto px-2.5 pt-2 pb-3 space-y-2">
+          <div class="flex items-center justify-between gap-2 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 shadow-inner">
+            <div class="flex flex-col min-w-0 flex-1">
+              <div class="flex items-center gap-1.5">
+                <span class="text-amber-400 text-xs">🖩</span>
+                <span id="virtualNumpadFieldName" class="text-[11px] font-extrabold text-amber-300 truncate">الخانة النشطة</span>
+              </div>
+              <div id="virtualNumpadValuePreview" dir="ltr" class="text-base sm:text-lg font-black text-emerald-300 tracking-wider text-left truncate font-mono">0</div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button type="button" id="btnSwitchToNativeMobileKeyboard" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-[10px] font-extrabold transition whitespace-nowrap" title="إيقاف اللوحة المدمجة واستخدام كيبورد الهاتف العادي">
+                ⌨️ كيبورد الهاتف
+              </button>
+              <button type="button" id="btnCloseVirtualPosNumpad" class="w-8 h-8 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white font-extrabold text-sm flex items-center justify-center shadow transition" title="إغلاق لوحة المفاتيح (Esc)">
+                ✕
+              </button>
+            </div>
+          </div>
+          <div id="virtualPosNumpadGrid" class="grid grid-cols-4 gap-1.5 sm:gap-2" dir="ltr">
+            <button type="button" data-numpad-key="7" class="v-numpad-btn v-numpad-digit">7</button>
+            <button type="button" data-numpad-key="8" class="v-numpad-btn v-numpad-digit">8</button>
+            <button type="button" data-numpad-key="9" class="v-numpad-btn v-numpad-digit">9</button>
+            <button type="button" data-numpad-key="BACKSPACE" class="v-numpad-btn v-numpad-fn-warn" title="مسح آخر رقم">⌫</button>
+            <button type="button" data-numpad-key="4" class="v-numpad-btn v-numpad-digit">4</button>
+            <button type="button" data-numpad-key="5" class="v-numpad-btn v-numpad-digit">5</button>
+            <button type="button" data-numpad-key="6" class="v-numpad-btn v-numpad-digit">6</button>
+            <button type="button" data-numpad-key="CLEAR" class="v-numpad-btn v-numpad-fn-danger" title="تصفير الخانة بالكامل">C</button>
+            <button type="button" data-numpad-key="1" class="v-numpad-btn v-numpad-digit">1</button>
+            <button type="button" data-numpad-key="2" class="v-numpad-btn v-numpad-digit">2</button>
+            <button type="button" data-numpad-key="3" class="v-numpad-btn v-numpad-digit">3</button>
+            <button type="button" data-numpad-key="000" class="v-numpad-btn v-numpad-fn-gold" title="إضافة ثلاثة أصفار (ألف)">+000</button>
+            <button type="button" data-numpad-key="0" class="v-numpad-btn v-numpad-digit">0</button>
+            <button type="button" data-numpad-key="00" class="v-numpad-btn v-numpad-digit text-base">00</button>
+            <button type="button" data-numpad-key="." class="v-numpad-btn v-numpad-digit">.</button>
+            <button type="button" data-numpad-key="ENTER" class="v-numpad-btn v-numpad-fn-enter" title="إدخال والانتقال للخانة التالية (Enter)">⏎</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrapper.firstElementChild);
+    drawer = document.getElementById('virtualPosNumpadDrawer');
+  }
+  return drawer;
+}
+window.ensureVirtualPosNumpadMounted = ensureVirtualPosNumpadMounted;
 
 function isVirtualPosNumpadEnabled() {
   try {
@@ -245,6 +316,7 @@ function isTargetVirtualNumpadInput(el) {
 }
 
 function syncVirtualNumpadInputModesAndToggleUI() {
+  ensureVirtualPosNumpadMounted();
   const enabled = isVirtualPosNumpadEnabled();
   const inputs = getAllVirtualNumpadTargetInputs();
   inputs.forEach(inp => {
@@ -292,22 +364,27 @@ function updateVirtualNumpadPreviewUI() {
 
 function openVirtualPosNumpadForInput(inputEl) {
   if (!isVirtualPosNumpadEnabled() || !isTargetVirtualNumpadInput(inputEl)) return;
-  const drawer = document.getElementById('virtualPosNumpadDrawer');
+  const drawer = ensureVirtualPosNumpadMounted();
   if (!drawer) return;
+
+  lastNumpadOpenedAt = Date.now();
 
   if (activeNumpadInputEl && activeNumpadInputEl !== inputEl) {
     activeNumpadInputEl.classList.remove('numpad-active-input-highlight');
   }
 
+  const switchedField = (activeNumpadInputEl !== inputEl);
   activeNumpadInputEl = inputEl;
-  isFirstNumpadKeystroke = true;
+  if (switchedField || !isVirtualPosNumpadOpen) {
+    isFirstNumpadKeystroke = true;
+  }
   isVirtualPosNumpadOpen = true;
 
   inputEl.setAttribute('inputmode', 'none');
   inputEl.classList.add('numpad-active-input-highlight');
 
   // تظليل/تحديد القيمة الحالية عند أول لمسة ليتم استبدالها فور كتابة رقم جديد مثل الآلة الحاسبة
-  if (inputEl.value && String(inputEl.value).trim() !== '') {
+  if (isFirstNumpadKeystroke && inputEl.value && String(inputEl.value).trim() !== '') {
     setTimeout(() => {
       try {
         if (document.activeElement === inputEl && isFirstNumpadKeystroke) {
@@ -339,11 +416,14 @@ function openVirtualPosNumpadForInput(inputEl) {
   }, 60);
 }
 
-function closeVirtualPosNumpad() {
+function closeVirtualPosNumpad(blurActiveInput = true) {
   const drawer = document.getElementById('virtualPosNumpadDrawer');
   if (drawer) drawer.classList.add('hidden');
   if (activeNumpadInputEl) {
     activeNumpadInputEl.classList.remove('numpad-active-input-highlight');
+    if (blurActiveInput) {
+      try { activeNumpadInputEl.blur(); } catch (e) {}
+    }
   }
   activeNumpadInputEl = null;
   isFirstNumpadKeystroke = false;
@@ -377,7 +457,7 @@ function setVirtualPosNumpadPreference(enable, showMsg = true) {
 function handleVirtualNumpadKeyPress(keyAction) {
   if (!activeNumpadInputEl || activeNumpadInputEl.disabled) return;
   const el = activeNumpadInputEl;
-  const isIntOnly = (el.id === 'inpScaleNo' || el.id === 'inpCarNo');
+  const isIntOnly = (el.id === 'inpScaleNo' || el.id === 'inpCarNo' || el.id === 'inpCreditSales');
   let rawCurrent = String(el.value || '').replace(/,/g, '').trim();
 
   if (keyAction === 'ENTER') {
@@ -409,11 +489,11 @@ function handleVirtualNumpadKeyPress(keyAction) {
       calculateAndFillRemainingCredit(true);
     } else if (el.id === 'inpDeliveredCash' || el.id === 'inpCarriedForwardCash') {
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      closeVirtualPosNumpad();
+      closeVirtualPosNumpad(true);
     } else if (el.id === 'inpExpAmount') {
       const expForm = document.getElementById('expenseEntryForm');
       if (expForm) expForm.requestSubmit ? expForm.requestSubmit() : expForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      closeVirtualPosNumpad();
+      closeVirtualPosNumpad(true);
     }
     updateVirtualNumpadPreviewUI();
     return;
@@ -498,17 +578,22 @@ function handleVirtualNumpadKeyPress(keyAction) {
 }
 
 function initVirtualPosNumpadController() {
+  ensureVirtualPosNumpadMounted();
   syncVirtualNumpadInputModesAndToggleUI();
 
   const btnToggleHeader = document.getElementById('btnToggleVirtualPosNumpad');
-  if (btnToggleHeader) {
-    btnToggleHeader.addEventListener('click', () => {
+  if (btnToggleHeader && !btnToggleHeader.dataset.numpadBound) {
+    btnToggleHeader.dataset.numpadBound = '1';
+    btnToggleHeader.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       setVirtualPosNumpadPreference(!isVirtualPosNumpadEnabled(), true);
     });
   }
 
   const btnSwitchNative = document.getElementById('btnSwitchToNativeMobileKeyboard');
-  if (btnSwitchNative) {
+  if (btnSwitchNative && !btnSwitchNative.dataset.numpadBound) {
+    btnSwitchNative.dataset.numpadBound = '1';
     btnSwitchNative.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -526,17 +611,19 @@ function initVirtualPosNumpadController() {
   }
 
   const btnCloseDrawer = document.getElementById('btnCloseVirtualPosNumpad');
-  if (btnCloseDrawer) {
+  if (btnCloseDrawer && !btnCloseDrawer.dataset.numpadBound) {
+    btnCloseDrawer.dataset.numpadBound = '1';
     btnCloseDrawer.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeVirtualPosNumpad();
+      closeVirtualPosNumpad(true);
     });
   }
 
   // ربط أزرار اللوحة حصرياً بحدث pointerdown مع e.preventDefault() لمنع فقدان التركيز من الحقل النشط
   const numpadGrid = document.getElementById('virtualPosNumpadGrid');
-  if (numpadGrid) {
+  if (numpadGrid && !numpadGrid.dataset.numpadBound) {
+    numpadGrid.dataset.numpadBound = '1';
     numpadGrid.addEventListener('pointerdown', (e) => {
       const keyBtn = e.target.closest('[data-numpad-key]');
       if (!keyBtn) return;
@@ -549,7 +636,14 @@ function initVirtualPosNumpadController() {
     });
   }
 
-  // التقاط حدث focus و click على جميع الخانات الرقمية والمالية لفتح اللوحة تلقائياً
+  // التقاط أحداث اللمس والتركيز (pointerdown / touchstart / focusin / click) على الخانات الرقمية والمالية
+  document.addEventListener('pointerdown', (e) => {
+    const target = e.target;
+    if (isTargetVirtualNumpadInput(target) && isVirtualPosNumpadEnabled()) {
+      openVirtualPosNumpadForInput(target);
+    }
+  }, { passive: true });
+
   document.addEventListener('focusin', (e) => {
     const target = e.target;
     if (isTargetVirtualNumpadInput(target)) {
@@ -558,7 +652,7 @@ function initVirtualPosNumpadController() {
       }
     } else if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) {
       if (isVirtualPosNumpadOpen) {
-        closeVirtualPosNumpad();
+        closeVirtualPosNumpad(false);
       }
     }
   });
@@ -566,15 +660,16 @@ function initVirtualPosNumpadController() {
   document.addEventListener('click', (e) => {
     const target = e.target;
     if (isTargetVirtualNumpadInput(target)) {
-      if (isVirtualPosNumpadEnabled() && (!isVirtualPosNumpadOpen || activeNumpadInputEl !== target)) {
+      if (isVirtualPosNumpadEnabled()) {
         openVirtualPosNumpadForInput(target);
       }
       return;
     }
     if (isVirtualPosNumpadOpen) {
+      if (Date.now() - lastNumpadOpenedAt < 250) return;
       const drawer = document.getElementById('virtualPosNumpadDrawer');
       if (drawer && !drawer.contains(target) && !target.closest('#btnToggleVirtualPosNumpad')) {
-        closeVirtualPosNumpad();
+        closeVirtualPosNumpad(true);
       }
     }
   });
@@ -4343,9 +4438,9 @@ function ensureSmartSettlementStripMounted() {
     const tip = Math.max(0, parseNum(document.getElementById('inpTip')?.value) || 0);
     const netW = (w2 >= w1 && w2 > 0) ? roundMoney2(w2 - w1) : 0;
     const totalWithTip = roundMoney2(roundMoney2(netW * price) + tip);
-    const newRemCredit = roundMoney2(Math.max(0, totalWithTip - newCashVal - newTrVal));
+    const newRemCredit = Math.max(0, Math.round(totalWithTip - newCashVal - newTrVal));
     if (inpCredEl) {
-      inpCredEl.value = newRemCredit > 0 ? fmtMoney(newRemCredit) : '0';
+      inpCredEl.value = newRemCredit > 0 ? fmtMoney(Math.round(newRemCredit)) : '0';
     }
 
     if (tDelta > 0) {
@@ -4412,11 +4507,11 @@ function ensureSmartSettlementStripMounted() {
     const tip = Math.max(0, parseNum(document.getElementById('inpTip')?.value) || 0);
     const netW = (w2 >= w1 && w2 > 0) ? roundMoney2(w2 - w1) : 0;
     const totalWithTip = roundMoney2(roundMoney2(netW * price) + tip);
-    const restoredCred = roundMoney2(Math.max(0, totalWithTip - restoredCash - restoredTr));
+    const restoredCred = Math.max(0, Math.round(totalWithTip - restoredCash - restoredTr));
 
     if (inpCashEl) inpCashEl.value = restoredCash > 0 ? fmtMoney(restoredCash) : '';
     if (inpTrEl) inpTrEl.value = restoredTr > 0 ? fmtMoney(restoredTr) : '';
-    if (inpCredEl) inpCredEl.value = (w2 >= w1 && w2 > 0 && totalWithTip > 0) ? (restoredCred > 0 ? fmtMoney(restoredCred) : '0') : '';
+    if (inpCredEl) inpCredEl.value = (w2 >= w1 && w2 > 0 && totalWithTip > 0) ? (restoredCred > 0 ? fmtMoney(Math.round(restoredCred)) : '0') : '';
 
     updateLiveFormCalculation();
     showToast('↩️ تم التراجع وتصفير الإضافات التكميلية وإعادة المبالغ لأصل التوزيع!', '↩️');
@@ -4960,7 +5055,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v100-strip-fix';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v101-numpad-fix';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -4995,7 +5090,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=100', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=101', { scope: './' }).catch(() => {});
     }
   }
 
@@ -5026,7 +5121,8 @@ function initFarmSalesApp() {
       updateLiveFormCalculation();
     });
     inp.addEventListener('blur', (e) => {
-      const val = parseNum(e.target.value);
+      const rawVal = parseNum(e.target.value);
+      const val = e.target.id === 'inpCreditSales' ? Math.round(rawVal) : rawVal;
       e.target.value = val > 0 ? fmtMoney(val) : (e.target.id === 'inpDeliveredCash' ? '0' : '');
       updateLiveFormCalculation();
     });
@@ -6668,7 +6764,7 @@ function initFarmSalesApp() {
     const rem = Math.max(0, Math.round(totalWithTip - cashS - trS));
     const creditEl = document.getElementById('inpCreditSales');
     if (creditEl) {
-      creditEl.value = rem > 0 ? fmtMoney(rem) : '0';
+      creditEl.value = rem > 0 ? fmtMoney(Math.round(rem)) : '0';
       if (focusCreditInput) {
         creditEl.focus();
         creditEl.select();
@@ -6727,8 +6823,8 @@ function initFarmSalesApp() {
       if (inpCashSalesEl) inpCashSalesEl.value = finalCashNoCust > 0 ? fmtMoney(finalCashNoCust) : '';
       if (inpTrSalesEl) inpTrSalesEl.value = finalTransferNoCust > 0 ? fmtMoney(finalTransferNoCust) : '';
       if (inpCreditSalesEl) {
-        const remNoCust = roundMoney2(Math.max(0, totalWithTip - finalCashNoCust - finalTransferNoCust));
-        inpCreditSalesEl.value = hasValidW2 && totalWithTip > 0 ? (remNoCust > 0 ? fmtMoney(remNoCust) : '0') : '';
+        const remNoCust = Math.max(0, Math.round(totalWithTip - finalCashNoCust - finalTransferNoCust));
+        inpCreditSalesEl.value = hasValidW2 && totalWithTip > 0 ? (remNoCust > 0 ? fmtMoney(Math.round(remNoCust)) : '0') : '';
       }
       updateLiveFormCalculation();
       if (!silent) {
@@ -6774,14 +6870,14 @@ function initFarmSalesApp() {
       const finalTransfer = roundMoney2(allocSalesTransfer + supplementalTransferAdded);
       const inpCashSales = inpCashSalesEl;
       const inpTransferSales = inpTrSalesEl;
-      remCredit = roundMoney2(Math.max(0, totalWithTip - finalCash - finalTransfer));
+      remCredit = Math.max(0, Math.round(totalWithTip - finalCash - finalTransfer));
 
       if (inpCashSales) inpCashSales.value = finalCash > 0 ? fmtMoney(finalCash) : '';
       if (inpTransferSales) inpTransferSales.value = finalTransfer > 0 ? fmtMoney(finalTransfer) : '';
       if (finalTransfer > 0 && custTrType && selTrSalesTypeEl && !selTrSalesTypeEl.value) {
         selTrSalesTypeEl.value = custTrType;
       }
-      if (inpCreditSalesEl) inpCreditSalesEl.value = remCredit > 0 ? fmtMoney(remCredit) : '0';
+      if (inpCreditSalesEl) inpCreditSalesEl.value = remCredit > 0 ? fmtMoney(Math.round(remCredit)) : '0';
     } else {
       // لم تُدخل الوزنة الثانية بعد (السيارة تحت التحميل - وزنة 1)
       if (inpCashSalesEl) inpCashSalesEl.value = '';
@@ -7619,7 +7715,7 @@ function initFarmSalesApp() {
     document.getElementById('inpCashSales').value = item.cashSales ? fmtMoney(item.cashSales) : '';
     document.getElementById('inpTransferSales').value = item.transferSales ? fmtMoney(item.transferSales) : '';
     document.getElementById('selTransferSalesType').value = item.transferSalesType || '';
-    document.getElementById('inpCreditSales').value = item.creditSales ? fmtMoney(item.creditSales) : '';
+    document.getElementById('inpCreditSales').value = item.creditSales ? fmtMoney(Math.round(item.creditSales)) : '';
     document.getElementById('inpDebtCash').value = item.debtCash ? fmtMoney(item.debtCash) : '';
     document.getElementById('inpDebtTransfer').value = item.debtTransfer ? fmtMoney(item.debtTransfer) : '';
     document.getElementById('selDebtTransferType').value = item.debtTransferType || '';
@@ -8295,7 +8391,7 @@ function initFarmSalesApp() {
       document.getElementById('inpCashSales').value = row.cashSales ? fmtMoney(row.cashSales) : '';
       document.getElementById('inpTransferSales').value = row.transferSales ? fmtMoney(row.transferSales) : '';
       document.getElementById('selTransferSalesType').value = row.transferSalesType || '';
-      document.getElementById('inpCreditSales').value = row.creditSales ? fmtMoney(row.creditSales) : '';
+      document.getElementById('inpCreditSales').value = row.creditSales ? fmtMoney(Math.round(row.creditSales)) : '';
       document.getElementById('inpDebtCash').value = row.debtCash ? fmtMoney(row.debtCash) : '';
       document.getElementById('inpDebtTransfer').value = row.debtTransfer ? fmtMoney(row.debtTransfer) : '';
       document.getElementById('selDebtTransferType').value = row.debtTransferType || '';
@@ -9677,12 +9773,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=100',
-    './js/accounting.js?v=100',
-    './js/storage-sync.js?v=100',
-    './js/excel-engine.js?v=100',
-    './js/print-export.js?v=100',
-    './js/ui-controllers.js?v=100'
+    './js/core-state.js?v=101',
+    './js/accounting.js?v=101',
+    './js/storage-sync.js?v=101',
+    './js/excel-engine.js?v=101',
+    './js/print-export.js?v=101',
+    './js/ui-controllers.js?v=101'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -9891,14 +9987,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=100');
+        scTpl.setAttribute('src', './excel-template.js?v=101');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=100');
+        lnk.setAttribute('href', './style.css?v=101');
         bundledStyleEl.replaceWith(lnk);
       }
     }
