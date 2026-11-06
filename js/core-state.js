@@ -909,6 +909,24 @@ function ensureDeletedTimestampsStructure(obj) {
 
 function applyParsedStateObject(parsed) {
   if (!parsed || !parsed.days || !parsed.merchants) return false;
+  if (!parsed.farmsArchive || typeof parsed.farmsArchive !== 'object') {
+    parsed.farmsArchive = {};
+  }
+  const parsedFarmName = String(parsed.farmName ?? '').trim();
+  if (parsedFarmName && parsed.days && typeof parsed.days === 'object' && !parsed.farmsArchive[parsedFarmName]) {
+    parsed.farmsArchive[parsedFarmName] = {
+      farmName: parsedFarmName,
+      updatedAt: parsed.updatedAt || new Date(getSyncedNow()).toISOString(),
+      farmResetAt: Number(parsed.farmResetAt) || 0,
+      lastBulkImportAt: Number(parsed.lastBulkImportAt) || 0,
+      visibleDays: Array.isArray(parsed.visibleDays) && parsed.visibleDays.length > 0 ? [...parsed.visibleDays] : [1],
+      defaultPrice: parsed.defaultPrice !== undefined ? Number(parsed.defaultPrice) : 0,
+      defaultTip: parsed.defaultTip !== undefined ? Number(parsed.defaultTip) : 0,
+      lastScaleNo: parsed.lastScaleNo !== undefined ? Number(parsed.lastScaleNo) : 0,
+      merchants: Array.isArray(parsed.merchants) ? JSON.parse(JSON.stringify(parsed.merchants)) : [],
+      days: JSON.parse(JSON.stringify(parsed.days))
+    };
+  }
   const savedWebhook = (getEmbeddedWebhookUrl() || parsed.webhookUrl || appState.webhookUrl || '').trim();
   appState = { ...getDefaultState(), ...parsed, webhookUrl: savedWebhook };
   appState.deletedIds = ensureDeletedIdsStructure(appState.deletedIds);

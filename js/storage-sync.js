@@ -220,6 +220,8 @@ function activateFarmFromArchive(targetFarm) {
   const nowSwitchTs = getSyncedNow();
   appState.farmName = targetFarm;
   appState.lastFarmSwitchAt = nowSwitchTs;
+  appState.syncOutbox = [];
+  appState.lastDeltaSyncAt = 0;
   appState.hasLocalEdits = true;
   localMutationEpoch++;
   lastLocalMutationAt = Date.now();
@@ -1193,10 +1195,38 @@ function sanitizeMergedTombstonesAgainstLiveData(localState, cloudData, mergedDe
   });
 }
 
+function ensureObjectActiveFarmInArchive(stateLikeObj) {
+  if (!stateLikeObj || typeof stateLikeObj !== 'object') return;
+  if (!stateLikeObj.farmsArchive || typeof stateLikeObj.farmsArchive !== 'object') {
+    stateLikeObj.farmsArchive = {};
+  }
+  const fName = String(stateLikeObj.farmName ?? '').trim();
+  if (fName && stateLikeObj.days && typeof stateLikeObj.days === 'object' && !stateLikeObj.farmsArchive[fName]) {
+    stateLikeObj.farmsArchive[fName] = {
+      farmName: fName,
+      updatedAt: stateLikeObj.updatedAt || new Date(getSyncedNow()).toISOString(),
+      farmResetAt: Number(stateLikeObj.farmResetAt) || 0,
+      lastBulkImportAt: Number(stateLikeObj.lastBulkImportAt) || 0,
+      visibleDays: Array.isArray(stateLikeObj.visibleDays) && stateLikeObj.visibleDays.length > 0 ? [...stateLikeObj.visibleDays] : [1],
+      defaultPrice: stateLikeObj.defaultPrice !== undefined ? Number(stateLikeObj.defaultPrice) : 0,
+      defaultTip: stateLikeObj.defaultTip !== undefined ? Number(stateLikeObj.defaultTip) : 0,
+      lastScaleNo: stateLikeObj.lastScaleNo !== undefined ? Number(stateLikeObj.lastScaleNo) : 0,
+      merchants: Array.isArray(stateLikeObj.merchants) ? JSON.parse(JSON.stringify(stateLikeObj.merchants)) : [],
+      days: JSON.parse(JSON.stringify(stateLikeObj.days))
+    };
+  }
+}
+if (typeof window !== 'undefined') {
+  window.ensureObjectActiveFarmInArchive = ensureObjectActiveFarmInArchive;
+}
+
 function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
   if (!cloudData || typeof cloudData !== 'object') return false;
   normalizeIncomingCloudPayload(cloudData);
   if (!cloudData.days || !cloudData.merchants) return false;
+  // فك ضغط الأرشيف تلقائياً لكلا الطرفين (localState و cloudData) إذا كانت المزرعة النشطة غير موجودة داخل farmsArchive بسبب ضغط buildCompactStateForLocalStorage
+  ensureObjectActiveFarmInArchive(appState);
+  ensureObjectActiveFarmInArchive(cloudData);
 
   // معايرة ساعة الجهاز المحلي مع طابع وقت السحابة لتعويض أي تأخر في ساعة الهاتف (Clock Skew Calibration)
   if (cloudData.updatedAt) {
@@ -1348,22 +1378,37 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     };
   };
 
-  const mergedArchive = { ...(appState.farmsArchive || {}) };
+  // اتحاد تراكمي (Additive Union) لجميع المزارع الموجودة في الذاكرة المحلية والسحابة مع الاحتفاظ بأي مزرعة محلية حتى لو لم تكن موجودة في cloudData.farmsArchive
+  const localState = appState;
+  const mergedArchive = {};
+  if (localState.farmsArchive && typeof localState.farmsArchive === 'object') {
+    Object.keys(localState.farmsArchive).forEach(fKey => {
+      if (fKey && localState.farmsArchive[fKey]) {
+        mergedArchive[fKey] = JSON.parse(JSON.stringify(localState.farmsArchive[fKey]));
+      }
+    });
+  }
   if (cloudData.farmsArchive && typeof cloudData.farmsArchive === 'object') {
     Object.keys(cloudData.farmsArchive).forEach(fKey => {
+      if (!fKey) return;
       const cArch = cloudData.farmsArchive[fKey];
       const lArch = mergedArchive[fKey];
       if (lArch && lArch.days && cArch && cArch.days) {
         mergedArchive[fKey] = mergeFarmSnapshots(lArch, cArch, fKey);
-      } else if (cArch) {
-        mergedArchive[fKey] = cArch;
+      } else if (cArch && !lArch) {
+        mergedArchive[fKey] = JSON.parse(JSON.stringify(cArch));
       }
     });
   }
-  mergedDeletedIds.farms.forEach(fn => { delete mergedArchive[fn]; });
+  const delFarmsSet = new Set((mergedDeletedIds.farms || []).map(String));
+  Object.keys(mergedArchive).forEach(fn => {
+    if (delFarmsSet.has(fn)) {
+      delete mergedArchive[fn];
+    }
+  });
   appState.farmsArchive = mergedArchive;
 
-  // المتصفح يُعتبر جديداً/فارغاً فقط إذا لم يكن لديه تعديلات أو حذف محلي معلّق، وكان عدد حركاته المحلية = 0 تماماً
+  // المتصفح يُعتبر جديداً/فارغاً فقط إذا لم يكن لديه تعديلات أو حذف محلي معلّق، وكان عدد حركاته المحلية = 0 تماماً، ولم تكن هناك مزرعة منشأة أو محفوظة في الأرشيف
   const hasRecentLocalDeletions = Boolean(
     appState.hasLocalEdits && (
       localDel.sales.length > 0 ||
@@ -1373,8 +1418,12 @@ function mergeCloudDataIntoLocal(cloudData, preferCloud = true) {
     )
   );
   const archiveFarmsCount = Object.keys(appState.farmsArchive || {}).length;
-  // لا نعتبر المتصفح جديداً/فارغاً إذا كان المستخدم يمتلك أرشيف مزارع متعددة أو قام بالتبديل اليدوي بين المزارع!
-  const isLocalEffectivelyFresh = (localMovementsCount === 0) && !hasRecentLocalDeletions && archiveFarmsCount <= 1 && !Number(appState.lastFarmSwitchAt) && (
+  const hasLocalFarmOrArchive = Boolean(
+    (localFarmName && Number(appState.lastFarmSwitchAt) > 0) ||
+    archiveFarmsCount > 0
+  );
+  // منع هدم المزارع الفارغة: إذا كان appState.farmName موجوداً و lastFarmSwitchAt > 0 أو توجد مزارع في farmsArchive، يكون isLocalEffectivelyFresh = false قطعاً
+  const isLocalEffectivelyFresh = !hasLocalFarmOrArchive && (localMovementsCount === 0) && !hasRecentLocalDeletions && !Number(appState.lastFarmSwitchAt) && (
     !appState.hasLocalEdits ||
     localResetAt === 0 ||
     (cloudMovementsCount > 0 && !isTimestampSignificantlyNewer(localResetAt, Math.max(cloudResetAt, cloudMaxAddedAt), CLOCK_SKEW_BUFFER_MS))
@@ -2481,8 +2530,12 @@ function saveState(incrementPending = true, skipCloudPreMerge = false) {
 }
 
 function setFarmName(newName, skipImmediateSave = false) {
+  syncActiveFarmIntoArchive();
   const cleaned = String(newName ?? '').trim();
   appState.farmName = cleaned;
+  appState.lastFarmSwitchAt = getSyncedNow();
+  appState.syncOutbox = [];
+  appState.lastDeltaSyncAt = 0;
   if (cleaned) {
     unrecordDeletedItem('farms', cleaned);
   }
@@ -2495,6 +2548,7 @@ function setFarmName(newName, skipImmediateSave = false) {
   document.getElementById('dailyFarmNameBadge').textContent = dispName;
   document.getElementById('dashFarmNameTitle').textContent = dispName;
   document.title = cleaned ? `نظام محاضر لجان بيع المزارع - ${cleaned}` : 'نظام محاضر لجان بيع المزارع';
+  syncActiveFarmIntoArchive();
   if (!skipImmediateSave) {
     saveState(true);
   }

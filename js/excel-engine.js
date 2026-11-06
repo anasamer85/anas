@@ -1335,6 +1335,7 @@ function isSaleRecordUnchanged(oldRec, newRec) {
 }
 
 function importWorkbookIntoAppState(workbook, sourceFileName = '') {
+  syncActiveFarmIntoArchive();
   if (!workbook || !workbook.Sheets || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length === 0) {
     showToast('⚠️ ملف الإكسيل فارغ أو غير صالح للقراءة!', '⚠️');
     return false;
@@ -1362,7 +1363,16 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
       }
     }
   }
+  const prevActiveFarmBeforeImport = String(appState.farmName || '').trim();
   appState.farmName = detectedFarmName;
+  unrecordDeletedItem('farms', detectedFarmName);
+  if (prevActiveFarmBeforeImport && prevActiveFarmBeforeImport !== detectedFarmName) {
+    if (appState.farmsArchive && appState.farmsArchive[detectedFarmName] && appState.farmsArchive[detectedFarmName].days) {
+      appState.days = ensureDaysSchemaIntact(JSON.parse(JSON.stringify(appState.farmsArchive[detectedFarmName].days)));
+    } else {
+      appState.days = ensureDaysSchemaIntact({});
+    }
+  }
 
   // 2. قراءة وتنظيف دليل التجار الموحد من شيت `تكويد التجار وكشف الحساب`
   const merchSheet = workbook.Sheets['تكويد التجار وكشف الحساب'];
@@ -1899,6 +1909,9 @@ function importWorkbookIntoAppState(workbook, sourceFileName = '') {
   appState.defaultPrice = lastImportedPrice;
   appState.defaultTip = lastImportedTip;
   appState.lastExcelSync = `تم التحديث من (${sourceFileName || 'شيت الإكسيل'}) الساعة ${new Date().toLocaleTimeString('ar-EG')}`;
+  appState.lastFarmSwitchAt = masterImportTs || getSyncedNow();
+  appState.syncOutbox = []; // إجبار الرفع الشامل لضمان رفع المزرعة المستوردة وfarmsArchive
+  appState.lastDeltaSyncAt = 0;
   syncActiveFarmIntoArchive();
   // نمرر skipCloudPreMerge = false حتى يندمج تحديث الإكسيل بأمان مع طابور المزامنة السحابية الذري (Atomic Pre-Fetch Merge) دون تضارب
   saveState(true, false);

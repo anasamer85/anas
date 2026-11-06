@@ -1,4 +1,17 @@
 // =========================================================================
+// SUPPLEMENTAL CHECKOUT PAYMENT BOOSTERS STATE (v97-payment-boosters)
+// =========================================================================
+let supplementalCashAdded = 0;
+let supplementalTransferAdded = 0;
+
+function resetSupplementalPaymentBoosters() {
+  supplementalCashAdded = 0;
+  supplementalTransferAdded = 0;
+  const inpBoostEl = document.getElementById('inpSupplementalBoostAmount');
+  if (inpBoostEl) inpBoostEl.value = '';
+}
+
+// =========================================================================
 // RECEIPT EXPORT DROPDOWN (FIXED POSITIONING), MODAL SCROLL LOCK & FOCUS TRAP (v96)
 // =========================================================================
 function buildScaleReceiptDropdownHtml(safeId, dayNum, extraContainerCls = 'ml-1') {
@@ -3832,6 +3845,228 @@ function setSaleEntryMode(mode = 'sale', options = {}) {
   }
 }
 
+
+function ensureSmartSettlementStripMounted() {
+  let wrapper = document.getElementById('smartSupplementalSettlementStrip');
+  if (wrapper) return wrapper;
+  const hostCard = document.getElementById('currentInvoiceCollectionCard');
+  if (!hostCard) return null;
+
+  wrapper = document.createElement('div');
+  wrapper.id = 'smartSupplementalSettlementStrip';
+  wrapper.className = 'hidden mt-2 pt-2 border-t border-blue-200/80 space-y-2';
+  wrapper.innerHTML = `
+    <div id="smartSupplementalControlsRow" class="hidden bg-white/95 border-2 border-emerald-400 rounded-xl p-2 shadow-sm flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="text-[11px] font-extrabold text-emerald-950 flex items-center gap-1">
+          <span>⚡</span>
+          <span>تعزيز وسداد تكميلي فوق العهدة (بدون جمع ذهني):</span>
+        </span>
+        <button type="button" id="btnBoostSettleRemainingCash" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1" title="إضافة كامل الآجل المتبقي إلى نقدي المبيعات وتصفير الآجل فوراً">
+          <span>💵</span>
+          <span id="lblBoostSettleRemainingCash">قفّل الباقي كاش</span>
+        </button>
+        <button type="button" id="btnBoostSettleRemainingTransfer" class="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1" title="إضافة كامل الآجل المتبقي إلى تحويل المبيعات وتصفير الآجل فوراً">
+          <span>💳</span>
+          <span id="lblBoostSettleRemainingTransfer">قفّل الباقي تحويل</span>
+        </button>
+      </div>
+      <div class="flex items-center gap-1.5 flex-1 sm:flex-initial justify-end min-w-[210px]">
+        <input id="inpSupplementalBoostAmount" type="text" inputmode="decimal" data-money-input="1" placeholder="مبلغ إضافي (مثال: 10,000)..."
+          class="w-36 sm:w-40 px-2.5 py-1 text-xs font-extrabold border-2 border-emerald-500 rounded-lg bg-emerald-50/40 focus:bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600" autocomplete="off" />
+        <button type="button" id="btnAddSupplementalCashBoost" class="px-2.5 py-1 rounded-lg bg-blue-900 hover:bg-blue-800 text-amber-300 font-extrabold text-[11px] shadow-sm transition whitespace-nowrap flex items-center gap-1" title="جمع هذا المبلغ الإضافي فوق نقدي المبيعات الحالي وخصمه من الآجل تلقائياً">
+          <span>➕</span>
+          <span>أضف للنقدي</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="supplementalBoostBreakdownPill" class="hidden bg-emerald-100/90 border border-emerald-400 text-emerald-950 px-3 py-1.5 rounded-xl text-[11px] font-extrabold flex flex-wrap items-center justify-between gap-2 shadow-sm">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span>📌</span>
+        <span id="lblSupplementalBoostBreakdownTxt">تفصيل الدفعات التكميلية المضافة فوق العهدة</span>
+      </div>
+      <button type="button" id="btnUndoSupplementalBoosts" class="px-2.5 py-0.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-extrabold text-[11px] transition flex items-center gap-1 shrink-0" title="إلغاء وتصفير المبالغ التكميلية المضافة والعودة لأصل توزيع العهدة">
+        <span>↩️</span>
+        <span>تراجع (تصفير الإضافات)</span>
+      </button>
+    </div>
+  `;
+  hostCard.appendChild(wrapper);
+
+  const inpBoost = wrapper.querySelector('#inpSupplementalBoostAmount');
+  if (inpBoost) {
+    inpBoost.addEventListener('input', (e) => {
+      const formatted = formatLiveMoneyInputString(e.target.value);
+      if (e.target.value !== formatted) e.target.value = formatted;
+    });
+    inpBoost.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const btnAdd = document.getElementById('btnAddSupplementalCashBoost');
+        if (btnAdd) btnAdd.click();
+      }
+    });
+  }
+
+  const applyIncrementalPaymentBoost = (cashDelta = 0, transferDelta = 0, toastNote = '') => {
+    const cDelta = roundMoney2(Math.max(0, Number(cashDelta) || 0));
+    const tDelta = roundMoney2(Math.max(0, Number(transferDelta) || 0));
+    if (cDelta <= 0 && tDelta <= 0) return;
+
+    const inpCashEl = document.getElementById('inpCashSales');
+    const inpTrEl = document.getElementById('inpTransferSales');
+    const inpCredEl = document.getElementById('inpCreditSales');
+
+    const prevCashVal = roundMoney2(Math.max(0, parseNum(inpCashEl?.value) || 0));
+    const prevTrVal = roundMoney2(Math.max(0, parseNum(inpTrEl?.value) || 0));
+    const baseCashBeforeBoost = roundMoney2(Math.max(0, prevCashVal - supplementalCashAdded));
+    const baseTrBeforeBoost = roundMoney2(Math.max(0, prevTrVal - supplementalTransferAdded));
+
+    supplementalCashAdded = roundMoney2(supplementalCashAdded + cDelta);
+    supplementalTransferAdded = roundMoney2(supplementalTransferAdded + tDelta);
+
+    const newCashVal = roundMoney2(baseCashBeforeBoost + supplementalCashAdded);
+    const newTrVal = roundMoney2(baseTrBeforeBoost + supplementalTransferAdded);
+
+    if (inpCashEl) inpCashEl.value = newCashVal > 0 ? fmtMoney(newCashVal) : '';
+    if (inpTrEl) inpTrEl.value = newTrVal > 0 ? fmtMoney(newTrVal) : '';
+
+    const w1 = Math.max(0, parseNum(document.getElementById('inpW1')?.value) || 0);
+    const w2 = Math.max(0, parseNum(document.getElementById('inpW2')?.value) || 0);
+    const price = Math.max(0, parseNum(document.getElementById('inpPrice')?.value) || 0);
+    const tip = Math.max(0, parseNum(document.getElementById('inpTip')?.value) || 0);
+    const netW = (w2 >= w1 && w2 > 0) ? roundMoney2(w2 - w1) : 0;
+    const totalWithTip = roundMoney2(roundMoney2(netW * price) + tip);
+    const newRemCredit = roundMoney2(Math.max(0, totalWithTip - newCashVal - newTrVal));
+    if (inpCredEl) {
+      inpCredEl.value = newRemCredit > 0 ? fmtMoney(newRemCredit) : '0';
+    }
+
+    if (tDelta > 0) {
+      const selTrTypeEl = document.getElementById('selTransferSalesType');
+      const custTrType = document.getElementById('selCustodyTransferType')?.value || '';
+      if (selTrTypeEl && !selTrTypeEl.value && custTrType) {
+        selTrTypeEl.value = custTrType;
+      }
+    }
+
+    updateLiveFormCalculation();
+    if (toastNote) showToast(toastNote, '⚡');
+  };
+
+  wrapper.querySelector('#btnBoostSettleRemainingCash')?.addEventListener('click', () => {
+    const remCred = roundMoney2(Math.max(0, parseNum(document.getElementById('inpCreditSales')?.value) || 0));
+    if (remCred <= 0) {
+      showToast('لا يوجد متبقي آجل على الفاتورة لتقفيله نقداً!', 'ℹ️');
+      return;
+    }
+    applyIncrementalPaymentBoost(remCred, 0, `💵 تم إضافة باقي الفاتورة (${fmtMoney(remCred)} ج.م) للنقدي وتصفير الآجل بنجاح!`);
+  });
+
+  wrapper.querySelector('#btnBoostSettleRemainingTransfer')?.addEventListener('click', () => {
+    const remCred = roundMoney2(Math.max(0, parseNum(document.getElementById('inpCreditSales')?.value) || 0));
+    if (remCred <= 0) {
+      showToast('لا يوجد متبقي آجل على الفاتورة لتقفيله بتحويل!', 'ℹ️');
+      return;
+    }
+    applyIncrementalPaymentBoost(0, remCred, `💳 تم إضافة باقي الفاتورة (${fmtMoney(remCred)} ج.م) للتحويل وتصفير الآجل بنجاح!`);
+    const selTrTypeEl = document.getElementById('selTransferSalesType');
+    if (selTrTypeEl && !selTrTypeEl.value) {
+      setTimeout(() => { try { selTrTypeEl.focus(); } catch (e) {} }, 40);
+    }
+  });
+
+  wrapper.querySelector('#btnAddSupplementalCashBoost')?.addEventListener('click', () => {
+    const inpEl = document.getElementById('inpSupplementalBoostAmount');
+    const boostAmt = roundMoney2(Math.max(0, parseNum(inpEl?.value) || 0));
+    if (boostAmt <= 0) {
+      showToast('⚠️ اكتب المبلغ الإضافي أولاً ليتم جمعه على النقدي تلقائياً!', '⚠️');
+      if (inpEl) inpEl.focus();
+      return;
+    }
+    if (inpEl) inpEl.value = '';
+    applyIncrementalPaymentBoost(boostAmt, 0, `➕ تم جمع (${fmtMoney(boostAmt)} ج.م) فوق نقدي الفاتورة وخصمها من الآجل تلقائياً!`);
+  });
+
+  wrapper.querySelector('#btnUndoSupplementalBoosts')?.addEventListener('click', () => {
+    const inpCashEl = document.getElementById('inpCashSales');
+    const inpTrEl = document.getElementById('inpTransferSales');
+    const inpCredEl = document.getElementById('inpCreditSales');
+
+    const curCash = roundMoney2(Math.max(0, parseNum(inpCashEl?.value) || 0));
+    const curTr = roundMoney2(Math.max(0, parseNum(inpTrEl?.value) || 0));
+    const restoredCash = roundMoney2(Math.max(0, curCash - supplementalCashAdded));
+    const restoredTr = roundMoney2(Math.max(0, curTr - supplementalTransferAdded));
+
+    resetSupplementalPaymentBoosters();
+
+    const w1 = Math.max(0, parseNum(document.getElementById('inpW1')?.value) || 0);
+    const w2 = Math.max(0, parseNum(document.getElementById('inpW2')?.value) || 0);
+    const price = Math.max(0, parseNum(document.getElementById('inpPrice')?.value) || 0);
+    const tip = Math.max(0, parseNum(document.getElementById('inpTip')?.value) || 0);
+    const netW = (w2 >= w1 && w2 > 0) ? roundMoney2(w2 - w1) : 0;
+    const totalWithTip = roundMoney2(roundMoney2(netW * price) + tip);
+    const restoredCred = roundMoney2(Math.max(0, totalWithTip - restoredCash - restoredTr));
+
+    if (inpCashEl) inpCashEl.value = restoredCash > 0 ? fmtMoney(restoredCash) : '';
+    if (inpTrEl) inpTrEl.value = restoredTr > 0 ? fmtMoney(restoredTr) : '';
+    if (inpCredEl) inpCredEl.value = (w2 >= w1 && w2 > 0 && totalWithTip > 0) ? (restoredCred > 0 ? fmtMoney(restoredCred) : '0') : '';
+
+    updateLiveFormCalculation();
+    showToast('↩️ تم التراجع وتصفير الإضافات التكميلية وإعادة المبالغ لأصل التوزيع!', '↩️');
+  });
+
+  return wrapper;
+}
+
+function updateSmartSettlementStripUI(credS, cashS, trS) {
+  const wrapper = ensureSmartSettlementStripMounted();
+  if (!wrapper) return;
+  const controlsRow = document.getElementById('smartSupplementalControlsRow');
+  const pillEl = document.getElementById('supplementalBoostBreakdownPill');
+  const pillTxtEl = document.getElementById('lblSupplementalBoostBreakdownTxt');
+  const lblCashBtn = document.getElementById('lblBoostSettleRemainingCash');
+  const lblTrBtn = document.getElementById('lblBoostSettleRemainingTransfer');
+
+  const hasCreditRemaining = roundMoney2(Number(credS) || 0) > 0;
+  const hasSupplementalBoosts = (roundMoney2(supplementalCashAdded) > 0 || roundMoney2(supplementalTransferAdded) > 0);
+  const isDebtOnly = typeof isDebtCollectionOnlyMode === 'function' && isDebtCollectionOnlyMode();
+
+  if (isDebtOnly || (!hasCreditRemaining && !hasSupplementalBoosts)) {
+    wrapper.classList.add('hidden');
+    if (controlsRow) controlsRow.classList.add('hidden');
+    if (pillEl) pillEl.classList.add('hidden');
+    return;
+  }
+
+  wrapper.classList.remove('hidden');
+
+  if (controlsRow) {
+    controlsRow.classList.toggle('hidden', !hasCreditRemaining);
+    if (hasCreditRemaining) {
+      if (lblCashBtn) lblCashBtn.textContent = `قفّل الباقي كاش (+${fmtMoney(credS)})`;
+      if (lblTrBtn) lblTrBtn.textContent = `قفّل الباقي تحويل (+${fmtMoney(credS)})`;
+    }
+  }
+
+  if (pillEl && pillTxtEl) {
+    pillEl.classList.toggle('hidden', !hasSupplementalBoosts);
+    if (hasSupplementalBoosts) {
+      const parts = [];
+      if (roundMoney2(supplementalCashAdded) > 0) {
+        const origCash = roundMoney2(Math.max(0, (Number(cashS) || 0) - supplementalCashAdded));
+        parts.push(`نقدي الفاتورة (${fmtMoney(cashS)}) = أصل (${fmtMoney(origCash)}) + إضافي تكميلي (${fmtMoney(supplementalCashAdded)})`);
+      }
+      if (roundMoney2(supplementalTransferAdded) > 0) {
+        const origTr = roundMoney2(Math.max(0, (Number(trS) || 0) - supplementalTransferAdded));
+        parts.push(`تحويل الفاتورة (${fmtMoney(trS)}) = أصل (${fmtMoney(origTr)}) + إضافي تكميلي (${fmtMoney(supplementalTransferAdded)})`);
+      }
+      pillTxtEl.textContent = parts.join(' | ');
+    }
+  }
+}
+
 function updateLiveFormCalculation() {
   const rawW1 = document.getElementById('inpW1').value;
   const rawW2 = document.getElementById('inpW2').value;
@@ -3858,6 +4093,7 @@ function updateLiveFormCalculation() {
   const trS = parseNum(document.getElementById('inpTransferSales').value) || 0;
   const credS = parseNum(document.getElementById('inpCreditSales').value) || 0;
   const diff = (cashS + trS + credS) - totalWithTip;
+  updateSmartSettlementStripUI(credS, cashS, trS);
 
   document.getElementById('calcNetWeight').textContent = `${fmtInt(netW)} كجم`;
   document.getElementById('calcTotalWithTip').textContent = `${fmtDec(totalWithTip)} ج.م`;
@@ -4311,7 +4547,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v97-final';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v97-payment-boosters';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -4346,7 +4582,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=97', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=97boost', { scope: './' }).catch(() => {});
     }
   }
 
@@ -4895,6 +5131,9 @@ function initFarmSalesApp() {
       if (appState.farmName === oldEditName) {
         appState.farmName = newName;
       }
+      appState.lastFarmSwitchAt = getSyncedNow();
+      appState.syncOutbox = [];
+      appState.lastDeltaSyncAt = 0;
       document.getElementById('editCloudFarmOldName').value = '';
       document.getElementById('btnAddNewCloudFarm').textContent = '➕ إنشاء مزرعة جديدة بالسحابة';
       document.getElementById('btnCancelCloudFarmEdit').classList.add('hidden');
@@ -4912,6 +5151,8 @@ function initFarmSalesApp() {
     const nowCreateTs = getSyncedNow();
     appState.farmName = newName;
     appState.lastFarmSwitchAt = nowCreateTs;
+    appState.syncOutbox = [];
+    appState.lastDeltaSyncAt = 0;
     appState.farmResetAt = 0;
     appState.factoryZeroWipeAt = 0;
     appState.hasLocalEdits = true;
@@ -6068,10 +6309,13 @@ function initFarmSalesApp() {
     if (totalCustody <= 0) {
       if (inpDebtCashEl) inpDebtCashEl.value = '';
       if (inpDebtTrEl) inpDebtTrEl.value = '';
-      if (inpCashSalesEl) inpCashSalesEl.value = '';
-      if (inpTrSalesEl) inpTrSalesEl.value = '';
+      const finalCashNoCust = roundMoney2(supplementalCashAdded);
+      const finalTransferNoCust = roundMoney2(supplementalTransferAdded);
+      if (inpCashSalesEl) inpCashSalesEl.value = finalCashNoCust > 0 ? fmtMoney(finalCashNoCust) : '';
+      if (inpTrSalesEl) inpTrSalesEl.value = finalTransferNoCust > 0 ? fmtMoney(finalTransferNoCust) : '';
       if (inpCreditSalesEl) {
-        inpCreditSalesEl.value = hasValidW2 && totalWithTip > 0 ? fmtMoney(totalWithTip) : '';
+        const remNoCust = roundMoney2(Math.max(0, totalWithTip - finalCashNoCust - finalTransferNoCust));
+        inpCreditSalesEl.value = hasValidW2 && totalWithTip > 0 ? (remNoCust > 0 ? fmtMoney(remNoCust) : '0') : '';
       }
       updateLiveFormCalculation();
       if (!silent) {
@@ -6112,11 +6356,16 @@ function initFarmSalesApp() {
       allocSalesCash = roundMoney2(Math.min(remCashAfterDebt, totalWithTip));
       const remInvoiceAfterCash = roundMoney2(Math.max(0, totalWithTip - allocSalesCash));
       allocSalesTr = roundMoney2(Math.min(remTrAfterDebt, remInvoiceAfterCash));
-      remCredit = roundMoney2(Math.max(0, totalWithTip - allocSalesCash - allocSalesTr));
+      const allocSalesTransfer = allocSalesTr;
+      const finalCash = roundMoney2(allocSalesCash + supplementalCashAdded);
+      const finalTransfer = roundMoney2(allocSalesTransfer + supplementalTransferAdded);
+      const inpCashSales = inpCashSalesEl;
+      const inpTransferSales = inpTrSalesEl;
+      remCredit = roundMoney2(Math.max(0, totalWithTip - finalCash - finalTransfer));
 
-      if (inpCashSalesEl) inpCashSalesEl.value = allocSalesCash > 0 ? fmtMoney(allocSalesCash) : '';
-      if (inpTrSalesEl) inpTrSalesEl.value = allocSalesTr > 0 ? fmtMoney(allocSalesTr) : '';
-      if (allocSalesTr > 0 && custTrType && selTrSalesTypeEl) {
+      if (inpCashSales) inpCashSales.value = finalCash > 0 ? fmtMoney(finalCash) : '';
+      if (inpTransferSales) inpTransferSales.value = finalTransfer > 0 ? fmtMoney(finalTransfer) : '';
+      if (finalTransfer > 0 && custTrType && selTrSalesTypeEl && !selTrSalesTypeEl.value) {
         selTrSalesTypeEl.value = custTrType;
       }
       if (inpCreditSalesEl) inpCreditSalesEl.value = remCredit > 0 ? fmtMoney(remCredit) : '0';
@@ -6267,6 +6516,7 @@ function initFarmSalesApp() {
   function cancelOrClearCurrentSaleEntry(showFeedbackToast = true) {
     const wasEditing = Boolean((document.getElementById('editSaleId') && document.getElementById('editSaleId').value) || activeRecalledPendingId);
     activeRecalledPendingId = '';
+    resetSupplementalPaymentBoosters();
     const formEl = document.getElementById('saleEntryForm');
     if (formEl) formEl.reset();
     const editIdEl = document.getElementById('editSaleId');
@@ -6938,6 +7188,7 @@ function initFarmSalesApp() {
     const item = (dayObj.pendingSales || []).find(x => x.id === pid);
     if (!item) return;
     activeRecalledPendingId = item.id;
+    resetSupplementalPaymentBoosters();
     const isPreWeighingItem = Boolean(item.status === 'pre_weighing' || (Number(item.w1) || 0) <= 0);
     setSaleEntryMode('sale', { clearWeightFields: false, focusMerchantOrDebt: false, showModeToast: false });
     document.getElementById('editSaleId').value = '';
@@ -7612,6 +7863,7 @@ function initFarmSalesApp() {
       const id = editBtn.getAttribute('data-edit-sale');
       const row = appState.days[appState.currentDay].sales.find(x => x.id === id);
       if (!row) return;
+      resetSupplementalPaymentBoosters();
       const compRow = computeSaleRow(row);
       const hasDebtValuesInRow = Boolean(compRow.isDebtCollectionOnly || (Number(row.debtCash) || 0) > 0 || (Number(row.debtTransfer) || 0) > 0);
       setDebtCollectionOptionsVisible(hasDebtValuesInRow, { switchBackToScaleIfHidden: false });
@@ -8030,8 +8282,11 @@ function initFarmSalesApp() {
           lockUpdatedAt: 0
         };
       }
+      syncActiveFarmIntoArchive();
       appState.farmName = newName;
       appState.lastFarmSwitchAt = nowCreateTs;
+      appState.syncOutbox = [];
+      appState.lastDeltaSyncAt = 0;
       appState.farmResetAt = 0;
       appState.factoryZeroWipeAt = 0;
       appState.hasLocalEdits = true;
@@ -9005,12 +9260,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=97',
-    './js/accounting.js?v=97',
-    './js/storage-sync.js?v=97',
-    './js/excel-engine.js?v=97',
-    './js/print-export.js?v=97',
-    './js/ui-controllers.js?v=97'
+    './js/core-state.js?v=97boost',
+    './js/accounting.js?v=97boost',
+    './js/storage-sync.js?v=97boost',
+    './js/excel-engine.js?v=97boost',
+    './js/print-export.js?v=97boost',
+    './js/ui-controllers.js?v=97boost'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -9219,14 +9474,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=97');
+        scTpl.setAttribute('src', './excel-template.js?v=97boost');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=97');
+        lnk.setAttribute('href', './style.css?v=97boost');
         bundledStyleEl.replaceWith(lnk);
       }
     }
