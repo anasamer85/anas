@@ -182,6 +182,411 @@ window.debouncedSaveState = debouncedSaveState;
 // =========================================================================
 // 4. UI RENDERING FUNCTIONS
 // =========================================================================
+
+// =========================================================================
+// VIRTUAL POS CALCULATOR NUMPAD ENGINE (v99 — 7-8-9 Top Calculator Layout)
+// =========================================================================
+const VIRTUAL_NUMPAD_PREF_KEY = 'pref_virtual_pos_numpad_v99';
+let activeNumpadInputEl = null;
+let isFirstNumpadKeystroke = false;
+let isVirtualPosNumpadOpen = false;
+
+const VIRTUAL_NUMPAD_FIELD_LABELS = {
+  inpScaleNo: '🔢 مسلسل الميزان / رقم السند',
+  inpCarNo: '🚛 رقم السيارة',
+  inpW1: '⚖️ الوزنة الأولى (فارغ - كجم)',
+  inpW2: '⚖️ الوزنة الثانية (قائم - كجم)',
+  inpPrice: '💰 السعر (ج.م / كجم)',
+  inpTip: '🎁 الإكرامية (ج.م)',
+  inpCustodyCash: '💼 عهدة نقدية دفعها التاجر',
+  inpCustodyTransfer: '💳 عهدة تحويل دفعها التاجر',
+  inpCashSales: '💵 نقدي مبيعات (للخزنة)',
+  inpCreditSales: '📌 آجل فاتورة اليوم',
+  inpTransferSales: '🏦 تحويل مبيعات (يخصم من التاجر)',
+  inpSupplementalBoostAmount: '➕ مبلغ إضافي تكميلي للنقدي',
+  inpDebtCash: '💵 نقدي تحصيل مديونيات سابقة',
+  inpDebtTransfer: '💳 تحويل تحصيل مديونيات سابقة',
+  inpPrevCash: '🏦 نقدي مزارع سابقة (للخزنة فقط)',
+  inpPrevTransfer: '🏦 تحويل مزارع سابقة',
+  inpExpAmount: '💸 المبلغ المنصرف (ج.م)',
+  inpDeliveredCash: '🏦 النقدية المسلمة فعلياً من الخزينة',
+  inpCarriedForwardCash: '🔄 نقدية مرحّلة بالخزنة لليوم التالي',
+  inpModalMissingPrice: '💰 سعر الكيلو لإتمام الحفظ (ج.م / كجم)'
+};
+
+function isVirtualPosNumpadEnabled() {
+  try {
+    const saved = localStorage.getItem(VIRTUAL_NUMPAD_PREF_KEY);
+    if (saved === '1' || saved === 'true') return true;
+    if (saved === '0' || saved === 'false') return false;
+  } catch (e) {}
+  return true;
+}
+
+function getAllVirtualNumpadTargetInputs() {
+  if (typeof document === 'undefined') return [];
+  return Array.from(
+    document.querySelectorAll(
+      'input[data-money-input="1"], #inpScaleNo, #inpCarNo, #inpSupplementalBoostAmount, #inpModalMissingPrice'
+    )
+  );
+}
+
+function isTargetVirtualNumpadInput(el) {
+  if (!el || el.tagName !== 'INPUT' || el.disabled || el.readOnly) return false;
+  if (el.getAttribute('data-money-input') === '1') return true;
+  const id = el.id || '';
+  return (
+    id === 'inpScaleNo' ||
+    id === 'inpCarNo' ||
+    id === 'inpSupplementalBoostAmount' ||
+    id === 'inpModalMissingPrice'
+  );
+}
+
+function syncVirtualNumpadInputModesAndToggleUI() {
+  const enabled = isVirtualPosNumpadEnabled();
+  const inputs = getAllVirtualNumpadTargetInputs();
+  inputs.forEach(inp => {
+    const isIntField = (inp.id === 'inpScaleNo' || inp.id === 'inpCarNo');
+    if (enabled) {
+      if (inp.type === 'number') {
+        inp.setAttribute('data-orig-number-type', '1');
+        try { inp.type = 'text'; } catch (e) {}
+      }
+      inp.setAttribute('inputmode', 'none');
+    } else {
+      inp.setAttribute('inputmode', isIntField ? 'numeric' : 'decimal');
+    }
+  });
+
+  const toggleBtn = document.getElementById('btnToggleVirtualPosNumpad');
+  const toggleLbl = document.getElementById('lblToggleVirtualPosNumpad');
+  if (toggleBtn && toggleLbl) {
+    if (enabled) {
+      toggleLbl.textContent = 'لوحة الحاسبة: مفعلة ✓';
+      toggleBtn.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-400 text-slate-950 border border-amber-200 text-xs font-extrabold cursor-pointer transition select-none shadow-sm';
+    } else {
+      toggleLbl.textContent = 'لوحة الحاسبة: متوقفة (كيبورد الهاتف)';
+      toggleBtn.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-xs font-extrabold text-slate-200 cursor-pointer transition select-none';
+    }
+  }
+  if (!enabled && isVirtualPosNumpadOpen) {
+    closeVirtualPosNumpad();
+  }
+}
+
+function updateVirtualNumpadPreviewUI() {
+  if (!activeNumpadInputEl) return;
+  const lblEl = document.getElementById('virtualNumpadFieldName');
+  const valEl = document.getElementById('virtualNumpadValuePreview');
+  if (lblEl) {
+    const customLabel = VIRTUAL_NUMPAD_FIELD_LABELS[activeNumpadInputEl.id];
+    lblEl.textContent = customLabel || activeNumpadInputEl.placeholder || 'إدخال رقمي';
+  }
+  if (valEl) {
+    const rawVal = String(activeNumpadInputEl.value || '').trim();
+    valEl.textContent = rawVal !== '' ? rawVal : '0';
+  }
+}
+
+function openVirtualPosNumpadForInput(inputEl) {
+  if (!isVirtualPosNumpadEnabled() || !isTargetVirtualNumpadInput(inputEl)) return;
+  const drawer = document.getElementById('virtualPosNumpadDrawer');
+  if (!drawer) return;
+
+  if (activeNumpadInputEl && activeNumpadInputEl !== inputEl) {
+    activeNumpadInputEl.classList.remove('numpad-active-input-highlight');
+  }
+
+  activeNumpadInputEl = inputEl;
+  isFirstNumpadKeystroke = true;
+  isVirtualPosNumpadOpen = true;
+
+  inputEl.setAttribute('inputmode', 'none');
+  inputEl.classList.add('numpad-active-input-highlight');
+
+  // تظليل/تحديد القيمة الحالية عند أول لمسة ليتم استبدالها فور كتابة رقم جديد مثل الآلة الحاسبة
+  if (inputEl.value && String(inputEl.value).trim() !== '') {
+    setTimeout(() => {
+      try {
+        if (document.activeElement === inputEl && isFirstNumpadKeystroke) {
+          inputEl.select();
+        }
+      } catch (e) {}
+    }, 15);
+  }
+
+  drawer.classList.remove('hidden');
+  document.body.classList.add('virtual-numpad-open');
+  document.body.style.paddingBottom = '310px';
+
+  // إخفاء الشريط السفلي العائم مؤقتاً أثناء فتح اللوحة لمنع التكدس وحجب الشاشة
+  const floatBar = document.getElementById('mobileWeighbridgeActionBar');
+  if (floatBar) {
+    floatBar.classList.add('hidden');
+    floatBar.style.display = 'none';
+  }
+
+  updateVirtualNumpadPreviewUI();
+
+  setTimeout(() => {
+    try {
+      if (activeNumpadInputEl) {
+        activeNumpadInputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch (e) {}
+  }, 60);
+}
+
+function closeVirtualPosNumpad() {
+  const drawer = document.getElementById('virtualPosNumpadDrawer');
+  if (drawer) drawer.classList.add('hidden');
+  if (activeNumpadInputEl) {
+    activeNumpadInputEl.classList.remove('numpad-active-input-highlight');
+  }
+  activeNumpadInputEl = null;
+  isFirstNumpadKeystroke = false;
+  isVirtualPosNumpadOpen = false;
+
+  document.body.classList.remove('virtual-numpad-open');
+  document.body.style.paddingBottom = '';
+
+  // إعادة إظهار الشريط السفلي العائم حسب إعدادات المستخدم
+  if (typeof updateFloatingActionBarVisibilityUI === 'function') {
+    updateFloatingActionBarVisibilityUI();
+  }
+}
+
+function setVirtualPosNumpadPreference(enable, showMsg = true) {
+  const nextState = Boolean(enable);
+  try {
+    localStorage.setItem(VIRTUAL_NUMPAD_PREF_KEY, nextState ? '1' : '0');
+  } catch (e) {}
+  syncVirtualNumpadInputModesAndToggleUI();
+  if (showMsg && typeof showToast === 'function') {
+    showToast(
+      nextState
+        ? '🖩 تم تفعيل لوحة مفاتيح الآلة الحاسبة المدمجة (7-8-9 في الأعلى) وإيقاف كيبورد الهاتف العشوائي!'
+        : '⌨️ تم التحويل إلى كيبورد الهاتف الافتراضي (يمكنك إعادة تفعيل لوحة الحاسبة في أي وقت).',
+      nextState ? '🖩' : '⌨️'
+    );
+  }
+}
+
+function handleVirtualNumpadKeyPress(keyAction) {
+  if (!activeNumpadInputEl || activeNumpadInputEl.disabled) return;
+  const el = activeNumpadInputEl;
+  const isIntOnly = (el.id === 'inpScaleNo' || el.id === 'inpCarNo');
+  let rawCurrent = String(el.value || '').replace(/,/g, '').trim();
+
+  if (keyAction === 'ENTER') {
+    isFirstNumpadKeystroke = false;
+    const enterEvt = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true
+    });
+    el.dispatchEvent(enterEvt);
+
+    // للحقول التي لا تنتقل لخانة تالية تلقائياً (مثل العهدة أو النقدية المسلمة أو المصروف)
+    if (el.id === 'inpCustodyCash') {
+      const autoChk = document.getElementById('chkAutoDistributeCustody');
+      if (!autoChk || autoChk.checked) {
+        distributeCustodyWaterfall({ silent: true, focusTarget: false });
+      }
+      const nextCustEl = document.getElementById('inpCustodyTransfer');
+      if (nextCustEl) nextCustEl.focus();
+    } else if (el.id === 'inpCustodyTransfer') {
+      const autoChk = document.getElementById('chkAutoDistributeCustody');
+      if (!autoChk || autoChk.checked) {
+        distributeCustodyWaterfall({ silent: false, focusTarget: true });
+      }
+    } else if (el.id === 'inpTransferSales') {
+      calculateAndFillRemainingCredit(true);
+    } else if (el.id === 'inpDeliveredCash' || el.id === 'inpCarriedForwardCash') {
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      closeVirtualPosNumpad();
+    } else if (el.id === 'inpExpAmount') {
+      const expForm = document.getElementById('expenseEntryForm');
+      if (expForm) expForm.requestSubmit ? expForm.requestSubmit() : expForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      closeVirtualPosNumpad();
+    }
+    updateVirtualNumpadPreviewUI();
+    return;
+  }
+
+  if (keyAction === 'CLEAR') {
+    isFirstNumpadKeystroke = false;
+    el.value = '';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    updateVirtualNumpadPreviewUI();
+    return;
+  }
+
+  if (keyAction === 'BACKSPACE') {
+    isFirstNumpadKeystroke = false;
+    if (rawCurrent.length > 0) {
+      rawCurrent = rawCurrent.slice(0, -1);
+    }
+    el.value = rawCurrent;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    updateVirtualNumpadPreviewUI();
+    return;
+  }
+
+  if (keyAction === '.') {
+    if (isIntOnly) return;
+    if (isFirstNumpadKeystroke) {
+      rawCurrent = '0.';
+      isFirstNumpadKeystroke = false;
+    } else if (!rawCurrent.includes('.')) {
+      rawCurrent = (rawCurrent === '' ? '0' : rawCurrent) + '.';
+    }
+    el.value = rawCurrent;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    updateVirtualNumpadPreviewUI();
+    return;
+  }
+
+  if (keyAction === '000') {
+    if (isFirstNumpadKeystroke) {
+      isFirstNumpadKeystroke = false;
+      if (!rawCurrent || Number(rawCurrent) === 0) {
+        rawCurrent = '1000';
+      } else {
+        rawCurrent = rawCurrent + '000';
+      }
+    } else {
+      if (!rawCurrent || rawCurrent === '0') {
+        rawCurrent = '0';
+      } else if (rawCurrent.includes('.')) {
+        const parts = rawCurrent.split('.');
+        rawCurrent = parts[0] + '000' + (parts[1] ? '.' + parts[1] : '');
+      } else {
+        rawCurrent = rawCurrent + '000';
+      }
+    }
+    el.value = rawCurrent;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    updateVirtualNumpadPreviewUI();
+    return;
+  }
+
+  // أرقام 0-9 و 00
+  if (isFirstNumpadKeystroke) {
+    isFirstNumpadKeystroke = false;
+    rawCurrent = (keyAction === '00') ? '0' : String(keyAction);
+  } else {
+    if (rawCurrent === '0' && keyAction !== '.') {
+      rawCurrent = (keyAction === '00' || keyAction === '0') ? '0' : String(keyAction);
+    } else {
+      if (rawCurrent.includes('.')) {
+        const decPart = rawCurrent.split('.')[1] || '';
+        if (decPart.length >= 2) return;
+      }
+      rawCurrent += String(keyAction);
+    }
+  }
+
+  el.value = rawCurrent;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  updateVirtualNumpadPreviewUI();
+}
+
+function initVirtualPosNumpadController() {
+  syncVirtualNumpadInputModesAndToggleUI();
+
+  const btnToggleHeader = document.getElementById('btnToggleVirtualPosNumpad');
+  if (btnToggleHeader) {
+    btnToggleHeader.addEventListener('click', () => {
+      setVirtualPosNumpadPreference(!isVirtualPosNumpadEnabled(), true);
+    });
+  }
+
+  const btnSwitchNative = document.getElementById('btnSwitchToNativeMobileKeyboard');
+  if (btnSwitchNative) {
+    btnSwitchNative.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetToRefocus = activeNumpadInputEl;
+      setVirtualPosNumpadPreference(false, true);
+      if (targetToRefocus) {
+        setTimeout(() => {
+          try {
+            targetToRefocus.blur();
+            targetToRefocus.focus();
+          } catch (err) {}
+        }, 40);
+      }
+    });
+  }
+
+  const btnCloseDrawer = document.getElementById('btnCloseVirtualPosNumpad');
+  if (btnCloseDrawer) {
+    btnCloseDrawer.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeVirtualPosNumpad();
+    });
+  }
+
+  // ربط أزرار اللوحة حصرياً بحدث pointerdown مع e.preventDefault() لمنع فقدان التركيز من الحقل النشط
+  const numpadGrid = document.getElementById('virtualPosNumpadGrid');
+  if (numpadGrid) {
+    numpadGrid.addEventListener('pointerdown', (e) => {
+      const keyBtn = e.target.closest('[data-numpad-key]');
+      if (!keyBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const keyAction = keyBtn.getAttribute('data-numpad-key');
+      if (keyAction) {
+        handleVirtualNumpadKeyPress(keyAction);
+      }
+    });
+  }
+
+  // التقاط حدث focus و click على جميع الخانات الرقمية والمالية لفتح اللوحة تلقائياً
+  document.addEventListener('focusin', (e) => {
+    const target = e.target;
+    if (isTargetVirtualNumpadInput(target)) {
+      if (isVirtualPosNumpadEnabled()) {
+        openVirtualPosNumpadForInput(target);
+      }
+    } else if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) {
+      if (isVirtualPosNumpadOpen) {
+        closeVirtualPosNumpad();
+      }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (isTargetVirtualNumpadInput(target)) {
+      if (isVirtualPosNumpadEnabled() && (!isVirtualPosNumpadOpen || activeNumpadInputEl !== target)) {
+        openVirtualPosNumpadForInput(target);
+      }
+      return;
+    }
+    if (isVirtualPosNumpadOpen) {
+      const drawer = document.getElementById('virtualPosNumpadDrawer');
+      if (drawer && !drawer.contains(target) && !target.closest('#btnToggleVirtualPosNumpad')) {
+        closeVirtualPosNumpad();
+      }
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    if (isVirtualPosNumpadOpen && e.target === activeNumpadInputEl) {
+      updateVirtualNumpadPreviewUI();
+    }
+  });
+}
+window.closeVirtualPosNumpad = closeVirtualPosNumpad;
+
 function updateConnectionAndSyncUI() {
   const isOnline = navigator.onLine;
   const dot = document.getElementById('connDot');
@@ -2780,7 +3185,7 @@ function renderUsersAndPermissionsUI(renderTable = true) {
 }
 
 function updateFloatingActionBarVisibilityUI() {
-  const isVisible = appState.showFloatingActionBar !== false;
+  const isVisible = (appState.showFloatingActionBar !== false) && !isVirtualPosNumpadOpen;
   const barEl = document.getElementById('mobileWeighbridgeActionBar');
   if (barEl) {
     barEl.classList.toggle('hidden', !isVisible);
@@ -3856,27 +4261,27 @@ function ensureSmartSettlementStripMounted() {
   wrapper.id = 'smartSupplementalSettlementStrip';
   wrapper.className = 'hidden mt-2 pt-2 border-t border-blue-200/80 space-y-2';
   wrapper.innerHTML = `
-    <div id="smartSupplementalControlsRow" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
+    <div id="smartSupplementalControlsRow" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-2 items-stretch">
       <div class="flex flex-col justify-end h-full">
-        <button type="button" id="btnBoostSettleRemainingCash" class="w-full h-[34px] px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] shadow-sm transition flex items-center justify-center gap-1 whitespace-nowrap" title="إضافة كامل الآجل المتبقي إلى نقدي المبيعات وتصفير الآجل فوراً">
-          <span>💵</span>
-          <span id="lblBoostSettleRemainingCash">قفّل الباقي كاش</span>
+        <button type="button" id="btnBoostSettleRemainingCash" class="w-full min-h-[38px] h-auto py-1 px-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] sm:text-xs leading-tight font-extrabold shadow-sm transition flex items-center justify-center gap-1 whitespace-normal break-words text-center" title="إضافة كامل الآجل المتبقي إلى نقدي المبيعات وتصفير الآجل فوراً">
+          <span class="shrink-0">💵</span>
+          <span id="lblBoostSettleRemainingCash" class="whitespace-normal break-words leading-tight">تقفيل كاش</span>
         </button>
       </div>
       <div class="flex flex-col justify-end h-full">
-        <button type="button" id="btnBoostSettleRemainingTransfer" class="w-full h-[34px] px-2.5 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-[11px] shadow-sm transition flex items-center justify-center gap-1 whitespace-nowrap" title="إضافة كامل الآجل المتبقي إلى تحويل المبيعات وتصفير الآجل فوراً">
-          <span>💳</span>
-          <span id="lblBoostSettleRemainingTransfer">قفّل الباقي تحويل</span>
+        <button type="button" id="btnBoostSettleRemainingTransfer" class="w-full min-h-[38px] h-auto py-1 px-1 rounded-lg bg-teal-700 hover:bg-teal-600 text-white text-[11px] sm:text-xs leading-tight font-extrabold shadow-sm transition flex items-center justify-center gap-1 whitespace-normal break-words text-center" title="إضافة كامل الآجل المتبقي إلى تحويل المبيعات وتصفير الآجل فوراً">
+          <span class="shrink-0">💳</span>
+          <span id="lblBoostSettleRemainingTransfer" class="whitespace-normal break-words leading-tight">تقفيل تحويل</span>
         </button>
       </div>
       <div class="flex flex-col justify-end h-full">
-        <input id="inpSupplementalBoostAmount" type="text" inputmode="decimal" data-money-input="1" placeholder="مبلغ إضافي..."
-          class="w-full h-[34px] px-2.5 text-xs font-extrabold border-2 border-emerald-500 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600" autocomplete="off" />
+        <input id="inpSupplementalBoostAmount" type="text" inputmode="none" data-money-input="1" placeholder="مبلغ إضافي..."
+          class="w-full min-h-[38px] h-auto py-1 px-2 text-xs font-extrabold border-2 border-emerald-500 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600" autocomplete="off" />
       </div>
       <div class="flex flex-col justify-end h-full">
-        <button type="button" id="btnAddSupplementalCashBoost" class="w-full h-[34px] px-2.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-amber-300 font-extrabold text-[11px] shadow-sm transition whitespace-nowrap flex items-center justify-center gap-1" title="جمع هذا المبلغ الإضافي فوق نقدي المبيعات الحالي وخصمه من الآجل تلقائياً">
-          <span>➕</span>
-          <span>أضف للنقدي</span>
+        <button type="button" id="btnAddSupplementalCashBoost" class="w-full min-h-[38px] h-auto py-1 px-1 rounded-lg bg-blue-900 hover:bg-blue-800 text-amber-300 text-[11px] sm:text-xs leading-tight font-extrabold shadow-sm transition whitespace-normal break-words text-center flex items-center justify-center gap-1" title="جمع هذا المبلغ الإضافي فوق نقدي المبيعات الحالي وخصمه من الآجل تلقائياً">
+          <span class="shrink-0">➕</span>
+          <span class="whitespace-normal break-words leading-tight">أضف للنقدي</span>
         </button>
       </div>
     </div>
@@ -4045,8 +4450,9 @@ function updateSmartSettlementStripUI(credS, cashS, trS) {
   if (controlsRow) {
     controlsRow.classList.toggle('hidden', !hasCreditRemaining);
     if (hasCreditRemaining) {
-      if (lblCashBtn) lblCashBtn.textContent = `قفّل الباقي كاش (+${fmtMoney(credS)})`;
-      if (lblTrBtn) lblTrBtn.textContent = `قفّل الباقي تحويل (+${fmtMoney(credS)})`;
+      const roundedValue = fmtInt(Math.round(Number(credS) || 0));
+      if (lblCashBtn) lblCashBtn.textContent = `تقفيل كاش (${roundedValue})`;
+      if (lblTrBtn) lblTrBtn.textContent = `تقفيل تحويل (${roundedValue})`;
     }
   }
 
@@ -4381,6 +4787,7 @@ function updateLiveFormCalculation() {
 function initFarmSalesApp() {
   if (window.__farmAppInitialized) return;
   window.__farmAppInitialized = true;
+  initVirtualPosNumpadController();
   const loadedFromLocal = loadState();
   unifyGlobalMerchantsRegistry();
   const hasWebhookNow = Boolean((appState.webhookUrl || getEmbeddedWebhookUrl()) && navigator.onLine);
@@ -4553,7 +4960,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v98-ui-polish';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v100-strip-fix';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -4588,7 +4995,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=98', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=100', { scope: './' }).catch(() => {});
     }
   }
 
@@ -8758,7 +9165,11 @@ function initFarmSalesApp() {
     if (e.key === 'Escape') {
       let handledEsc = false;
 
-      // 1. إغلاق أي قوائم منسدلة مفتوحة أولاً
+      // 1. إغلاق أي قوائم منسدلة أو لوحة مفاتيح محاسبية مفتوحة أولاً
+      if (isVirtualPosNumpadOpen) {
+        closeVirtualPosNumpad();
+        handledEsc = true;
+      }
       if (document.querySelector('.receipt-dropdown-menu.open')) {
         closeAllReceiptDropdownMenus();
         handledEsc = true;
@@ -9266,12 +9677,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=98',
-    './js/accounting.js?v=98',
-    './js/storage-sync.js?v=98',
-    './js/excel-engine.js?v=98',
-    './js/print-export.js?v=98',
-    './js/ui-controllers.js?v=98'
+    './js/core-state.js?v=100',
+    './js/accounting.js?v=100',
+    './js/storage-sync.js?v=100',
+    './js/excel-engine.js?v=100',
+    './js/print-export.js?v=100',
+    './js/ui-controllers.js?v=100'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -9480,14 +9891,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=98');
+        scTpl.setAttribute('src', './excel-template.js?v=100');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=98');
+        lnk.setAttribute('href', './style.css?v=100');
         bundledStyleEl.replaceWith(lnk);
       }
     }
@@ -9611,7 +10022,12 @@ function initFarmSalesApp() {
       cloneMerchModal.classList.add('hidden');
     }
     if (bodyEl) {
-      bodyEl.classList.remove('printing-merchant-modal', 'floating-bar-hidden', 'audit-metadata-hidden', 'lite-field-mode-active');
+      bodyEl.classList.remove('printing-merchant-modal', 'floating-bar-hidden', 'audit-metadata-hidden', 'lite-field-mode-active', 'virtual-numpad-open');
+      bodyEl.style.paddingBottom = '';
+    }
+    const cloneNumpad = cloneDoc.querySelector('#virtualPosNumpadDrawer');
+    if (cloneNumpad) {
+      cloneNumpad.classList.add('hidden');
     }
     const cloneFloatBar = cloneDoc.querySelector('#mobileWeighbridgeActionBar');
     if (cloneFloatBar) {

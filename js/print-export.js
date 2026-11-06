@@ -1280,7 +1280,7 @@ function triggerTablePrint(tableKey) {
 <head>
   <meta charset="UTF-8" />
   <title>طباعة مستند — نظام محاضر لجان بيع المزارع</title>
-  <link rel="stylesheet" href="./style.css?v=98" />
+  <link rel="stylesheet" href="./style.css?v=100" />
   <style>
     ${pageOrientationCss}
     html, body {

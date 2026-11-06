@@ -2742,9 +2742,43 @@ body.modal-scroll-locked {
   display: grid !important;
 }
 
-#smartSupplementalControlsRow button,
+.min-h-\[38px\] {
+  min-height: 38px !important;
+}
+.h-auto {
+  height: auto !important;
+}
+.whitespace-normal {
+  white-space: normal !important;
+}
+.break-words {
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+}
+.items-stretch {
+  align-items: stretch !important;
+}
+
+#smartSupplementalControlsRow:not(.hidden) {
+  display: grid !important;
+  align-items: stretch !important;
+}
+
+#smartSupplementalControlsRow button {
+  min-height: 38px !important;
+  height: auto !important;
+  flex: 1 1 auto !important;
+  white-space: normal !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  line-height: 1.25 !important;
+  padding: 4px 4px !important;
+  box-sizing: border-box !important;
+}
+
 #smartSupplementalControlsRow input {
-  height: 34px !important;
+  min-height: 38px !important;
+  height: 100% !important;
   box-sizing: border-box !important;
 }
 
@@ -2820,4 +2854,100 @@ body.modal-scroll-locked {
     grid-column: span 7 / span 7 !important;
     gap: 8px !important;
   }
+}
+
+
+/* =========================================================================
+   13. V99 VIRTUAL POS CALCULATOR NUMPAD & SCREEN OCCLUSION PROTECTION
+   ========================================================================= */
+#virtualPosNumpadDrawer {
+  background-color: rgba(2, 6, 23, 0.98) !important;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 -14px 36px rgba(2, 6, 23, 0.72) !important;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#virtualPosNumpadDrawer.hidden {
+  display: none !important;
+}
+
+.v-numpad-btn {
+  height: 46px;
+  border-radius: 12px;
+  font-family: 'Cairo', ui-monospace, monospace;
+  font-size: 19px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.06s ease, background-color 0.12s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.v-numpad-btn:active {
+  transform: scale(0.95);
+}
+
+.v-numpad-digit {
+  background-color: #1e293b;
+  color: #f8fafc;
+  border: 1.5px solid #334155;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.v-numpad-digit:hover {
+  background-color: #334155;
+}
+
+.v-numpad-fn-warn {
+  background-color: #b45309;
+  color: #fef3c7;
+  border: 1.5px solid #f59e0b;
+}
+
+.v-numpad-fn-danger {
+  background-color: #be123c;
+  color: #ffe4e6;
+  border: 1.5px solid #fb7185;
+}
+
+.v-numpad-fn-gold {
+  background-color: #f59e0b;
+  color: #0f172a;
+  border: 1.5px solid #fde68a;
+  font-size: 16px;
+}
+
+.v-numpad-fn-enter {
+  background-color: #059669;
+  color: #ffffff;
+  border: 2px solid #6ee7b7;
+  font-size: 20px;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.45);
+}
+
+.numpad-active-input-highlight {
+  outline: 3px solid #f59e0b !important;
+  outline-offset: 1px !important;
+  background-color: #fffbeb !important;
+}
+
+body.virtual-numpad-open {
+  padding-bottom: 310px !important;
+}
+
+body.virtual-numpad-open #mobileWeighbridgeActionBar {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.virtual-numpad-open #toastContainer {
+  bottom: 278px !important;
 }
