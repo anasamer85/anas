@@ -3856,25 +3856,25 @@ function ensureSmartSettlementStripMounted() {
   wrapper.id = 'smartSupplementalSettlementStrip';
   wrapper.className = 'hidden mt-2 pt-2 border-t border-blue-200/80 space-y-2';
   wrapper.innerHTML = `
-    <div id="smartSupplementalControlsRow" class="hidden bg-white/95 border-2 border-emerald-400 rounded-xl p-2 shadow-sm flex flex-wrap items-center justify-between gap-2">
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <span class="text-[11px] font-extrabold text-emerald-950 flex items-center gap-1">
-          <span>⚡</span>
-          <span>تعزيز وسداد تكميلي فوق العهدة (بدون جمع ذهني):</span>
-        </span>
-        <button type="button" id="btnBoostSettleRemainingCash" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1" title="إضافة كامل الآجل المتبقي إلى نقدي المبيعات وتصفير الآجل فوراً">
+    <div id="smartSupplementalControlsRow" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
+      <div class="flex flex-col justify-end h-full">
+        <button type="button" id="btnBoostSettleRemainingCash" class="w-full h-[34px] px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] shadow-sm transition flex items-center justify-center gap-1 whitespace-nowrap" title="إضافة كامل الآجل المتبقي إلى نقدي المبيعات وتصفير الآجل فوراً">
           <span>💵</span>
           <span id="lblBoostSettleRemainingCash">قفّل الباقي كاش</span>
         </button>
-        <button type="button" id="btnBoostSettleRemainingTransfer" class="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-[11px] shadow-sm transition flex items-center gap-1" title="إضافة كامل الآجل المتبقي إلى تحويل المبيعات وتصفير الآجل فوراً">
+      </div>
+      <div class="flex flex-col justify-end h-full">
+        <button type="button" id="btnBoostSettleRemainingTransfer" class="w-full h-[34px] px-2.5 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-[11px] shadow-sm transition flex items-center justify-center gap-1 whitespace-nowrap" title="إضافة كامل الآجل المتبقي إلى تحويل المبيعات وتصفير الآجل فوراً">
           <span>💳</span>
           <span id="lblBoostSettleRemainingTransfer">قفّل الباقي تحويل</span>
         </button>
       </div>
-      <div class="flex items-center gap-1.5 flex-1 sm:flex-initial justify-end min-w-[210px]">
-        <input id="inpSupplementalBoostAmount" type="text" inputmode="decimal" data-money-input="1" placeholder="مبلغ إضافي (مثال: 10,000)..."
-          class="w-36 sm:w-40 px-2.5 py-1 text-xs font-extrabold border-2 border-emerald-500 rounded-lg bg-emerald-50/40 focus:bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600" autocomplete="off" />
-        <button type="button" id="btnAddSupplementalCashBoost" class="px-2.5 py-1 rounded-lg bg-blue-900 hover:bg-blue-800 text-amber-300 font-extrabold text-[11px] shadow-sm transition whitespace-nowrap flex items-center gap-1" title="جمع هذا المبلغ الإضافي فوق نقدي المبيعات الحالي وخصمه من الآجل تلقائياً">
+      <div class="flex flex-col justify-end h-full">
+        <input id="inpSupplementalBoostAmount" type="text" inputmode="decimal" data-money-input="1" placeholder="مبلغ إضافي..."
+          class="w-full h-[34px] px-2.5 text-xs font-extrabold border-2 border-emerald-500 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600" autocomplete="off" />
+      </div>
+      <div class="flex flex-col justify-end h-full">
+        <button type="button" id="btnAddSupplementalCashBoost" class="w-full h-[34px] px-2.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-amber-300 font-extrabold text-[11px] shadow-sm transition whitespace-nowrap flex items-center justify-center gap-1" title="جمع هذا المبلغ الإضافي فوق نقدي المبيعات الحالي وخصمه من الآجل تلقائياً">
           <span>➕</span>
           <span>أضف للنقدي</span>
         </button>
@@ -3884,9 +3884,9 @@ function ensureSmartSettlementStripMounted() {
     <div id="supplementalBoostBreakdownPill" class="hidden bg-emerald-100/90 border border-emerald-400 text-emerald-950 px-3 py-1.5 rounded-xl text-[11px] font-extrabold flex flex-wrap items-center justify-between gap-2 shadow-sm">
       <div class="flex items-center gap-1.5 flex-wrap">
         <span>📌</span>
-        <span id="lblSupplementalBoostBreakdownTxt">تفصيل الدفعات التكميلية المضافة فوق العهدة</span>
+        <span id="lblSupplementalBoostBreakdownTxt"></span>
       </div>
-      <button type="button" id="btnUndoSupplementalBoosts" class="px-2.5 py-0.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-extrabold text-[11px] transition flex items-center gap-1 shrink-0" title="إلغاء وتصفير المبالغ التكميلية المضافة والعودة لأصل توزيع العهدة">
+      <button type="button" id="btnUndoSupplementalBoosts" class="h-[28px] px-2.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-extrabold text-[11px] transition flex items-center justify-center gap-1 shrink-0 whitespace-nowrap" title="إلغاء وتصفير المبالغ التكميلية المضافة والعودة لأصل توزيع العهدة">
         <span>↩️</span>
         <span>تراجع (تصفير الإضافات)</span>
       </button>
@@ -4180,8 +4180,14 @@ function updateLiveFormCalculation() {
     btnDepositSurplus.classList.toggle('inline-flex', hasPositiveSurplusAfterInvoice);
   }
   if (btnStickyDistCust) {
-    btnStickyDistCust.classList.toggle('hidden', totalCustody <= 0);
-    btnStickyDistCust.classList.toggle('inline-flex', totalCustody > 0);
+    const showCustBtn = totalCustody > 0;
+    btnStickyDistCust.classList.toggle('hidden', !showCustBtn);
+    btnStickyDistCust.classList.toggle('flex', showCustBtn);
+    const kpisGridEl = document.getElementById('stickyBarKpisContainer');
+    if (kpisGridEl) {
+      kpisGridEl.classList.toggle('grid-cols-3', !showCustBtn);
+      kpisGridEl.classList.toggle('grid-cols-4', showCustBtn);
+    }
   }
 
   const balEl = document.getElementById('calcMerchantBalance');
@@ -4547,7 +4553,7 @@ function initFarmSalesApp() {
     if (btnInstallPwa) btnInstallPwa.classList.add("hidden");
     deferredPwaPrompt = null;
   });
-  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v97-payment-boosters';
+  const ACTIVE_PWA_CACHE_NAME = 'farm-sales-v98-ui-polish';
 
   // Force app hard reload via Service Worker update lifecycle
   async function forceAppHardReload() {
@@ -4582,7 +4588,7 @@ function initFarmSalesApp() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     if (!window.__swRegisteredOnceV86) {
       window.__swRegisteredOnceV86 = true;
-      navigator.serviceWorker.register('./sw.js?v=97boost', { scope: './' }).catch(() => {});
+      navigator.serviceWorker.register('./sw.js?v=98', { scope: './' }).catch(() => {});
     }
   }
 
@@ -9260,12 +9266,12 @@ function initFarmSalesApp() {
 
   // Pre-fetch and cache external style.css, vendor-loader.js, excel-template.js & the 6 modular ./js/*.js files (v86)
   const MODULAR_JS_SCRIPTS_ORDER = [
-    './js/core-state.js?v=97boost',
-    './js/accounting.js?v=97boost',
-    './js/storage-sync.js?v=97boost',
-    './js/excel-engine.js?v=97boost',
-    './js/print-export.js?v=97boost',
-    './js/ui-controllers.js?v=97boost'
+    './js/core-state.js?v=98',
+    './js/accounting.js?v=98',
+    './js/storage-sync.js?v=98',
+    './js/excel-engine.js?v=98',
+    './js/print-export.js?v=98',
+    './js/ui-controllers.js?v=98'
   ];
 
   async function preloadExternalAssetsForGoogleSitesEmbed() {
@@ -9474,14 +9480,14 @@ function initFarmSalesApp() {
       const bundledTplEl = cloneDoc.querySelector('#bundledGoogleSitesExcelTemplateJs');
       if (bundledTplEl) {
         const scTpl = document.createElement('script');
-        scTpl.setAttribute('src', './excel-template.js?v=97boost');
+        scTpl.setAttribute('src', './excel-template.js?v=98');
         bundledTplEl.replaceWith(scTpl);
       }
       const bundledStyleEl = cloneDoc.querySelector('#bundledGoogleSitesStyleCss');
       if (bundledStyleEl) {
         const lnk = document.createElement('link');
         lnk.setAttribute('rel', 'stylesheet');
-        lnk.setAttribute('href', './style.css?v=97boost');
+        lnk.setAttribute('href', './style.css?v=98');
         bundledStyleEl.replaceWith(lnk);
       }
     }

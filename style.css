@@ -2696,3 +2696,128 @@ body.modal-scroll-locked {
   background-color: #f1f5f9;
   outline: none;
 }
+
+
+/* =========================================================================
+   12. V98 UI POLISH: RULER-ALIGNED INPUTS & STRUCTURED GRID ACTION BAR
+   ========================================================================= */
+.items-end {
+  align-items: flex-end !important;
+}
+.h-full {
+  height: 100%;
+}
+.h-9 {
+  height: 2.25rem !important;
+}
+.h-10 {
+  height: 2.5rem !important;
+}
+.h-\[38px\] {
+  height: 38px !important;
+}
+.h-\[34px\] {
+  height: 34px !important;
+}
+.h-\[28px\] {
+  height: 28px !important;
+}
+.grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.grid-cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.grid-cols-12 {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+#currentInvoiceCollectionCard input[type="text"],
+#currentInvoiceCollectionCard select {
+  height: 38px !important;
+  box-sizing: border-box !important;
+}
+
+#smartSupplementalControlsRow:not(.hidden) {
+  display: grid !important;
+}
+
+#smartSupplementalControlsRow button,
+#smartSupplementalControlsRow input {
+  height: 34px !important;
+  box-sizing: border-box !important;
+}
+
+/* الهيكلة الشبكية الموحدة لشريط الإجراءات السفلي العائم (#mobileWeighbridgeActionBar) وشريط النموذج البديل (#inlineSaleFormActionsMobile) */
+#mobileWeighbridgeActionBar .sticky-bar-main-wrap {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  align-items: center !important;
+  gap: 6px !important;
+  width: 100% !important;
+}
+
+#mobileWeighbridgeActionBar .sticky-bar-kpis-group {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+#mobileWeighbridgeActionBar .sticky-bar-kpis-group.grid-cols-4,
+#mobileWeighbridgeActionBar .sticky-bar-kpis-group:has(#btnStickyDistributeCustody:not(.hidden)) {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+#mobileWeighbridgeActionBar .sticky-bar-actions-group,
+#inlineSaleFormActionsMobile .inline-bar-actions-group {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+#mobileWeighbridgeActionBar .sticky-bar-actions-group > button,
+#inlineSaleFormActionsMobile .inline-bar-actions-group > button {
+  height: 40px !important;
+  width: 100% !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+
+@media screen and (max-width: 480px) {
+  #mobileWeighbridgeActionBar .sticky-bar-actions-group > button,
+  #inlineSaleFormActionsMobile .inline-bar-actions-group > button {
+    font-size: 11px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+  #mobileWeighbridgeActionBar .sticky-bar-kpis-group > span,
+  #mobileWeighbridgeActionBar .sticky-bar-kpis-group > button {
+    font-size: 10.5px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  .lg\:grid-cols-12,
+  #mobileWeighbridgeActionBar .sticky-bar-main-wrap {
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+  .lg\:col-span-5,
+  #mobileWeighbridgeActionBar .sticky-bar-kpis-group {
+    grid-column: span 5 / span 5 !important;
+  }
+  .lg\:col-span-7,
+  #mobileWeighbridgeActionBar .sticky-bar-actions-group {
+    grid-column: span 7 / span 7 !important;
+    gap: 8px !important;
+  }
+}

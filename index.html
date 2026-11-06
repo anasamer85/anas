@@ -16,18 +16,18 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
-  <script src="./vendor/vendor-loader.js?v=97boost"></script>
+  <script src="./vendor/vendor-loader.js?v=98"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <meta id="metaEmbeddedCloudWebhookUrl" name="cloud-webhook-url" content="" />
   <meta id="metaEmbeddedEncryptedWebhookVault" name="encrypted-webhook-vault" content="" />
   <meta id="metaEmbeddedDefaultFarmName" name="default-farm-name" content="" />
   <script id="embeddedWebhookConfigScript">
     // خزينة رابط المزامنة السحابية المشفرة والمربوطة بتسجيل الدخول (تُفك تلقائياً عند إدخال اسم المستخدم وكلمة المرور)
-    window.EMBEDDED_CLOUD_WEBHOOK_URL = 'https://farm-sales-committee-default-rtdb.europe-west1.firebasedatabase.app/';
-    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [xB2F30A9QLvE5ZhnhhSNrJKdNF78YeegkrlalTFB];
+    window.EMBEDDED_CLOUD_WEBHOOK_URL = '';
+    window.EMBEDDED_ENCRYPTED_WEBHOOK_VAULT = [];
     window.EMBEDDED_DEFAULT_FARM_NAME = '';
   </script>
-  <link rel="stylesheet" href="./style.css?v=97boost" />
+  <link rel="stylesheet" href="./style.css?v=98" />
   <style id="criticalPrintStyles">
     #merchantPrintOnlyContainer {
       display: none;
@@ -943,31 +943,31 @@
                   </button>
                 </div>
               </div>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">نقدي مبيعات (للخزنة) <span class="text-[10px] text-blue-700 font-extrabold">(Enter ⬅️ آجل ⚡)</span></label>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-end">
+                <div class="flex flex-col justify-end h-full">
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1 leading-tight">نقدي مبيعات (للخزنة) <span class="text-[10px] text-blue-700 font-extrabold">(Enter ⬅️ آجل ⚡)</span></label>
                   <input id="inpCashSales" type="text" inputmode="decimal" enterkeyhint="next" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
+                    class="w-full h-[38px] px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
                 </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-700 mb-0.5">آجل فاتورة اليوم <span class="text-[10px] text-emerald-700 font-extrabold">(Enter ⬅️ حفظ)</span></label>
+                <div class="flex flex-col justify-end h-full">
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1 leading-tight">آجل فاتورة اليوم <span class="text-[10px] text-emerald-700 font-extrabold">(Enter ⬅️ حفظ)</span></label>
                   <input id="inpCreditSales" type="text" inputmode="decimal" enterkeyhint="done" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
+                    class="w-full h-[38px] px-2.5 py-1.5 text-sm font-bold border border-slate-300 rounded-lg bg-white" autocomplete="off" />
                 </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">
+                <div class="flex flex-col justify-end h-full">
+                  <label class="block text-[11px] font-bold text-amber-900 mb-1 leading-tight">
                     تحويل مبيعات (يخصم من التاجر)
                     <span class="ui-tooltip-badge" title="مبلغ محول لسداد فاتورة اليوم؛ يُخصم من مديونية التاجر ولا يدخل الخزنة النقدية" data-tooltip="يُخصم من حساب التاجر ويُدرج في بيان التحويلات (لا يدخل الخزنة)">?</span>
                   </label>
                   <input id="inpTransferSales" type="text" inputmode="decimal" data-money-input="1" placeholder="0"
-                    class="w-full px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" autocomplete="off" />
+                    class="w-full h-[38px] px-2.5 py-1.5 text-sm font-bold border border-amber-400 rounded-lg bg-amber-50/50" autocomplete="off" />
                 </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-amber-900 mb-0.5">
+                <div class="flex flex-col justify-end h-full">
+                  <label class="block text-[11px] font-bold text-amber-900 mb-1 leading-tight">
                     نوع تحويل المبيعات
                     <span class="ui-tooltip-badge" title="اختر نوع التحويل ليتم تبويبه في شيت بيان التحويلات والشيكات" data-tooltip="لتصنيف المبلغ في شيت التحويلات (كاش / بنكي / إنستا / شيكات)">?</span>
                   </label>
-                  <select id="selTransferSalesType" class="w-full px-2 py-1.5 text-xs font-bold border border-amber-400 rounded-lg bg-white">
+                  <select id="selTransferSalesType" class="w-full h-[38px] px-2 py-1 text-xs font-bold border border-amber-400 rounded-lg bg-white">
                     <option value="">-- اختر النوع --</option>
                     <option value="تحويل كاش">تحويل كاش / محفظة</option>
                     <option value="تحويل بنكي">تحويل بنكي</option>
@@ -1081,65 +1081,65 @@
             <div id="smartAuditAlertsList" class="space-y-1 text-[11px] font-bold text-slate-800"></div>
           </div>
 
-          <!-- Inline Form Action Buttons at end of form for both Phone & Desktop (4 Buttons: ➕ حركة جديدة | ✕ إلغاء الإدخال | ⏳ حفظ مؤقت وزنة 1 | 💾 حفظ نهائي) -->
-          <div id="inlineSaleFormActionsMobile" style="display: none;" class="hidden items-center justify-end gap-2 pt-2.5 border-t border-slate-200 flex-wrap">
-            <div class="inline-bar-actions-group flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
-              <button type="button" id="btnInlineNewSale" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-950 border border-sky-300 font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1" title="بدء حركة جديدة وتفريغ الحقول مع الانتقال الفوري لخانة اسم التاجر">
+          <!-- Inline Form Action Buttons at end of form for both Phone & Desktop (4 Buttons in Unified Grid: ➕ حركة جديدة | ✕ إلغاء الإدخال | ⏳ حفظ مؤقت وزنة 1 | 💾 حفظ نهائي) -->
+          <div id="inlineSaleFormActionsMobile" style="display: none;" class="hidden w-full pt-2.5 border-t border-slate-200">
+            <div class="inline-bar-actions-group grid grid-cols-4 gap-1.5 sm:gap-2 w-full">
+              <button type="button" id="btnInlineNewSale" class="w-full h-10 px-2 sm:px-3 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-950 border border-sky-300 font-extrabold text-[11px] sm:text-xs shadow-sm transition flex items-center justify-center gap-1 whitespace-nowrap" title="بدء حركة جديدة وتفريغ الحقول مع الانتقال الفوري لخانة اسم التاجر">
                 <span class="action-btn-icon">➕</span>
                 <span class="action-btn-text">حركة جديدة</span>
               </button>
-              <button type="button" id="btnInlineCancelSale" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
+              <button type="button" id="btnInlineCancelSale" class="w-full h-10 px-2 sm:px-3 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-extrabold text-[11px] sm:text-xs shadow-sm transition flex items-center justify-center gap-1 whitespace-nowrap" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
                 <span class="action-btn-icon">✕</span>
                 <span id="btnInlineCancelSaleText" class="action-btn-text">إلغاء الإدخال</span>
               </button>
-              <button type="button" id="btnInlineSavePendingW1" class="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition flex items-center justify-center gap-1" title="حفظ مؤقت للوزنة الأولى">
+              <button type="button" id="btnInlineSavePendingW1" class="w-full h-10 px-2 sm:px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] sm:text-xs shadow transition flex items-center justify-center gap-1 whitespace-nowrap" title="حفظ مؤقت للوزنة الأولى">
                 <span class="action-btn-icon">⏳</span>
                 <span class="action-btn-text">حفظ مؤقت وزنة 1</span>
               </button>
-              <button type="submit" id="btnInlineSaveSale" class="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition flex items-center justify-center gap-1" title="حفظ نهائي للحركة">
+              <button type="submit" id="btnInlineSaveSale" class="w-full h-10 px-2 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] sm:text-xs shadow transition flex items-center justify-center gap-1 whitespace-nowrap" title="حفظ نهائي للحركة">
                 <span class="action-btn-icon">💾</span>
                 <span id="btnInlineSaveSaleText" class="action-btn-text">حفظ نهائي</span>
               </button>
             </div>
           </div>
 
-          <!-- Weighbridge Floating Action Bar for Phone & Computer (شريط إجراءات سفلي عائم للهاتف والكمبيوتر داخل نموذج البيع) -->
+          <!-- Weighbridge Floating Action Bar for Phone & Computer (تخطيط شبكي مهيكل بدون التفاف عشوائي) -->
           <div id="mobileWeighbridgeActionBar" class="mobile-weighbridge-sticky-bar rounded-2xl border-2 border-amber-400 bg-slate-900/95 text-white p-2 md:px-4 md:py-2.5 shadow-2xl">
-            <div class="sticky-bar-main-wrap flex flex-wrap items-center justify-between gap-2">
-              <!-- Live Net Weight, Total Invoice & Auto Remaining Credit -->
-              <div class="sticky-bar-kpis-group flex items-center gap-1.5 flex-wrap">
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 border border-white/15 text-[10px] md:text-xs font-bold" title="الوزن الصافي">
+            <div class="sticky-bar-main-wrap grid grid-cols-1 lg:grid-cols-12 items-center gap-1.5 lg:gap-3">
+              <!-- Live Net Weight, Total Invoice & Auto Remaining Credit (5 columns on Desktop, 3-col top row on Mobile/Tablet) -->
+              <div id="stickyBarKpisContainer" class="sticky-bar-kpis-group lg:col-span-5 grid grid-cols-3 gap-1.5 items-center w-full">
+                <span class="h-9 px-2 rounded-lg bg-white/10 border border-white/15 text-[10px] md:text-xs font-bold flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden" title="الوزن الصافي">
                   <span>⚖️</span><span class="sticky-bar-label-txt">الصافي:</span>
-                  <strong id="stickyBarNetWeight" class="text-amber-300 font-extrabold text-xs md:text-sm">0 كجم</strong>
+                  <strong id="stickyBarNetWeight" class="text-amber-300 font-extrabold text-[11px] md:text-xs">0 كجم</strong>
                 </span>
-                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-[10px] md:text-xs font-bold" title="صافي الفاتورة بالإكرامية">
-                  <span>💰</span><span class="sticky-bar-label-txt">صافي الفاتورة:</span>
-                  <strong id="stickyBarTotalInvoice" class="text-emerald-300 font-extrabold text-xs md:text-sm">0 ج.م</strong>
+                <span class="h-9 px-2 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-[10px] md:text-xs font-bold flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden" title="صافي الفاتورة بالإكرامية">
+                  <span>💰</span><span class="sticky-bar-label-txt">الفاتورة:</span>
+                  <strong id="stickyBarTotalInvoice" class="text-emerald-300 font-extrabold text-[11px] md:text-xs">0 ج.م</strong>
                 </span>
-                <button type="button" id="btnStickyAutoCredit" class="px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-[10px] md:text-xs font-extrabold border border-blue-400/50 transition flex items-center gap-1" title="حساب باقي الفاتورة آجل تلقائياً والانتقال لحقل الآجل">
-                  <span>⚡</span><span class="sticky-bar-label-txt">باقي الفاتورة آجل:</span>
+                <button type="button" id="btnStickyAutoCredit" class="w-full h-9 px-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-[10px] md:text-xs font-extrabold border border-blue-400/50 transition flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden" title="حساب باقي الفاتورة آجل تلقائياً والانتقال لحقل الآجل">
+                  <span>⚡</span><span class="sticky-bar-label-txt">الآجل:</span>
                   <strong id="stickyBarRemCredit" class="text-amber-200">0 ج.م</strong>
                 </button>
-                <button type="button" id="btnStickyDistributeCustody" class="hidden px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] md:text-xs font-extrabold border border-amber-300 transition items-center gap-1" title="توزيع العهدة تلقائياً على المديونية السابقة ثم فاتورة اليوم">
+                <button type="button" id="btnStickyDistributeCustody" class="hidden w-full h-9 px-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] md:text-xs font-extrabold border border-amber-300 transition items-center justify-center gap-1 whitespace-nowrap overflow-hidden" title="توزيع العهدة تلقائياً على المديونية السابقة ثم فاتورة اليوم">
                   <span>💼</span><span class="sticky-bar-label-txt">توزيع العهدة</span><span>⚡</span>
                 </button>
               </div>
 
-              <!-- Pinned Action Buttons (➕ حركة جديدة | ✕ إلغاء الإدخال | ⏳ حفظ مؤقت وزنة 1 | 💾 حفظ نهائي) -->
-              <div class="sticky-bar-actions-group flex items-center gap-1.5 md:gap-2 flex-1 sm:flex-initial justify-end w-full sm:w-auto">
-                <button type="button" id="btnStickyNewSale" class="px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white border border-sky-300/60 font-extrabold text-xs md:text-sm shadow transition flex items-center justify-center gap-1 shrink-0" title="بدء حركة جديدة وتفريغ الحقول مع الانتقال الفوري لخانة اسم التاجر">
+              <!-- Pinned Action Buttons (7 columns on Desktop, 4-col bottom row on Mobile/Tablet) -->
+              <div class="sticky-bar-actions-group lg:col-span-7 grid grid-cols-4 gap-1.5 md:gap-2 items-center w-full">
+                <button type="button" id="btnStickyNewSale" class="w-full h-10 px-2 md:px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white border border-sky-300/60 font-extrabold text-[11px] md:text-xs shadow transition flex items-center justify-center gap-1 whitespace-nowrap" title="بدء حركة جديدة وتفريغ الحقول مع الانتقال الفوري لخانة اسم التاجر">
                   <span class="action-btn-icon">➕</span>
                   <span class="sticky-bar-label-txt action-btn-text">حركة جديدة</span>
                 </button>
-                <button type="button" id="btnCancelEditSale" class="px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-300/60 font-extrabold text-xs md:text-sm shadow transition flex items-center justify-center gap-1 shrink-0" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
+                <button type="button" id="btnCancelEditSale" class="w-full h-10 px-2 md:px-3 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-300/60 font-extrabold text-[11px] md:text-xs shadow transition flex items-center justify-center gap-1 whitespace-nowrap" title="إلغاء وتفريغ الإدخال الحالي أو التعديل">
                   <span class="action-btn-icon">✕</span>
                   <span id="btnCancelEditSaleText" class="sticky-bar-label-txt action-btn-text">إلغاء الإدخال</span>
                 </button>
-                <button type="button" id="btnSavePendingW1" class="flex-1 sm:flex-initial px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs md:text-sm shadow-md transition flex items-center justify-center gap-1" title="حفظ مؤقت للوزنة الأولى">
+                <button type="button" id="btnSavePendingW1" class="w-full h-10 px-2 md:px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] md:text-xs shadow-md transition flex items-center justify-center gap-1 whitespace-nowrap" title="حفظ مؤقت للوزنة الأولى">
                   <span class="action-btn-icon">⏳</span>
                   <span class="sticky-bar-label-txt action-btn-text">حفظ مؤقت وزنة 1</span>
                 </button>
-                <button type="submit" id="btnSaveSale" class="flex-1 sm:flex-initial px-3 md:px-6 py-1.5 md:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs md:text-sm shadow-lg border border-emerald-300/50 transition flex items-center justify-center gap-1.5" title="حفظ نهائي للحركة">
+                <button type="submit" id="btnSaveSale" class="w-full h-10 px-2 md:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] md:text-xs shadow-lg border border-emerald-300/50 transition flex items-center justify-center gap-1 whitespace-nowrap" title="حفظ نهائي للحركة">
                   <span class="action-btn-icon">💾</span>
                   <span id="btnSaveSaleText" class="sticky-bar-label-txt action-btn-text">حفظ نهائي</span>
                 </button>
@@ -3197,45 +3197,45 @@
     <!-- Dedicated Print-Only Container for Single Merchant Statement -->
   <div id="merchantPrintOnlyContainer" dir="rtl"></div>
 
-  <script src="./excel-template.js?v=97boost"></script>
-  <script src="./js/core-state.js?v=97boost"></script>
-  <script src="./js/accounting.js?v=97boost"></script>
-  <script src="./js/storage-sync.js?v=97boost"></script>
-  <script src="./js/excel-engine.js?v=97boost"></script>
-  <script src="./js/print-export.js?v=97boost"></script>
-  <script src="./js/ui-controllers.js?v=97boost"></script>
+  <script src="./excel-template.js?v=98"></script>
+  <script src="./js/core-state.js?v=98"></script>
+  <script src="./js/accounting.js?v=98"></script>
+  <script src="./js/storage-sync.js?v=98"></script>
+  <script src="./js/excel-engine.js?v=98"></script>
+  <script src="./js/print-export.js?v=98"></script>
+  <script src="./js/ui-controllers.js?v=98"></script>
   <script id="pwaOfflineBootstrapScript">
     (function initOfflineFirstPwaEngine() {
-      var SW_CACHE_NAME = 'farm-sales-v97-payment-boosters';
+      var SW_CACHE_NAME = 'farm-sales-v98-ui-polish';
       var CORE_URLS = [
         './',
         './index.html',
         './style.css',
-        './style.css?v=97boost',
+        './style.css?v=98',
         './excel-template.js',
-        './excel-template.js?v=97boost',
+        './excel-template.js?v=98',
         './js/core-state.js',
-        './js/core-state.js?v=97boost',
+        './js/core-state.js?v=98',
         './js/accounting.js',
-        './js/accounting.js?v=97boost',
+        './js/accounting.js?v=98',
         './js/storage-sync.js',
-        './js/storage-sync.js?v=97boost',
+        './js/storage-sync.js?v=98',
         './js/excel-engine.js',
-        './js/excel-engine.js?v=97boost',
+        './js/excel-engine.js?v=98',
         './js/print-export.js',
-        './js/print-export.js?v=97boost',
+        './js/print-export.js?v=98',
         './js/ui-controllers.js',
-        './js/ui-controllers.js?v=97boost',
+        './js/ui-controllers.js?v=98',
         './manifest.json',
         './icon-192.png',
         './icon-512.png',
         './vendor/vendor-loader.js',
-        './vendor/vendor-loader.js?v=97boost'
+        './vendor/vendor-loader.js?v=98'
       ];
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
         if (!window.__swRegisteredOnceV86) {
           window.__swRegisteredOnceV86 = true;
-          navigator.serviceWorker.register('./sw.js?v=97boost', { scope: './' }).catch(function () {});
+          navigator.serviceWorker.register('./sw.js?v=98', { scope: './' }).catch(function () {});
         }
       }
       if ('caches' in window && navigator.onLine) {
